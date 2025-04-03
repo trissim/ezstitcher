@@ -56,6 +56,50 @@ process_plate_folder(
 )
 ```
 
+## Testing Focus Detection
+
+This repository includes utility scripts for testing focus detection on Z-stack images:
+
+### 1. Simple Test Script
+
+For quick focus quality analysis on a specific tile of images:
+
+```bash
+python utils/analyze_focus.py "/path/to/zstack/*.tif" --output focus_report.png
+```
+
+This will:
+- Load all images matching the pattern
+- Analyze focus quality using different methods
+- Plot focus scores, best and worst images
+- Save or display the results
+
+### 2. Comprehensive Test Suite
+
+For more detailed testing of all focus detection methods:
+
+```bash
+python test_focus_detection.py /path/to/zstack/folder --output-dir results
+```
+
+This will:
+- Test all focus detection methods
+- Plot scores and best images for each method
+- Create result files in the output directory
+
+### 3. Selecting Best Focused Images
+
+To test the automatic selection of best focused images:
+
+```bash
+python test_focus_detection.py /path/to/zstack/folder --mode select --output-dir best_focused
+```
+
+This will:
+- Analyze all tiles in the folder
+- Find the best focused z-slice for each tile
+- Create symbolic links in the output directory to the best focused images
+
 ## Package Structure
 
 - `ezstitcher/core/image_process.py`: Core image processing functions
@@ -74,6 +118,7 @@ process_plate_folder(
 - tifffile
 - ashlar
 - opencv-python
+- matplotlib (for visualization)
 
 ## License
 
