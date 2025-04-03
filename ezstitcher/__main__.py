@@ -18,6 +18,7 @@ def main():
         description="EZStitcher - Easy Microscopy Image Stitching Tool"
     )
     
+    # Core arguments
     parser.add_argument(
         "plate_folder", 
         type=str,
@@ -66,24 +67,55 @@ def main():
         help="Specific wells to process (e.g., A01 B02). If not specified, all wells are processed."
     )
     
-    parser.add_argument(
-        "--z-stack", 
-        action="store_true",
-        help="Enable Z-stack handling"
-    )
+    # Z-stack related arguments
+    z_stack_group = parser.add_argument_group('Z-Stack Processing')
     
-    parser.add_argument(
+    z_stack_group.add_argument(
         "--focus-detect",
         action="store_true",
         help="Enable best focus detection for Z-stacks"
     )
     
-    parser.add_argument(
+    z_stack_group.add_argument(
+        "--focus-wavelength",
+        type=str,
+        default="1",
+        help="Wavelength to use for focus detection (default: 1, use 'all' for all wavelengths)"
+    )
+    
+    z_stack_group.add_argument(
         "--focus-method",
         type=str,
-        choices=["combined", "laplacian", "sobel", "tenengrad", "brenner", "adaptive_fft"],
+        choices=["combined", "laplacian", "normalized_variance", "tenengrad", "fft", "adaptive_fft"],
         default="combined",
-        help="Focus detection method to use"
+        help="Focus detection method to use (default: combined)"
+    )
+    
+    z_stack_group.add_argument(
+        "--create-projections",
+        action="store_true",
+        help="Create 3D projections from Z-stacks"
+    )
+    
+    z_stack_group.add_argument(
+        "--projection-types",
+        type=str,
+        default="max,mean",
+        help="Comma-separated list of projection types to create (default: max,mean)"
+    )
+    
+    z_stack_group.add_argument(
+        "--stitch-method",
+        type=str,
+        default="best_focus",
+        help="Method for Z-stack stitching (default: best_focus, or specific z-index)"
+    )
+    
+    # Legacy Z-stack option for backward compatibility
+    parser.add_argument(
+        "--z-stack", 
+        action="store_true",
+        help="Enable basic Z-stack handling (legacy option)"
     )
     
     args = parser.parse_args()
@@ -107,10 +139,20 @@ def main():
     else:
         composite_weights = None
     
+    # Parse projection types
+    if args.projection_types:
+        projection_types = args.projection_types.split(',')
+    else:
+        projection_types = ['max', 'mean']
+    
+    # Determine if we should use Z-stack processing
+    use_zstack_handler = (args.z_stack or args.focus_detect or 
+                         args.create_projections or args.stitch_method != "best_focus")
+    
     # Process the plate folder
     try:
-        if args.z_stack:
-            # Use the version that handles Z-stacks
+        if use_zstack_handler:
+            # Use the enhanced version that handles Z-stacks
             modified_process_plate_folder(
                 args.plate_folder,
                 reference_channels=args.reference_channels,
@@ -121,7 +163,10 @@ def main():
                 max_shift=args.max_shift,
                 well_filter=args.wells,
                 focus_detect=args.focus_detect,
-                focus_method=args.focus_method
+                focus_method=args.focus_method,
+                create_projections=args.create_projections,
+                projection_types=projection_types,
+                stitch_z_reference=args.stitch_method
             )
         else:
             # Use the standard version
