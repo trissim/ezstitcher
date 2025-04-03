@@ -22,9 +22,24 @@ from ezstitcher.core.focus_detect import (
     tenengrad_variance,
     normalized_variance,
     laplacian_energy,
-    find_best_focus,
-    extract_z_index
+    find_best_focus
 )
+
+# Define our own extract_z_index function
+def extract_z_index(filename):
+    """
+    Extract Z-index from a filename.
+    
+    Args:
+        filename (str): Filename including _z{zzz} pattern
+        
+    Returns:
+        int or None: Z-index if found, None otherwise
+    """
+    match = re.search(r'_z(\d{3})', filename)
+    if match:
+        return int(match.group(1))
+    return None
 
 def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_z(\d{3})'):
     """
@@ -61,10 +76,24 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
     
     # Load images
     images = []
+    valid_paths = []
+    first_shape = None
+    
     for path in image_paths:
         img = cv2.imread(path)
         if img is not None:
-            images.append(img)
+            # Check if this is the first image or has the same shape as the first image
+            if first_shape is None:
+                first_shape = img.shape
+                images.append(img)
+                valid_paths.append(path)
+                print(f"Loaded {os.path.basename(path)}: {img.shape}")
+            elif img.shape == first_shape:
+                images.append(img)
+                valid_paths.append(path)
+                print(f"Loaded {os.path.basename(path)}: {img.shape}")
+            else:
+                print(f"Skipping {os.path.basename(path)} due to size mismatch: {img.shape} vs {first_shape}")
         else:
             print(f"Failed to load {path}")
     
@@ -72,16 +101,40 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
         print("No valid images loaded")
         return
     
+    # Update image_paths to only include paths of valid images
+    image_paths = valid_paths
+    
+    # Update z_indices to match the valid images
+    if z_indices:
+        z_indices = z_indices[:len(images)]
+    
     # Calculate focus measures
     measures = {}
     for method in methods:
-        # Use find_best_focus function
-        _, best_idx, best_z, all_scores = find_best_focus(images, z_indices=z_indices, methods=[method])
-        measures[method] = {
-            'scores': [score['combined'] for score in all_scores],
-            'best_idx': best_idx,
-            'best_z': best_z
-        }
+        # Calculating focus measures for each method
+        try:
+            # Use find_best_focus function
+            _, best_idx, best_z, all_scores = find_best_focus(images, method=method)
+            
+            # Get scores based on method
+            if isinstance(all_scores[0], dict):
+                # If all_scores contains dictionaries
+                scores = [score.get('combined', 0) for score in all_scores]
+            elif isinstance(all_scores[0], tuple):
+                # If all_scores contains tuples (idx, score)
+                scores = [score[1] for score in all_scores]
+            else:
+                # Otherwise just use the scores directly
+                scores = all_scores
+                
+            measures[method] = {
+                'scores': scores,
+                'best_idx': best_idx,
+                'best_z': best_z if best_z is not None else z_indices[best_idx] if z_indices else best_idx
+            }
+        except Exception as e:
+            print(f"Error with method '{method}': {e}")
+            continue
         
         print(f"Method '{method}': Best focus at z={best_z} (index {best_idx})")
     
