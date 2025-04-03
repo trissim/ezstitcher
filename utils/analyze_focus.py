@@ -19,13 +19,15 @@ if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
 from ezstitcher.core.focus_detect import (
-    tenengrad_variance,
+    combined_focus_measure,
     normalized_variance,
     laplacian_energy,
+    tenengrad_variance,
+    original_fft_focus,
+    adaptive_fft_focus,
     find_best_focus
 )
 
-# Define our own extract_z_index function
 def extract_z_index(filename):
     """
     Extract Z-index from a filename.
@@ -41,6 +43,51 @@ def extract_z_index(filename):
         return int(match.group(1))
     return None
 
+def calculate_focus_scores(images, method_name):
+    """
+    Calculate focus scores for all images using the specified method.
+    
+    Args:
+        images: List of images to analyze
+        method_name: Name of focus method to use
+        
+    Returns:
+        tuple: (best_index, scores_list)
+    """
+    # Select focus measure function
+    if method_name == 'combined':
+        focus_func = combined_focus_measure
+    elif method_name == 'nvar' or method_name == 'normalized_variance':
+        focus_func = normalized_variance
+    elif method_name == 'lap' or method_name == 'laplacian':
+        focus_func = laplacian_energy
+    elif method_name == 'ten' or method_name == 'tenengrad':
+        focus_func = tenengrad_variance
+    elif method_name == 'fft':
+        focus_func = original_fft_focus
+    elif method_name == 'adaptive_fft':
+        focus_func = adaptive_fft_focus
+    else:
+        raise ValueError(f"Unknown focus method: {method_name}")
+    
+    # Calculate scores for each image
+    scores = []
+    for img in images:
+        try:
+            score = focus_func(img)
+            scores.append(score)
+        except Exception as e:
+            print(f"Error calculating {method_name} score: {e}")
+            scores.append(0)
+    
+    # Find best index
+    if scores:
+        best_idx = np.argmax(scores)
+    else:
+        best_idx = 0
+        
+    return best_idx, scores
+
 def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_z(\d{3})'):
     """
     Analyze a series of Z-stack images and find the best focused one.
@@ -52,7 +99,7 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
         z_pattern: Regular expression pattern to extract Z-index
     """
     if methods is None:
-        methods = ["combined", "tenengrad", "laplacian", "normalized_variance"]
+        methods = ["combined", "nvar", "lap", "ten", "adaptive_fft"]
     
     # Find matching files
     image_paths = sorted(glob.glob(file_pattern))
@@ -108,35 +155,34 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
     if z_indices:
         z_indices = z_indices[:len(images)]
     
-    # Calculate focus measures
+    # Calculate focus measures for each method
     measures = {}
+    
     for method in methods:
-        # Calculating focus measures for each method
         try:
-            # Use find_best_focus function
-            _, best_idx, best_z, all_scores = find_best_focus(images, method=method)
+            # Calculate focus scores
+            best_idx, scores = calculate_focus_scores(images, method)
             
-            # Get scores based on method
-            if isinstance(all_scores[0], dict):
-                # If all_scores contains dictionaries
-                scores = [score.get('combined', 0) for score in all_scores]
-            elif isinstance(all_scores[0], tuple):
-                # If all_scores contains tuples (idx, score)
-                scores = [score[1] for score in all_scores]
-            else:
-                # Otherwise just use the scores directly
-                scores = all_scores
-                
+            # If we have z_indices, map the best index to a z-index
+            best_z = z_indices[best_idx] if z_indices else best_idx
+            
             measures[method] = {
                 'scores': scores,
                 'best_idx': best_idx,
-                'best_z': best_z if best_z is not None else z_indices[best_idx] if z_indices else best_idx
+                'best_z': best_z
             }
+            
+            print(f"Method '{method}': Best focus at z={best_z} (index {best_idx})")
         except Exception as e:
             print(f"Error with method '{method}': {e}")
-            continue
-        
-        print(f"Method '{method}': Best focus at z={best_z} (index {best_idx})")
+    
+    # Skip visualization if no measures were calculated
+    if not measures:
+        print("No focus measures could be calculated.")
+        return
+    
+    # Use the first successful method as the default
+    default_method = next(iter(measures.keys()))
     
     # Visualize results
     plt.figure(figsize=(15, 10))
@@ -145,9 +191,11 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
     plt.subplot(2, 2, 1)
     for method, data in measures.items():
         if z_indices:
+            # Plot against z-indices
             plt.plot(z_indices, data['scores'], 'o-', label=method)
             plt.axvline(x=data['best_z'], color='r', linestyle='--', alpha=0.5)
         else:
+            # Plot against indices
             plt.plot(data['scores'], 'o-', label=method)
             plt.axvline(x=data['best_idx'], color='r', linestyle='--', alpha=0.5)
     
@@ -159,20 +207,35 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
     
     # Show best focused image
     plt.subplot(2, 2, 2)
-    best_method = methods[0]  # Use the first method as default
-    best_idx = measures[best_method]['best_idx']
+    best_idx = measures[default_method]['best_idx']
     best_img = images[best_idx]
-    plt.imshow(cv2.cvtColor(best_img, cv2.COLOR_BGR2RGB))
-    best_z = measures[best_method]['best_z'] if measures[best_method]['best_z'] is not None else best_idx
+    best_z = measures[default_method]['best_z']
+    
+    # Convert BGR to RGB for display with matplotlib
+    if len(best_img.shape) == 3 and best_img.shape[2] == 3:
+        best_img_rgb = cv2.cvtColor(best_img, cv2.COLOR_BGR2RGB)
+    else:
+        # For grayscale images
+        best_img_rgb = best_img
+        
+    plt.imshow(best_img_rgb)
     plt.title(f'Best Focus (z={best_z})')
     plt.axis('off')
     
-    # Show worst focused image (lowest score)
+    # Show worst focused image (with lowest score)
     plt.subplot(2, 2, 3)
-    worst_idx = np.argmin(measures[best_method]['scores'])
+    scores = measures[default_method]['scores']
+    worst_idx = np.argmin(scores)
     worst_img = images[worst_idx]
-    plt.imshow(cv2.cvtColor(worst_img, cv2.COLOR_BGR2RGB))
     worst_z = z_indices[worst_idx] if z_indices else worst_idx
+    
+    # Convert BGR to RGB for display
+    if len(worst_img.shape) == 3 and worst_img.shape[2] == 3:
+        worst_img_rgb = cv2.cvtColor(worst_img, cv2.COLOR_BGR2RGB)
+    else:
+        worst_img_rgb = worst_img
+        
+    plt.imshow(worst_img_rgb)
     plt.title(f'Worst Focus (z={worst_z})')
     plt.axis('off')
     
@@ -183,9 +246,13 @@ def analyze_z_series(file_pattern, output_file=None, methods=None, z_pattern=r'_
     info_text += f"Number of images: {len(images)}\n\n"
     
     for method, data in measures.items():
+        best_idx = data['best_idx']
         info_text += f"Method: {method}\n"
-        info_text += f"Best focus: z={data['best_z']} (index {data['best_idx']})\n"
-        info_text += f"Score: {data['scores'][data['best_idx']]:.4f}\n\n"
+        info_text += f"Best focus: z={data['best_z']} (index {best_idx})\n"
+        if len(data['scores']) > 0:
+            best_score = data['scores'][best_idx]
+            info_text += f"Score: {best_score:.4f}\n"
+        info_text += "\n"
     
     plt.text(0.05, 0.95, info_text, va='top', fontsize=10)
     
@@ -202,7 +269,7 @@ if __name__ == "__main__":
     
     parser.add_argument("file_pattern", help="Glob pattern to match image files (e.g., '/path/to/images/*.tif')")
     parser.add_argument("--output", "-o", help="Output file to save visualization (if not specified, displays plot)")
-    parser.add_argument("--methods", "-m", nargs="+", default=["combined", "tenengrad", "laplacian", "normalized_variance"],
+    parser.add_argument("--methods", "-m", nargs="+", default=["combined", "nvar", "lap", "ten", "adaptive_fft"],
                        help="Focus detection methods to use")
     parser.add_argument("--z-pattern", default=r'_z(\d{3})',
                        help="Regular expression pattern to extract Z-index from filenames")
