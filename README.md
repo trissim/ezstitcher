@@ -1,35 +1,50 @@
-# Axon Quant
+# EZStitcher
 
-A microscopy image stitching and processing tool for neuronal axon quantification.
+An easy-to-use microscopy image stitching and processing tool for high-content imaging applications.
 
 ## Features
 
 - Microscopy image processing with various filters (blur, edge detection, tophat)
 - Histogram matching and normalization for consistent imaging
-- Image stitching with subpixel precision
+- Image stitching with subpixel precision 
+- Z-stack handling with focus detection
 - Support for multi-channel fluorescence microscopy
-- Z-stack handling and organization
 - Well and pattern detection for plate-based experiments
+- Automatic metadata extraction from TIFF files
 
 ## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/trissim/axon_quant.git
-cd axon_quant
+git clone https://github.com/trissim/ezstitcher.git
+cd ezstitcher
 
 # Create and activate a virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows, use: venv\Scripts\activate
 
-# Install dependencies
-pip install numpy scikit-image scipy pandas imageio tifffile ashlar
+# Install the package in development mode
+pip install -e .
 ```
 
-## Usage
+## Command Line Usage
+
+```bash
+# Process a plate folder
+ezstitcher /path/to/plate_folder --reference-channels 1 2 --tile-overlap 10
+
+# Process a plate folder with Z-stacks
+ezstitcher /path/to/plate_folder --z-stack --focus-detect
+
+# Process specific wells
+ezstitcher /path/to/plate_folder --wells A01 B02 C03
+```
+
+## Python API Usage
 
 ```python
-from stitcher_claude_v3 import process_plate_folder
+from ezstitcher.core.stitcher import process_plate_folder
+from ezstitcher.core.image_process import process_bf
 
 # Process a single plate folder
 process_plate_folder(
@@ -41,11 +56,12 @@ process_plate_folder(
 )
 ```
 
-## File Structure
+## Package Structure
 
-- `image_process.py`: Core image processing functions
-- `stitcher_claude_v3.py`: Main stitching pipeline
-- `z_stack_handler.py`: Z-stack organization and preprocessing
+- `ezstitcher/core/image_process.py`: Core image processing functions
+- `ezstitcher/core/stitcher.py`: Main stitching pipeline
+- `ezstitcher/core/z_stack_handler.py`: Z-stack organization and preprocessing
+- `ezstitcher/core/focus_detect.py`: Focus quality detection for Z-stacks
 
 ## Requirements
 
@@ -57,6 +73,7 @@ process_plate_folder(
 - imageio
 - tifffile
 - ashlar
+- opencv-python
 
 ## License
 

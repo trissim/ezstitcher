@@ -4,7 +4,7 @@ After creating your repository on GitHub, run these commands to connect your loc
 
 ```bash
 # Add the remote repository
-git remote add origin https://github.com/trissim/axon_quant.git
+git remote add origin https://github.com/trissim/ezstitcher.git
 
 # Push your code to GitHub
 git push -u origin main
@@ -13,7 +13,7 @@ git push -u origin main
 If you prefer to use SSH instead of HTTPS, use this command instead:
 
 ```bash
-git remote add origin git@github.com:trissim/axon_quant.git
+git remote add origin git@github.com:trissim/ezstitcher.git
 ```
 
 ## Next Steps

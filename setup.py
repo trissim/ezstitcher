@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="axon_quant",
+    name="ezstitcher",
     version="0.1.0",
     author="trissim",
     author_email="your.email@example.com",
-    description="A microscopy image stitching and processing tool for neuronal axon quantification",
+    description="An easy-to-use microscopy image stitching and processing tool",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/trissim/axon_quant",
+    url="https://github.com/trissim/ezstitcher",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -27,10 +27,11 @@ setup(
         "imageio>=2.9.0",
         "tifffile>=2021.1.1",
         "ashlar>=1.14.0",
+        "opencv-python>=4.5.0",
     ],
     entry_points={
         "console_scripts": [
-            "axon_quant=axon_quant.__main__:main",
+            "ezstitcher=ezstitcher.__main__:main",
         ],
     },
 )
