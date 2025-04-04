@@ -135,7 +135,7 @@ SiteSelection,{well_name},"""
         )
         
         # Check if processed directory was created
-        processed_dir = os.path.join(self.plate_dir, "processed")
+        processed_dir = os.path.join(self.plate_dir + "_processed", "TimePoint_1")
         self.assertTrue(os.path.exists(processed_dir), "Processed directory not created")
         
         # Check if stitched images were created
@@ -159,16 +159,17 @@ SiteSelection,{well_name},"""
             max_shift=10
         )
         
-        # Check if composite directory was created
-        composite_dir = os.path.join(self.plate_dir, "composite")
-        self.assertTrue(os.path.exists(composite_dir), "Composite directory not created")
+        # Check if processed directory with composite images was created
+        processed_dir = os.path.join(self.plate_dir + "_processed", "TimePoint_1")
+        self.assertTrue(os.path.exists(processed_dir), "Processed directory with composite images not created")
         
         # Check if stitched images were created
         stitched_dir = os.path.join(self.plate_dir + "_stitched", "TimePoint_1")
         self.assertTrue(os.path.exists(stitched_dir), "Stitched directory not created")
         
-        # Check if stitched images exist for both wavelengths and composite
-        for wavelength in [1, 2, "composite"]:
+        # Check if stitched images exist for both wavelengths 
+        # (composite is only used for alignment, not saved as final output)
+        for wavelength in [1, 2]:
             stitched_file = f"A01_w{wavelength}.tif"
             stitched_path = os.path.join(stitched_dir, stitched_file)
             self.assertTrue(os.path.exists(stitched_path), f"Stitched file {stitched_file} not created")
