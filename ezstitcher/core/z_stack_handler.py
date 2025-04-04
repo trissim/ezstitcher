@@ -4,6 +4,7 @@ import shutil
 import logging
 import numpy as np
 import cv2
+import tifffile
 from pathlib import Path
 from collections import defaultdict
 
@@ -404,8 +405,8 @@ def create_3d_projections(input_dir, output_dir, projection_types=['max', 'mean'
             output_filename = f"{base_name}{suffix}{file_ext}"
             output_path = output_dir / output_filename
             
-            # Save projection
-            cv2.imwrite(str(output_path), projection)
+            # Save projection using tifffile with no compression
+            tifffile.imwrite(str(output_path), projection, compression=None)
             logger.info(f"Created {proj_type} projection: {output_path}")
             projections_created += 1
     
