@@ -36,8 +36,8 @@ def parse_filename(filename):
     match2 = re.search(r'([A-Z]\d+)_s(\d+)_w(\d).*', filename)
     match3 = re.search(r'([A-Z]\d+)_w(\d).*', filename)
     
-    # New pattern for Z-step
-    z_match = re.search(r'_z(\d{3})', filename)
+    # Pattern for Z-step - matches 1-3 digits
+    z_match = re.search(r'_z(\d{1,3})', filename)
     z_step = z_match.group(1) if z_match else None
 
     if match3:
@@ -169,18 +169,50 @@ def compute_stitched_name(file_pattern):
 def clean_filename(filepath):
     """Renames a file from e.g. D05_s2_w1.TIF to a standard format with zero-padded site."""
     if os.path.isfile(filepath):
+        # First check for site pattern directly to handle cases parse_filename might miss
+        # Use more comprehensive regex to match any site pattern
+        site_match = re.search(r'_s(\d{1,3})(?=_|\.)', os.path.basename(filepath))
+        if site_match:
+            site_num = site_match.group(1)
+            # Only pad if not already 3 digits
+            if len(site_num) < 3:
+                padded = site_num.zfill(3)  # e.g. "002"
+                # Make the replacement
+                old_part = f"_s{site_num}"
+                new_part = f"_s{padded}"
+                new_path = filepath.replace(old_part, new_part)
+                os.rename(filepath, new_path)
+                filepath = new_path  # Update path for further processing
+                
+        # Also check for z pattern
+        z_match = re.search(r'_z(\d{1,3})(?=_|\.)', os.path.basename(filepath))
+        if z_match:
+            z_num = z_match.group(1)
+            # Only pad if not already 3 digits
+            if len(z_num) < 3:
+                padded = z_num.zfill(3)  # e.g. "002"
+                # Make the replacement
+                old_part = f"_z{z_num}"
+                new_part = f"_z{padded}"
+                new_path = filepath.replace(old_part, new_part)
+                os.rename(filepath, new_path)
+                filepath = new_path  # Update path for further processing
+                
+        # Now run the original logic to catch any other issues
         well, site, wavelength, z_step, newpath = parse_filename(filepath)
         if site is not None:
             padded = site.zfill(3)  # e.g. "002"
             new_filename = newpath.replace("_s"+site, "_s"+padded)
-        else:
-            new_filename = newpath
-
-        # Remove extra junk between site/wavelength
-        wave_idx = new_filename.index("_w"+wavelength)
-        ext = new_filename.split(".")[-1]
-        new_filename = new_filename[:wave_idx] + f"_w{wavelength}." + ext
-        os.rename(filepath, new_filename)
+            
+            # Remove extra junk between site/wavelength
+            if wavelength is not None:
+                wave_idx = new_filename.index("_w"+wavelength)
+                ext = new_filename.split(".")[-1]
+                new_filename = new_filename[:wave_idx] + f"_w{wavelength}." + ext
+                
+            # Only rename if the filename actually changed
+            if new_filename != filepath:
+                os.rename(filepath, new_filename)
 
 def clean_folder(folder):
     """Cleans up the filenames in a folder, removing thumbs, rewriting site numbers, etc."""
@@ -660,7 +692,7 @@ def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
 
 def setup_directories(plate_folder):
     """Create all necessary output directories for the stitching process.
-    Also handles Z-stack structure if present."""
+    Also handles Z-stack structure if present and standardizes filenames."""
     base_dir = Path(plate_folder).resolve()
 
     # Define and create all required directories
@@ -671,9 +703,19 @@ def setup_directories(plate_folder):
         'input': base_dir / "TimePoint_1"
     }
 
-    # Check for Z-stacks BEFORE creating directories
+    # Create the base stitched directory first
+    stitched_base = base_dir.with_name(f"{base_dir.name}_stitched")
+    stitched_base.mkdir(parents=True, exist_ok=True)
+    print(f"Base stitched directory created: {stitched_base}")
+
+    # Check for Z-stacks BEFORE creating other directories
     input_path = dirs['input']
     if input_path.exists():
+        # First, clean and standardize all filenames in the input directory
+        print(f"Standardizing filenames in {input_path}")
+        clean_folder(input_path)
+        
+        # Then check for Z-stack structure
         zstep_pattern = re.compile(r'^ZStep_(\d+)$')
         has_zstack = any(zstep_pattern.match(item.name) for item in input_path.iterdir() if item.is_dir())
         
@@ -681,11 +723,20 @@ def setup_directories(plate_folder):
             print(f"Z-stack structure detected in {input_path}")
             # Handle Z-stack organization first
             organize_zstack_folders(plate_folder)
+            
+            # Clean filenames in TimePoint_1 again after Z-stack reorganization
+            print(f"Cleaning filenames after Z-stack organization")
+            clean_folder(input_path)
 
-    # Now create output directories
+    # Now create the remaining directories
     for name, dir_path in dirs.items():
-        dir_path.mkdir(parents=True, exist_ok=True)
-        print(f"Directory created: {dir_path}")
+        if name != 'stitched':  # Already created the base stitched directory
+            dir_path.mkdir(parents=True, exist_ok=True)
+            print(f"Directory created: {dir_path}")
+    
+    # Ensure TimePoint_1 subdirectory exists in stitched directory
+    dirs['stitched'].mkdir(parents=True, exist_ok=True)
+    print(f"Stitched TimePoint_1 directory created: {dirs['stitched']}")
     
     return dirs
 

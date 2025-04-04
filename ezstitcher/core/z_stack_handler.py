@@ -70,12 +70,25 @@ def organize_zstack_folders(plate_folder):
         
         # Move and rename each file
         for img_file in image_files:
-            # Insert z_suffix before the file extension
-            base, ext = os.path.splitext(img_file.name)
-            new_filename = f"{base}{z_suffix}{ext}"
+            # First pad the site index if needed
+            # For example: A01_s1_w1.tif -> A01_s001_w1.tif
+            filename = img_file.name
+            site_match = re.search(r'_s(\d{1,3})(?=_|\.)', filename)
+            if site_match:
+                site_num = site_match.group(1)
+                # Only pad if not already 3 digits
+                if len(site_num) < 3:
+                    padded = site_num.zfill(3)  # e.g. "002"
+                    # Make the replacement
+                    filename = filename.replace(f"_s{site_num}", f"_s{padded}")
+            
+            # Then insert z_suffix before the file extension
+            base, ext = os.path.splitext(filename)
+            new_filename = f"{base}_z{z_index:03d}{ext}"
             destination = timepoint_path / new_filename
             
-            logger.debug(f"Moving {img_file.name} to {new_filename}")
+            # Log at INFO level for debugging
+            logger.info(f"Moving {img_file.name} to {new_filename}")
             
             # Move the file
             shutil.move(str(img_file), str(destination))
@@ -109,13 +122,40 @@ def detect_zstack_images(folder_path):
         logger.error(f"Folder does not exist: {folder_path}")
         return False, {}
     
-    # Pattern to find z-index in filenames
-    z_pattern = re.compile(r'(.+)_z(\d{3})(\..+)$')
+    # We'll use our own method to ensure site indices are padded correctly
+    # while preserving z-indices
+    for img_file in folder_path.glob("*.tif"):
+        filename = img_file.name
+        # Check for site pattern
+        site_match = re.search(r'_s(\d{1,3})(?=_|\.)', filename)
+        if site_match:
+            site_num = site_match.group(1)
+            # Only pad if not already 3 digits
+            if len(site_num) < 3:
+                padded = site_num.zfill(3)  # e.g. "002"
+                # Make the replacement
+                old_part = f"_s{site_num}"
+                new_part = f"_s{padded}"
+                new_path = img_file.with_name(filename.replace(old_part, new_part))
+                img_file.rename(new_path)
+    
+    # Pattern to find z-index in filenames - matches 1-3 digits
+    # This matches: example_z001.tif
+    z_pattern = re.compile(r'(.+)_z(\d{1,3})(\..+)$')
     
     # Dictionary to track z-indices for each base filename
     z_indices = defaultdict(list)
     
     # Scan folder for image files with z-index pattern
+    # First print all files in the folder for debugging
+    all_files = []
+    for ext in ['.tif', '.TIF', '.tiff', '.TIFF', '.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']:
+        all_files.extend(list(folder_path.glob(f"*{ext}")))
+    
+    logger.info(f"Files in folder: {[f.name for f in all_files[:10]]}")
+    logger.info(f"Looking for z-index pattern: {z_pattern.pattern}")
+    
+    # Check each file
     for ext in ['.tif', '.TIF', '.tiff', '.TIFF', '.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']:
         for img_file in folder_path.glob(f"*{ext}"):
             match = z_pattern.match(img_file.name)
@@ -123,6 +163,10 @@ def detect_zstack_images(folder_path):
                 base_name = match.group(1)  # Filename without z-index
                 z_index = int(match.group(2))  # z-index as integer
                 z_indices[base_name].append(z_index)
+                logger.info(f"Matched z-index: {img_file.name} -> base:{base_name}, z:{z_index}")
+            else:
+                # Print non-matching files for debugging
+                logger.info(f"No z-index match for file: {img_file.name}")
     
     # Check if we found any z-stack images
     has_zstack = len(z_indices) > 0
@@ -236,8 +280,9 @@ def create_best_focus_images(input_dir, output_dir, focus_wavelength='1', focus_
     
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+        
     # Check if folder contains Z-stack images
+    # (detect_zstack_images now also standardizes filenames)
     has_zstack, z_indices_map = detect_zstack_images(input_dir)
     if not has_zstack:
         logger.warning(f"No Z-stack images found in {input_dir}")
@@ -589,9 +634,18 @@ def stitch_across_z(plate_folder, reference_z='best_focus', **kwargs):
             logger.error("Failed to find best focus images for alignment")
             return False
         
-        # Stitch using best focus images
+        # Extract parent directory (plate directory) to ensure correct output path
+        parent_plate_dir = Path(plate_folder).resolve()
+        
+        # Stitch using best focus images but ensure output goes to correct location
         logger.info(f"Stitching using best focus images from {best_focus_dir}")
-        process_plate_folder(best_focus_dir.parent, **kwargs)
+        # Set the output directly to ensure it ends up in the right place
+        stitched_dir = parent_plate_dir.with_name(f"{parent_plate_dir.name}_stitched")
+        logger.info(f"Ensuring stitched directory exists: {stitched_dir}")
+        stitched_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Now process using the best focus directory
+        process_plate_folder(best_focus_dir, **kwargs)
     
     else:
         # Use specific z-index for alignment
@@ -632,6 +686,9 @@ def modified_process_plate_folder(plate_folder, focus_detect=False, focus_method
     # Preprocess to handle Z-stacks
     has_zstack, z_info = preprocess_plate_folder(plate_folder)
     
+    # Initialize success variable
+    success = False
+    
     # Apply focus detection if requested and z-stacks present
     if has_zstack and focus_detect:
         logger.info(f"Detecting best focus in Z-stacks using method: {focus_method}")
@@ -644,14 +701,21 @@ def modified_process_plate_folder(plate_folder, focus_detect=False, focus_method
         )
         
         if success:
-            # Use the best focus folder as input
+            # Use the best focus folder path for stitching instead of its parent
+            # The best_focus_dir is already a full path to the TimePoint_1_BestFocus directory
             logger.info(f"Using best focus images for stitching: {best_focus_dir}")
-            plate_folder = best_focus_dir.parent
+            # We don't need to try to access the parent, we'll use the best_focus_dir directly
+            plate_folder = best_focus_dir
     
     # Create projections if requested and z-stacks present
     if has_zstack and create_projections:
         logger.info(f"Creating Z-stack projections: {projection_types}")
-        create_zstack_projections(plate_folder, projection_types, wavelengths='all')
+        # Always create projections from the original plate folder, not the best focus folder
+        original_plate_folder = plate_folder
+        # If we've changed plate_folder to the best focus directory, revert back to the original for projections
+        if focus_detect and success and 'TimePoint_1_BestFocus' in str(plate_folder):
+            original_plate_folder = str(plate_folder).replace('TimePoint_1_BestFocus', '')
+        create_zstack_projections(original_plate_folder, projection_types, wavelengths='all')
     
     # Use z-reference stitching if z-stacks present
     if has_zstack and stitch_z_reference:
