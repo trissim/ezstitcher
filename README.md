@@ -7,7 +7,9 @@ An easy-to-use microscopy image stitching and processing tool for high-content i
 - Microscopy image processing with various filters (blur, edge detection, tophat)
 - Histogram matching and normalization for consistent imaging
 - Image stitching with subpixel precision 
-- Z-stack handling with focus detection
+- Enhanced Z-stack handling with advanced focus detection
+- 3D projections for Z-stack visualization (maximum, mean, etc.)
+- Automatic best-focus plane detection across Z-stacks
 - Support for multi-channel fluorescence microscopy
 - Well and pattern detection for plate-based experiments
 - Automatic metadata extraction from TIFF files
@@ -34,13 +36,21 @@ pip install -e .
 ezstitcher /path/to/plate_folder --reference-channels 1 2 --tile-overlap 10
 
 # Process a plate folder with Z-stacks
-ezstitcher /path/to/plate_folder --z-stack --focus-detect
+ezstitcher /path/to/plate_folder --focus-detect --focus-method combined
+
+# Create Z-stack projections
+ezstitcher /path/to/plate_folder --create-projections --projection-types max,mean,std
+
+# Full Z-stack workflow with best focus detection and stitching
+ezstitcher /path/to/plate_folder --focus-detect --create-projections --stitch-method best_focus
 
 # Process specific wells
 ezstitcher /path/to/plate_folder --wells A01 B02 C03
 ```
 
 ## Python API Usage
+
+### Basic Stitching
 
 ```python
 from ezstitcher.core.stitcher import process_plate_folder
@@ -56,13 +66,78 @@ process_plate_folder(
 )
 ```
 
-## Testing Focus Detection
+### Enhanced Z-Stack Processing
 
-This repository includes utility scripts for testing focus detection on Z-stack images:
+```python
+from ezstitcher.core.z_stack_handler import modified_process_plate_folder
 
-### 1. Simple Test Script
+# Process a plate folder with Z-stacks
+modified_process_plate_folder(
+    'path/to/plate_folder',
+    focus_detect=True,
+    focus_method="combined",
+    create_projections=True,
+    projection_types=['max', 'mean', 'std'],
+    stitch_z_reference='best_focus',
+    reference_channels=["1", "2"],
+    tile_overlap=10
+)
+```
 
-For quick focus quality analysis on a specific tile of images:
+## Z-Stack Processing Features
+
+EZStitcher includes comprehensive support for processing Z-stack microscopy images:
+
+### 1. Z-Stack Organization
+
+Automatically detects and organizes Z-stack data from both:
+- Folder-based organization (`ZStep_1`, `ZStep_2`, etc.)
+- Filename-based organization with `_z001`, `_z002` suffixes
+
+### 2. Best Focus Detection
+
+Multiple algorithms for identifying the best focused plane in a Z-stack:
+- Combined focus measure (weighted combination of multiple metrics)
+- Normalized variance
+- Laplacian energy (edge detection based)
+- Tenengrad variance (gradient-based)
+- FFT-based focus measures
+
+### 3. 3D Projections
+
+Create various projection types from Z-stacks:
+- Maximum intensity projection
+- Mean intensity projection
+- Minimum intensity projection
+- Standard deviation projection
+- Sum projection
+
+### 4. Z-Aware Stitching
+
+Stitch microscopy tiles with Z-awareness:
+- Use best focused planes for alignment references
+- Create consistent composite images from different wavelengths
+- Generate positions from reference Z-planes
+
+## Testing Z-Stack Processing
+
+### 1. Complete Z-Stack Workflow Test
+
+For testing the full Z-stack workflow:
+
+```bash
+python test_z_stack_workflow.py /path/to/plate_folder --focus-method combined --stitch-method best_focus
+```
+
+This will:
+- Organize Z-stack images if needed
+- Find best focused images across all tiles
+- Create Z-stack projections
+- Stitch images using best focused planes for positioning
+
+### 2. Focus Detection Analysis
+
+For detailed focus quality analysis:
 
 ```bash
 python utils/analyze_focus.py "/path/to/zstack/*.tif" --output focus_report.png
@@ -74,38 +149,26 @@ This will:
 - Plot focus scores, best and worst images
 - Save or display the results
 
-### 2. Comprehensive Test Suite
+### 3. Step-by-Step Z-Stack Processing
 
-For more detailed testing of all focus detection methods:
-
-```bash
-python test_focus_detection.py /path/to/zstack/folder --output-dir results
-```
-
-This will:
-- Test all focus detection methods
-- Plot scores and best images for each method
-- Create result files in the output directory
-
-### 3. Selecting Best Focused Images
-
-To test the automatic selection of best focused images:
+For demonstrating each processing step individually:
 
 ```bash
-python test_focus_detection.py /path/to/zstack/folder --mode select --output-dir best_focused
+python test_z_stack_workflow.py /path/to/plate_folder --step-by-step \
+    --focus-method combined --projection-types max,mean,std
 ```
 
-This will:
-- Analyze all tiles in the folder
-- Find the best focused z-slice for each tile
-- Create symbolic links in the output directory to the best focused images
+This mode:
+- Shows the results of each processing step individually
+- Gives more detailed logging and feedback
+- Helps understand the Z-stack workflow
 
 ## Package Structure
 
 - `ezstitcher/core/image_process.py`: Core image processing functions
 - `ezstitcher/core/stitcher.py`: Main stitching pipeline
-- `ezstitcher/core/z_stack_handler.py`: Z-stack organization and preprocessing
-- `ezstitcher/core/focus_detect.py`: Focus quality detection for Z-stacks
+- `ezstitcher/core/z_stack_handler.py`: Z-stack organization and processing
+- `ezstitcher/core/focus_detect.py`: Focus quality detection algorithms
 
 ## Requirements
 

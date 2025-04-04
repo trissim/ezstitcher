@@ -18,9 +18,15 @@ from ezstitcher.core.focus_detect import (
     tenengrad_variance,
     normalized_variance,
     laplacian_energy,
-    adaptive_fft_focus,
-    process_zstack_folder,
-    select_best_focused_images
+    adaptive_fft_focus
+)
+
+# Import Z-stack handler for handling focus detection across stacks
+from ezstitcher.core.z_stack_handler import (
+    detect_zstack_images,
+    load_image_stack,
+    find_best_focus_in_stack,
+    create_best_focus_images
 )
 
 def display_focus_scores(image_files, scores, best_idx, method_name, output_dir=None):
@@ -137,9 +143,9 @@ def test_focus_methods(input_dir, output_dir=None, methods=None):
                 scores.append(score)
             best_idx = np.argmax(scores)
         else:
-            # Use the find_best_focus function
-            best_img, best_idx, _, all_scores = find_best_focus(images, method=method)
-            scores = [score[1] for score in all_scores]
+            # Use the find_best_focus function directly
+            best_idx, focus_scores = find_best_focus(images, method=method)
+            scores = [score[1] for score in focus_scores]
         
         results[method] = {
             'best_idx': best_idx,
@@ -163,27 +169,39 @@ def test_focus_methods(input_dir, output_dir=None, methods=None):
 
 def test_select_best_focused_images(input_dir, output_dir, focus_method='combined'):
     """
-    Test the select_best_focused_images function which creates links to the best focused images.
+    Test Z-stack best focus selection and create images in the output directory.
     
     Args:
         input_dir: Directory containing Z-stack images
-        output_dir: Directory to save best focused images (links)
+        output_dir: Directory to save best focused images
         focus_method: Focus detection method to use
     """
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
-    # Run focus detection
+    # Check if directory contains Z-stack images
+    has_zstack, z_indices_map = detect_zstack_images(input_dir)
+    
+    if not has_zstack:
+        print(f"No Z-stack images detected in {input_dir}")
+        return
+        
+    # Create best focus images
     print(f"Finding best focused images in {input_dir} using method '{focus_method}'")
-    result = select_best_focused_images(input_dir, output_dir, methods=[focus_method])
+    best_focus_results = create_best_focus_images(
+        input_dir,
+        output_dir,
+        focus_wavelength='all',
+        focus_method=focus_method
+    )
     
     # Report results
-    if result:
-        print(f"Created links to {len(result)} best focused images in {output_dir}")
-        for tile_id, (src_path, z_idx, score) in result.items():
-            print(f"Tile {tile_id}: selected z={z_idx} (score={score:.3f})")
+    if best_focus_results:
+        print(f"Created {len(best_focus_results)} best focus images in {output_dir}")
+        for img_coords, best_z in best_focus_results.items():
+            print(f"Image at {img_coords}: selected z={best_z}")
     else:
-        print("No best focused images selected")
+        print("No best focused images created")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test focus detection on a folder of Z-stack images")
