@@ -76,29 +76,56 @@ def parse_filename(filename):
 
 def path_list_from_pattern(image_dir, image_pattern, z_step=None):
     """
-    Use a regex with {iii} replaced by \d{3} and optionally {zzz} replaced by z_step
-    to match all files in image_dir. Return sorted list of matches.
+    Match files in image_dir using patterns with placeholders.
+    Supports multiple pattern styles:
+    1. {iii} placeholder for site numbers (replaced by \d{3})
+    2. {zzz} placeholder for z-step (replaced by specific z-step or \d{3})
+    3. Glob-style patterns with * wildcards (converted to regex)
     
     Args:
         image_dir: Directory to search in
-        image_pattern: Pattern with {iii} for site and optionally {zzz} for z-step
+        image_pattern: Pattern with {iii} for site, {zzz} for z-step, or * wildcards
         z_step: If provided, match only files with this specific z-step
         
     Returns:
         list: Sorted list of matching filenames
     """
-    file_pattern = re.sub(r"\{iii\}", r"\d{3}", image_pattern)
+    # Handle substitution of {series} if present (from Ashlar)
+    if "{series}" in image_pattern:
+        print(f"WARNING: path_list_from_pattern detected {{series}} in pattern: {image_pattern}")
+        print(f"Converting {{series}} to {{iii}} for consistency")
+        image_pattern = image_pattern.replace("{series}", "{iii}")
     
-    if "{zzz}" in file_pattern:
-        if z_step is not None:
-            # Replace {zzz} with the specific z_step
-            file_pattern = file_pattern.replace("{zzz}", f"{int(z_step):03d}")
-        else:
-            # Replace {zzz} with any 3 digits
-            file_pattern = file_pattern.replace("{zzz}", r"\d{3}")
+    # Check if this is a glob-style pattern with * wildcards
+    if "*" in image_pattern:
+        # Convert glob pattern to regex pattern
+        # Escape special regex characters except for *
+        special_chars = [".", "^", "$", "+", "?", "(", ")", "[", "]", "{", "}", "|", "\\"]
+        file_pattern = image_pattern
+        for char in special_chars:
+            file_pattern = file_pattern.replace(char, f"\\{char}")
+        # Convert * to regex equivalent
+        file_pattern = file_pattern.replace("*", ".*")
+    else:
+        # Handle {iii} placeholder style
+        file_pattern = image_pattern.replace("{iii}", r"\d{3}")
+        
+        if "{zzz}" in file_pattern:
+            if z_step is not None:
+                # Replace {zzz} with the specific z_step
+                file_pattern = file_pattern.replace("{zzz}", f"{int(z_step):03d}")
+            else:
+                # Replace {zzz} with any 3 digits
+                file_pattern = file_pattern.replace("{zzz}", r"\d{3}")
+    
+    print(f"path_list_from_pattern: Using regex pattern: '{file_pattern}' to match files in {image_dir}")
     
     pattern = re.compile(f'^{file_pattern}$', re.IGNORECASE)
     matches = [f for f in os.listdir(image_dir) if pattern.match(f)]
+    print(f"path_list_from_pattern: Found {len(matches)} matching files")
+    if len(matches) > 0:
+        print(f"  First few matches: {matches[:min(5, len(matches))]}")
+    
     return sorted(matches)
 
 def compute_stitched_name(file_pattern):
@@ -120,7 +147,7 @@ def compute_stitched_name(file_pattern):
 def clean_filename(filepath):
     """Renames a file from e.g. D05_s2_w1.TIF to a standard format with zero-padded site."""
     if os.path.isfile(filepath):
-        well, site, wavelength, newpath = parse_filename(filepath)
+        well, site, wavelength, z_step, newpath = parse_filename(filepath)
         if site is not None:
             padded = site.zfill(3)  # e.g. "002"
             new_filename = newpath.replace("_s"+site, "_s"+padded)
@@ -557,6 +584,9 @@ def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
         pixel_size = get_pixel_size_from_tiff(first_image_path)
         print(f"Auto-detected pixel size: {pixel_size} microns")
 
+    # Store the original pattern for later use in generate_positions_df
+    original_pattern = image_pattern
+    # Replace {iii} with {series} for Ashlar
     image_pattern = image_pattern.replace("{iii}", "{series}")
     
     # Create a single-cycle FileSeriesReader from these files
@@ -594,7 +624,7 @@ def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
     
     # Extract positions and generate CSV
     positions = [(y, x) for x, y in mosaic.aligner.positions]
-    positions_df = generate_positions_df(image_dir, image_pattern, positions, grid_size_x, grid_size_y)
+    positions_df = generate_positions_df(image_dir, original_pattern, positions, grid_size_x, grid_size_y)
     positions_df.to_csv(positions_path, index=False, sep=";", header=False)
     
     print(f"Finished writing CSV to {positions_path}")
