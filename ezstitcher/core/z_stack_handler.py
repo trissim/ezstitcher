@@ -489,9 +489,15 @@ def select_best_focus_zstack(plate_folder, focus_wavelength='1', focus_method="c
     # Copy HTD file to best focus directory if available
     htd_files = list(Path(plate_folder).glob("*.HTD"))
     if htd_files:
+        dest_dir = Path(output_dir).parent
         for htd_file in htd_files:
-            shutil.copy2(htd_file, Path(output_dir).parent)
-            logger.info(f"Copied HTD file to {Path(output_dir).parent}")
+            # Avoid copying to the same location
+            dest_path = dest_dir / htd_file.name
+            if htd_file.resolve() != dest_path.resolve():
+                shutil.copy2(htd_file, dest_dir)
+                logger.info(f"Copied HTD file to {dest_dir}")
+            else:
+                logger.info(f"HTD file {htd_file.name} already exists in destination")
     
     logger.info(f"Created best focus images in {output_dir}")
     return True, output_dir
@@ -531,9 +537,15 @@ def create_zstack_projections(plate_folder, projection_types=['max', 'mean'], wa
     # Copy HTD file to projections directory if available
     htd_files = list(Path(plate_folder).glob("*.HTD"))
     if htd_files:
+        dest_dir = Path(output_dir).parent
         for htd_file in htd_files:
-            shutil.copy2(htd_file, Path(output_dir).parent)
-            logger.info(f"Copied HTD file to {Path(output_dir).parent}")
+            # Avoid copying to the same location
+            dest_path = dest_dir / htd_file.name
+            if htd_file.resolve() != dest_path.resolve():
+                shutil.copy2(htd_file, dest_dir)
+                logger.info(f"Copied HTD file to {dest_dir}")
+            else:
+                logger.info(f"HTD file {htd_file.name} already exists in destination")
     
     logger.info(f"Created {num_projections} projections in {output_dir}")
     return True, output_dir

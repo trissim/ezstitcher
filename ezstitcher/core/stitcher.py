@@ -74,6 +74,23 @@ def parse_filename(filename):
     # If no match, just return None
     return None, None, None, None, filename
 
+def get_pattern_string(pattern_entry):
+    """
+    Extract the pattern string from a potentially nested structure.
+    This handles both string patterns and dictionary objects from auto_detect_patterns.
+    
+    Args:
+        pattern_entry: Either a string pattern or a dict with "pattern" key
+        
+    Returns:
+        str: The extracted pattern string
+    """
+    # Check if pattern is a dict with "pattern" key (from auto_detect_patterns)
+    if isinstance(pattern_entry, dict) and "pattern" in pattern_entry:
+        return pattern_entry["pattern"]
+    # Otherwise assume it's a string pattern directly
+    return pattern_entry
+
 def path_list_from_pattern(image_dir, image_pattern, z_step=None):
     """
     Match files in image_dir using patterns with placeholders.
@@ -90,6 +107,8 @@ def path_list_from_pattern(image_dir, image_pattern, z_step=None):
     Returns:
         list: Sorted list of matching filenames
     """
+    # Handle dictionary patterns from auto_detect_patterns
+    image_pattern = get_pattern_string(image_pattern)
     # Handle substitution of {series} if present (from Ashlar)
     if "{series}" in image_pattern:
         print(f"WARNING: path_list_from_pattern detected {{series}} in pattern: {image_pattern}")
@@ -137,6 +156,9 @@ def compute_stitched_name(file_pattern):
       pattern = "mfd-ctb_A05_s{iii}_w1.tif" -> "mfd-ctb_A05_w1.tif"
       pattern = "mfd-ctb_B06_s{iii}w1.tif"  -> "mfd-ctb_B06_w1.tif"
     """
+    # Handle dictionary patterns from auto_detect_patterns
+    file_pattern = get_pattern_string(file_pattern)
+    
     file_pattern = re.sub(r"\{.*?\}", f"{{{'iii'}}}", file_pattern)
     if "s{iii}_" in file_pattern:
         stitched_name = file_pattern.replace("s{iii}_", "")
@@ -325,7 +347,10 @@ def generate_composite_reference_pattern(well, wavelength_patterns):
         str: Composite reference pattern name
     """
     # Use the first pattern as a template
-    template_pattern = next(iter(wavelength_patterns.values()))
+    first_pattern = next(iter(wavelength_patterns.values()))
+    # Get the pattern string if it's nested
+    template_pattern = get_pattern_string(first_pattern)
+    
     base_name = compute_stitched_name(template_pattern)
     return f"composite_{well}_s{{iii}}_{base_name}"
 
@@ -734,9 +759,11 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
         for channel in valid_channels:
             if channel in preprocessing_funcs and preprocessing_funcs[channel]:
                 print(f"Pre-processing channel {channel}")
+                # Get pattern string from potentially nested structure
+                pattern_string = get_pattern_string(wavelength_patterns[channel])
                 process_imgs_from_pattern(
                     dirs['input'], 
-                    wavelength_patterns[channel],
+                    pattern_string,
                     preprocessing_funcs[channel],
                     dirs['processed']
                 )
@@ -752,8 +779,10 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
         print(f"Creating composite reference for well {well} from {valid_channels}")
         
         # Get file lists for each channel
-        channel_files = {channel: path_list_from_pattern(dirs['input'], wavelength_patterns[channel]) 
-                        for channel in valid_channels}
+        channel_files = {}
+        for channel in valid_channels:
+            pattern_string = get_pattern_string(wavelength_patterns[channel])
+            channel_files[channel] = path_list_from_pattern(dirs['input'], pattern_string)
             
         # Generate a pattern for the new composite channel
         composite_pattern = generate_composite_reference_pattern(well, 
@@ -777,7 +806,7 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
     else:
         # Single channel case
         reference_channel = valid_channels[0]
-        ref_pattern = wavelength_patterns[reference_channel]
+        ref_pattern = get_pattern_string(wavelength_patterns[reference_channel])
     
     return reference_channel, ref_pattern, ref_dir, wavelength_patterns
 

@@ -105,12 +105,12 @@ SiteSelection,{well_name},"""
         )
         
         # Check if stitched images were created
-        stitched_dir = os.path.join(self.plate_dir, "stitched")
+        stitched_dir = os.path.join(self.plate_dir + "_stitched", "TimePoint_1")
         self.assertTrue(os.path.exists(stitched_dir), "Stitched directory not created")
         
         # Check if stitched images exist for both wavelengths
         for wavelength in [1, 2]:
-            stitched_file = f"A01_w{wavelength}_stitched.tif"
+            stitched_file = f"A01_w{wavelength}.tif"
             stitched_path = os.path.join(stitched_dir, stitched_file)
             self.assertTrue(os.path.exists(stitched_path), f"Stitched file {stitched_file} not created")
             
@@ -139,12 +139,12 @@ SiteSelection,{well_name},"""
         self.assertTrue(os.path.exists(processed_dir), "Processed directory not created")
         
         # Check if stitched images were created
-        stitched_dir = os.path.join(self.plate_dir, "stitched")
+        stitched_dir = os.path.join(self.plate_dir + "_stitched", "TimePoint_1")
         self.assertTrue(os.path.exists(stitched_dir), "Stitched directory not created")
         
         # Check if stitched images exist for both wavelengths
         for wavelength in [1, 2]:
-            stitched_file = f"A01_w{wavelength}_stitched.tif"
+            stitched_file = f"A01_w{wavelength}.tif"
             stitched_path = os.path.join(stitched_dir, stitched_file)
             self.assertTrue(os.path.exists(stitched_path), f"Stitched file {stitched_file} not created")
 
@@ -164,12 +164,12 @@ SiteSelection,{well_name},"""
         self.assertTrue(os.path.exists(composite_dir), "Composite directory not created")
         
         # Check if stitched images were created
-        stitched_dir = os.path.join(self.plate_dir, "stitched")
+        stitched_dir = os.path.join(self.plate_dir + "_stitched", "TimePoint_1")
         self.assertTrue(os.path.exists(stitched_dir), "Stitched directory not created")
         
         # Check if stitched images exist for both wavelengths and composite
         for wavelength in [1, 2, "composite"]:
-            stitched_file = f"A01_w{wavelength}_stitched.tif"
+            stitched_file = f"A01_w{wavelength}.tif"
             stitched_path = os.path.join(stitched_dir, stitched_file)
             self.assertTrue(os.path.exists(stitched_path), f"Stitched file {stitched_file} not created")
 
