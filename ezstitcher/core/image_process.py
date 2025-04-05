@@ -89,6 +89,22 @@ def create_weighted_composite(images_dict, weights_dict=None):
         max_val = 1.0  # For float dtypes, assume [0,1] range
 
     composite = np.clip(composite, 0, max_val).astype(original_dtype)
+
+    # Ensure the composite is 2D for stitching purposes
+    # Convert any 3D image to 2D by taking the mean along the appropriate axis
+    if composite.ndim == 3:
+        # Check if it's a channel-first format (C, H, W)
+        if composite.shape[0] <= 4:  # Assuming max 4 channels (RGBA)
+            # Convert channel-first to 2D by taking mean across channels
+            composite = np.mean(composite, axis=0).astype(original_dtype)
+        # Check if it's a channel-last format (H, W, C)
+        elif composite.shape[2] <= 4:  # Assuming max 4 channels (RGBA)
+            # Convert channel-last to 2D by taking mean across channels
+            composite = np.mean(composite, axis=2).astype(original_dtype)
+        else:
+            # If it's a 3D image with a different structure, use the first slice
+            composite = composite[0].astype(original_dtype)
+
     return composite
 
 def tophat(image, selem_radius=50, downsample_factor=4):
@@ -315,9 +331,15 @@ def assemble_image_subpixel(positions_path, images_dir, output_path, margin_rati
     # Use tifffile directly to avoid imagecodecs dependency
     import tifffile
     first_tile = tifffile.imread(os.path.join(images_dir, pos_entries[0][0]))
-    tile_h, tile_w = first_tile.shape[:2]
+
+    # Force image to be 2D grayscale
+    if first_tile.ndim == 3:
+        # Convert to 2D by taking the mean across channels
+        first_tile = np.mean(first_tile, axis=2 if first_tile.shape[2] <= 4 else 0).astype(first_tile.dtype)
+
+    tile_h, tile_w = first_tile.shape
     dtype = first_tile.dtype
-    num_channels = 1 if first_tile.ndim == 2 else first_tile.shape[2]
+    num_channels = 1  # Always use 1 channel (grayscale)
 
     # Compute bounding box of the integer offsets
     # We'll separate each tile's offset into integer + fractional parts
@@ -337,27 +359,27 @@ def assemble_image_subpixel(positions_path, images_dir, output_path, margin_rati
     # final canvas size
     final_w = int(np.ceil(max_x - min_x))
     final_h = int(np.ceil(max_y - min_y))
-    print(f"Final canvas size: {final_h} x {final_w} x {num_channels}")
+    print(f"Final canvas size: {final_h} x {final_w} x 1")
 
-    # Prepare accumulators
-    if num_channels == 1:
-        acc = np.zeros((final_h, final_w), dtype=np.float32)
-        weight_acc = np.zeros((final_h, final_w), dtype=np.float32)
-    else:
-        acc = np.zeros((final_h, final_w, num_channels), dtype=np.float32)
-        weight_acc = np.zeros((final_h, final_w, num_channels), dtype=np.float32)
+    # Prepare accumulators - always use 2D (grayscale)
+    acc = np.zeros((final_h, final_w), dtype=np.float32)
+    weight_acc = np.zeros((final_h, final_w), dtype=np.float32)
 
-    # Prepare the tile mask
+    # Prepare the tile mask - always 2D
     base_mask = create_linear_weight_mask(tile_h, tile_w, margin_ratio=margin_ratio)
-    if num_channels > 1:
-        base_mask = base_mask[..., np.newaxis]
 
     for i, (fname, x_f, y_f) in enumerate(pos_entries):
         print(f"Placing tile {i+1}/{len(pos_entries)}: {fname} at subpixel ({x_f}, {y_f})")
 
         # Use tifffile directly to avoid imagecodecs dependency
         tile_img = tifffile.imread(os.path.join(images_dir, fname))
-        if tile_img.shape[:2] != (tile_h, tile_w):
+
+        # Force image to be 2D grayscale
+        if tile_img.ndim == 3:
+            # Convert to 2D by taking the mean across channels
+            tile_img = np.mean(tile_img, axis=2 if tile_img.shape[2] <= 4 else 0).astype(tile_img.dtype)
+
+        if tile_img.shape != (tile_h, tile_w):
             raise RuntimeError(f"Tile shape mismatch: {tile_img.shape} vs {tile_h}x{tile_w}")
         if tile_img.dtype != dtype:
             raise RuntimeError(f"Tile dtype mismatch: {tile_img.dtype} vs {dtype}")

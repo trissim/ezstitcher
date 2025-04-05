@@ -212,7 +212,17 @@ def clean_filename(filepath):
             if wavelength is not None:
                 wave_idx = new_filename.index("_w"+wavelength)
                 ext = new_filename.split(".")[-1]
-                new_filename = new_filename[:wave_idx] + f"_w{wavelength}." + ext
+
+                # Check if there's a z-index in the filename
+                z_match = re.search(r'_z(\d{1,3})(?=_|\.)', os.path.basename(filepath))
+                if z_match:
+                    z_num = z_match.group(1)
+                    padded_z = z_num.zfill(3)  # e.g. "002"
+                    # Preserve the z-index in the new filename
+                    new_filename = new_filename[:wave_idx] + f"_w{wavelength}_z{padded_z}." + ext
+                else:
+                    # No z-index, just use wavelength
+                    new_filename = new_filename[:wave_idx] + f"_w{wavelength}." + ext
 
             # Only rename if the filename actually changed
             if new_filename != filepath:
@@ -529,6 +539,11 @@ def create_composite_reference_files(image_dir, processed_dir, channel_files,
             # Use tifffile directly to avoid imagecodecs dependency
             import tifffile
             img = tifffile.imread(img_path)
+
+            # Force image to be 2D grayscale
+            if img.ndim == 3:
+                # Convert to 2D by taking the mean across channels
+                img = np.mean(img, axis=2 if img.shape[2] <= 4 else 0).astype(img.dtype)
 
             # Apply preprocessing if specified for this channel
             if channel in preprocessing_funcs and preprocessing_funcs[channel] is not None:
@@ -1056,6 +1071,24 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
                 # Use the specified projection type
                 stitch_source = projections_dir
                 print(f"Using {stitch_z_reference} projections for stitching from {projections_dir}")
+            elif stitch_z_reference == 'all':
+                # Handle stitching each Z-plane separately
+                print(f"Stitching each Z-plane separately using stitch_across_z")
+                from ezstitcher.core.z_stack_handler import stitch_across_z
+                # Capture the return value from stitch_across_z
+                success = stitch_across_z(plate_folder, reference_z='all', **{
+                    'reference_channels': reference_channels,
+                    'preprocessing_funcs': preprocessing_funcs,
+                    'margin_ratio': margin_ratio,
+                    'composite_weights': composite_weights,
+                    'well_filter': well_filter,
+                    'tile_overlap': tile_overlap,
+                    'tile_overlap_x': tile_overlap_x,
+                    'tile_overlap_y': tile_overlap_y,
+                    'max_shift': max_shift
+                })
+                # Return early with the result from stitch_across_z
+                return success
         else:
             # No Z-stack detected, use original folder
             stitch_source = plate_folder
@@ -1067,10 +1100,10 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         except ValueError as e:
             print(f"Error: {e}")
             print(f"Skipping plate {stitch_source}")
-            return
+            return False  # Return False on pattern detection error
 
         if not patterns_by_well:
-            return
+            return False  # Return False when no patterns are found
 
         # Filter wells if requested
         if well_filter:
@@ -1078,7 +1111,7 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
                                if well in well_filter}
             if not patterns_by_well:
                 print(f"None of the requested wells {well_filter} found")
-                return
+                return False  # Return False when no requested wells are found
 
         # 2. Process each well
         for well, wavelength_patterns in patterns_by_well.items():
@@ -1103,11 +1136,13 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
             print(f"Completed processing well {well}")
 
         print(f"\nFinished stitching all wells in plate {stitch_source}")
+        return True  # Return True on success
 
     except Exception as err:
         import traceback
         traceback.print_exc()
         print(f"Failed to process plate folder {plate_folder}: {err}")
+        return False  # Return False on failure
 
 
 ############################

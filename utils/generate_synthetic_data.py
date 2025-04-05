@@ -37,6 +37,7 @@ class SyntheticMicroscopyGenerator:
                  stage_error_px=5,
                  wavelengths=2,
                  z_stack_levels=1,
+                 z_step_size=1.0,
                  num_cells=100,
                  cell_size_range=(10, 30),
                  cell_eccentricity_range=(0.1, 0.5),
@@ -44,6 +45,10 @@ class SyntheticMicroscopyGenerator:
                  background_intensity=500,
                  noise_level=100,
                  wavelength_params=None,
+                 shared_cell_fraction=0.95,  # Fraction of cells shared between wavelengths
+                 wavelength_intensities=None,  # Fixed intensities for each wavelength
+                 wavelength_backgrounds=None,  # Background intensities for each wavelength
+                 wells=['A01'],  # List of wells to generate
                  random_seed=None):
         """
         Initialize the synthetic microscopy generator.
@@ -57,6 +62,7 @@ class SyntheticMicroscopyGenerator:
             stage_error_px: Random error in stage positioning (pixels)
             wavelengths: Number of wavelength channels to generate
             z_stack_levels: Number of Z-stack levels to generate
+            z_step_size: Spacing between Z-steps in microns
             num_cells: Number of cells to generate
             cell_size_range: Range of cell sizes (min, max)
             cell_eccentricity_range: Range of cell eccentricity (min, max)
@@ -80,6 +86,14 @@ class SyntheticMicroscopyGenerator:
                         'background_intensity': 300
                     }
                 }
+            shared_cell_fraction: Fraction of cells shared between wavelengths (0.0-1.0)
+                0.0 means all cells are unique to each wavelength
+                1.0 means all cells are shared between wavelengths
+                Default is 0.95 (95% shared)
+            wavelength_intensities: Dictionary mapping wavelength indices to fixed intensities
+                Example: {1: 20000, 2: 10000}
+            wavelength_backgrounds: Dictionary mapping wavelength indices to background intensities
+                Example: {1: 800, 2: 400}
             random_seed: Random seed for reproducibility
         """
         self.output_dir = Path(output_dir)
@@ -90,6 +104,7 @@ class SyntheticMicroscopyGenerator:
         self.stage_error_px = stage_error_px
         self.wavelengths = wavelengths
         self.z_stack_levels = z_stack_levels
+        self.z_step_size = z_step_size
         self.num_cells = num_cells
         self.cell_size_range = cell_size_range
         self.cell_eccentricity_range = cell_eccentricity_range
@@ -97,6 +112,28 @@ class SyntheticMicroscopyGenerator:
         self.background_intensity = background_intensity
         self.noise_level = noise_level
         self.wavelength_params = wavelength_params or {}
+        self.shared_cell_fraction = shared_cell_fraction
+
+        # Set default wavelength intensities if not provided
+        if wavelength_intensities is None:
+            self.wavelength_intensities = {1: 20000, 2: 10000}
+            # Add defaults for additional wavelengths if needed
+            for w in range(3, wavelengths + 1):
+                self.wavelength_intensities[w] = 15000
+        else:
+            self.wavelength_intensities = wavelength_intensities
+
+        # Set default wavelength backgrounds if not provided
+        if wavelength_backgrounds is None:
+            self.wavelength_backgrounds = {1: 800, 2: 400}
+            # Add defaults for additional wavelengths if needed
+            for w in range(3, wavelengths + 1):
+                self.wavelength_backgrounds[w] = 600
+        else:
+            self.wavelength_backgrounds = wavelength_backgrounds
+
+        # Store the wells to generate
+        self.wells = wells
 
         # Set random seed if provided
         if random_seed is not None:
@@ -170,7 +207,7 @@ class SyntheticMicroscopyGenerator:
                 'rotation': rotation
             })
 
-        # Now generate wavelength-specific cell parameters based on the common base
+        # Now generate completely different cells for each wavelength
         self.cell_params = []
         for w in range(wavelengths):
             wavelength_idx = w + 1  # 1-based wavelength index
@@ -181,55 +218,30 @@ class SyntheticMicroscopyGenerator:
             w_cell_size_range = w_params.get('cell_size_range', self.cell_size_range)
             w_cell_intensity_range = w_params.get('cell_intensity_range', self.cell_intensity_range)
 
-            # Generate cells for this wavelength based on the common base cells
+            # Generate cells for this wavelength
             cells = []
 
-            # Determine how many cells to include from the base set
-            use_num_cells = min(w_num_cells, len(base_cells))
-
-            for i in range(use_num_cells):
-                base_cell = base_cells[i]
-
-                # Use the base position and orientation
-                x = base_cell['x']
-                y = base_cell['y']
-                rotation = base_cell['rotation']
-
-                # Keep similar size with small variation per wavelength (±20%)
-                base_size = base_cell['size']
-                size_variation = np.random.uniform(0.8, 1.2)
-                size = base_size * size_variation
-
-                # Keep similar eccentricity with small variation
-                base_eccentricity = base_cell['eccentricity']
-                eccentricity_variation = np.random.uniform(0.9, 1.1)
-                eccentricity = min(0.9, base_eccentricity * eccentricity_variation)  # Cap at 0.9
-
-                # Wavelength-specific intensity
-                intensity = np.random.uniform(*w_cell_intensity_range)
-
-                cells.append({
-                    'x': x,
-                    'y': y,
-                    'size': size,
-                    'eccentricity': eccentricity,
-                    'rotation': rotation,
-                    'intensity': intensity
-                })
-
-            # Make almost all cells shared between wavelengths (5% unique cells per wavelength)
-            # This ensures excellent registration across wavelengths while retaining some channel-specific features
-            extra_cells_count = int(w_num_cells * 0.05)
-            for i in range(extra_cells_count):
-                # Random position
+            # Generate completely new cells for each wavelength
+            for i in range(w_num_cells):
+                # Generate random position for this wavelength
                 x = np.random.randint(0, image_size[0])
                 y = np.random.randint(0, image_size[1])
 
-                # Wavelength-specific parameters
+                # Generate random cell properties
                 size = np.random.uniform(*w_cell_size_range)
                 eccentricity = np.random.uniform(*self.cell_eccentricity_range)
                 rotation = np.random.uniform(0, 2*np.pi)
-                intensity = np.random.uniform(*w_cell_intensity_range)
+
+                # Set very different intensities for each wavelength to make them easily distinguishable
+                if wavelength_idx == 1:
+                    # First wavelength: very high intensity
+                    intensity = 25000
+                elif wavelength_idx == 2:
+                    # Second wavelength: medium intensity
+                    intensity = 10000
+                else:
+                    # Other wavelengths: lower intensity
+                    intensity = 5000 + (wavelength_idx * 1000)  # Increase slightly for each additional wavelength
 
                 cells.append({
                     'x': x,
@@ -256,9 +268,12 @@ class SyntheticMicroscopyGenerator:
         # Get wavelength-specific parameters
         wavelength_idx = wavelength + 1  # Convert to 1-based index for params lookup
         w_params = self.wavelength_params.get(wavelength_idx, {})
-        w_background = w_params.get('background_intensity', self.background_intensity)
+
+        # Get background intensity from wavelength_backgrounds or use default
+        w_background = self.wavelength_backgrounds.get(wavelength_idx, self.background_intensity)
 
         # Create empty image with wavelength-specific background intensity
+        # Ensure image is 2D (not 3D) to avoid shape mismatch in ashlar
         image = np.ones(self.image_size, dtype=np.uint16) * w_background
 
         # Get cell parameters for this wavelength
@@ -301,7 +316,11 @@ class SyntheticMicroscopyGenerator:
         # Apply blur based on Z distance from focus
         if self.z_stack_levels > 1:
             # More blur for Z levels further from center
-            blur_sigma = 1.0 + 2.0 * (1.0 - z_factor)
+            # Scale blur by z_step_size to create more realistic Z-stack effect
+            # z_step_size controls the amount of blur between Z-steps
+            # Reduce blur by at least 4-fold
+            blur_sigma = (self.z_step_size / 4.0) * (1.0 + 2.0 * (1.0 - z_factor))
+            print(f"  Z-level {z_level}: blur_sigma={blur_sigma:.2f} (z_factor={z_factor:.2f}, z_step_size={self.z_step_size})")
             image = filters.gaussian(image, sigma=blur_sigma, preserve_range=True)
 
         # Ensure valid pixel values
@@ -314,30 +333,57 @@ class SyntheticMicroscopyGenerator:
     def generate_htd_file(self):
         """Generate HTD file with metadata in the format expected by ezstitcher."""
         # Generate the main HTD file in the plate dir
-        htd_path = self.output_dir / f"test_A01.HTD"
+        htd_path = self.output_dir / f"test_plate.HTD"
 
         # Basic HTD file content matching the format expected in stitcher.py find_HTD_file function
         htd_content = f"""HTD,1.0
-Description,Test HTD file for A01
-Wells,A01
+Description,Test HTD file for synthetic plate
+Wells,{','.join(self.wells)}
 GridSizeX,{self.grid_size[1]}
-GridSizeY,{self.grid_size[0]}
-SiteSelection,A01,"""
+GridSizeY,{self.grid_size[0]}"""
 
-        # Add site selection rows (all set to True)
-        for y in range(self.grid_size[0]):
-            row = []
-            for x in range(self.grid_size[1]):
-                row.append("True")
-            htd_content += "\nSiteSelection," + ",".join(row)
+        # Add site selection for each well
+        for well in self.wells:
+            htd_content += f"\nSiteSelection,{well},"
+            # Add site selection rows (all set to True)
+            for y in range(self.grid_size[0]):
+                row = []
+                for x in range(self.grid_size[1]):
+                    row.append("True")
+                htd_content += "\nSiteSelection," + ",".join(row)
 
         with open(htd_path, 'w') as f:
             f.write(htd_content)
 
         # Also create a copy in the TimePoint directory for better compatibility
-        timepoint_htd_path = self.timepoint_dir / f"test_A01.HTD"
+        timepoint_htd_path = self.timepoint_dir / f"test_plate.HTD"
         with open(timepoint_htd_path, 'w') as f:
             f.write(htd_content)
+
+        # Create individual HTD files for each well for backward compatibility
+        for well in self.wells:
+            well_htd_path = self.output_dir / f"test_{well}.HTD"
+            well_htd_content = f"""HTD,1.0
+Description,Test HTD file for {well}
+Wells,{well}
+GridSizeX,{self.grid_size[1]}
+GridSizeY,{self.grid_size[0]}
+SiteSelection,{well},"""
+
+            # Add site selection rows (all set to True)
+            for y in range(self.grid_size[0]):
+                row = []
+                for x in range(self.grid_size[1]):
+                    row.append("True")
+                well_htd_content += "\nSiteSelection," + ",".join(row)
+
+            with open(well_htd_path, 'w') as f:
+                f.write(well_htd_content)
+
+            # Also create a copy in the TimePoint directory
+            timepoint_well_htd_path = self.timepoint_dir / f"test_{well}.HTD"
+            with open(timepoint_well_htd_path, 'w') as f:
+                f.write(well_htd_content)
 
         return htd_path
 
@@ -347,54 +393,98 @@ SiteSelection,A01,"""
         print(f"Grid size: {self.grid_size[0]}x{self.grid_size[1]}")
         print(f"Wavelengths: {self.wavelengths}")
         print(f"Z-stack levels: {self.z_stack_levels}")
+        print(f"Wells: {', '.join(self.wells)}")
 
         # Generate HTD file
         htd_path = self.generate_htd_file()
         print(f"Generated HTD file: {htd_path}")
 
-        # Pre-generate the positions for each site to ensure consistency across Z-levels
-        # This creates a mapping of site_index -> (base_x_pos, base_y_pos)
-        site_positions = {}
-        site_index = 1
-        for row in range(self.grid_size[0]):
-            for col in range(self.grid_size[1]):
-                # Calculate base position
-                x = col * self.step_x
-                y = row * self.step_y
+        # Process each well
+        for well in self.wells:
+            print(f"\nGenerating data for well {well}...")
 
-                # Add random stage positioning error
-                # We apply this error to the base position, it will be constant across Z-steps
-                x_error = np.random.randint(-self.stage_error_px, self.stage_error_px)
-                y_error = np.random.randint(-self.stage_error_px, self.stage_error_px)
+            # Pre-generate the positions for each site to ensure consistency across Z-levels
+            # This creates a mapping of site_index -> (base_x_pos, base_y_pos)
+            site_positions = {}
+            site_index = 1
+            for row in range(self.grid_size[0]):
+                for col in range(self.grid_size[1]):
+                    # Calculate base position
+                    x = col * self.step_x
+                    y = row * self.step_y
 
-                x_pos = x + x_error
-                y_pos = y + y_error
+                    # Add random stage positioning error
+                    # We apply this error to the base position, it will be constant across Z-steps
+                    x_error = np.random.randint(-self.stage_error_px, self.stage_error_px)
+                    y_error = np.random.randint(-self.stage_error_px, self.stage_error_px)
 
-                # Ensure we don't go out of bounds
-                x_pos = max(0, min(x_pos, self.image_size[0] - self.tile_size[0]))
-                y_pos = max(0, min(y_pos, self.image_size[1] - self.tile_size[1]))
+                    x_pos = x + x_error
+                    y_pos = y + y_error
 
-                site_positions[site_index] = (x_pos, y_pos)
-                site_index += 1
+                    # Ensure we don't go out of bounds
+                    x_pos = max(0, min(x_pos, self.image_size[0] - self.tile_size[0]))
+                    y_pos = max(0, min(y_pos, self.image_size[1] - self.tile_size[1]))
 
-        # For multiple Z-stack levels, create proper ZStep folders
-        if self.z_stack_levels > 1:
-            for z in range(self.z_stack_levels):
-                z_level = z + 1  # 1-based Z level index
+                    site_positions[site_index] = (x_pos, y_pos)
+                    site_index += 1
 
-                # Create ZStep folder
-                zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
-                zstep_dir.mkdir(exist_ok=True)
+            # For multiple Z-stack levels, create proper ZStep folders
+            if self.z_stack_levels > 1:
+                # Make sure all ZStep folders are created first
+                for z in range(self.z_stack_levels):
+                    z_level = z + 1  # 1-based Z level index
+                    zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
+                    zstep_dir.mkdir(exist_ok=True)
+                    print(f"Created ZStep folder: {zstep_dir}")
 
-                # Generate images for each wavelength at this Z level
+                # Now generate images for each Z-level
+                for z in range(self.z_stack_levels):
+                    z_level = z + 1  # 1-based Z level index
+                    zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
+
+                    # Generate images for each wavelength at this Z level
+                    for w in range(self.wavelengths):
+                        wavelength = w + 1  # 1-based wavelength index
+
+                        # Generate full image
+                        print(f"Generating full image for wavelength {wavelength}, Z level {z_level}...")
+                        full_image = self.generate_cell_image(w, z)
+
+                        # Save tiles for this Z level using the pre-generated positions
+                        site_index = 1
+                        for row in range(self.grid_size[0]):
+                            for col in range(self.grid_size[1]):
+                                # Get the pre-generated position
+                                x_pos, y_pos = site_positions[site_index]
+
+                                # Extract tile
+                                tile = full_image[
+                                    y_pos:y_pos + self.tile_size[1],
+                                    x_pos:x_pos + self.tile_size[0]
+                                ]
+
+                                # Create filename without Z-index and without zero-padding site indices
+                                # This tests the padding functionality in the stitcher
+                                filename = f"{well}_s{site_index}_w{wavelength}.tif"
+                                filepath = zstep_dir / filename
+
+                                # Save image without compression
+                                tifffile.imwrite(filepath, tile, compression=None)
+
+                                # Print progress with full path for debugging
+                                print(f"  Saved tile: {zstep_dir.name}/{filename} (position: {x_pos}, {y_pos})")
+                                print(f"  Full path: {filepath.resolve()}")
+                                site_index += 1
+            else:
+                # For single Z level (no Z-stack), just save files directly in TimePoint_1
                 for w in range(self.wavelengths):
                     wavelength = w + 1  # 1-based wavelength index
 
-                    # Generate full image
-                    print(f"Generating full image for wavelength {wavelength}, Z level {z_level}...")
-                    full_image = self.generate_cell_image(w, z)
+                    # Generate full image for the single Z level
+                    print(f"Generating full image for wavelength {wavelength} (no Z-stack)...")
+                    full_image = self.generate_cell_image(w, 0)
 
-                    # Save tiles for this Z level using the pre-generated positions
+                    # Save tiles without Z-stack index
                     site_index = 1
                     for row in range(self.grid_size[0]):
                         for col in range(self.grid_size[1]):
@@ -408,49 +498,15 @@ SiteSelection,A01,"""
                             ]
 
                             # Create filename without Z-index and without zero-padding site indices
-                            # This tests the padding functionality in the stitcher
-                            filename = f"A01_s{site_index}_w{wavelength}.tif"
-                            filepath = zstep_dir / filename
+                            filename = f"{well}_s{site_index}_w{wavelength}.tif"
+                            filepath = self.timepoint_dir / filename
 
                             # Save image without compression
                             tifffile.imwrite(filepath, tile, compression=None)
 
-                            # Print progress with full path for debugging
-                            print(f"  Saved tile: {zstep_dir.name}/{filename} (position: {x_pos}, {y_pos})")
-                            print(f"  Full path: {filepath.resolve()}")
+                            # Print progress
+                            print(f"  Saved tile: {filename} (position: {x_pos}, {y_pos})")
                             site_index += 1
-        else:
-            # For single Z level (no Z-stack), just save files directly in TimePoint_1
-            for w in range(self.wavelengths):
-                wavelength = w + 1  # 1-based wavelength index
-
-                # Generate full image for the single Z level
-                print(f"Generating full image for wavelength {wavelength} (no Z-stack)...")
-                full_image = self.generate_cell_image(w, 0)
-
-                # Save tiles without Z-stack index
-                site_index = 1
-                for row in range(self.grid_size[0]):
-                    for col in range(self.grid_size[1]):
-                        # Get the pre-generated position
-                        x_pos, y_pos = site_positions[site_index]
-
-                        # Extract tile
-                        tile = full_image[
-                            y_pos:y_pos + self.tile_size[1],
-                            x_pos:x_pos + self.tile_size[0]
-                        ]
-
-                        # Create filename without Z-index and without zero-padding site indices
-                        filename = f"A01_s{site_index}_w{wavelength}.tif"
-                        filepath = self.timepoint_dir / filename
-
-                        # Save image without compression
-                        tifffile.imwrite(filepath, tile, compression=None)
-
-                        # Print progress
-                        print(f"  Saved tile: {filename} (position: {x_pos}, {y_pos})")
-                        site_index += 1
 
         print("Dataset generation complete!")
 
@@ -466,6 +522,7 @@ def main():
     parser.add_argument("--stage-error", type=int, default=5, help="Random error in stage positioning (pixels)")
     parser.add_argument("--wavelengths", type=int, default=2, help="Number of wavelength channels")
     parser.add_argument("--z-stack", type=int, default=1, help="Number of Z-stack levels")
+    parser.add_argument("--z-step-size", type=float, default=1.0, help="Spacing between Z-steps in microns")
     parser.add_argument("--num-cells", type=int, default=300, help="Number of cells to generate (higher density improves registration)")
     parser.add_argument("--cell-size", type=float, nargs=2, default=[10, 30], help="Cell size range (min max)")
     parser.add_argument("--cell-eccentricity", type=float, nargs=2, default=[0.1, 0.5],
@@ -556,6 +613,7 @@ def main():
         stage_error_px=args.stage_error,
         wavelengths=args.wavelengths,
         z_stack_levels=args.z_stack,
+        z_step_size=args.z_step_size,
         num_cells=args.num_cells,
         cell_size_range=tuple(args.cell_size),
         cell_eccentricity_range=tuple(args.cell_eccentricity),
