@@ -16,6 +16,7 @@ An easy-to-use microscopy image stitching and processing tool for high-content i
 - Synthetic microscopy data generation for testing
 - Comprehensive test suite with code coverage analysis
 - No dependency on imagecodecs (uses uncompressed TIFF)
+- Class-based architecture for improved code organization and modularity
 
 ## Installation
 
@@ -293,6 +294,76 @@ This will:
 - opencv-python
 - matplotlib (for visualization)
 - coverage (for test coverage analysis)
+
+## Class-Based API
+
+EZStitcher provides a class-based API for more flexibility and control. This API is available in the `class-based-refactor` branch and will be merged into the main branch after thorough testing.
+
+### Key Classes
+
+- **ImageProcessor**: Handles all image processing operations
+- **FocusDetector**: Handles focus detection algorithms
+- **ZStackManager**: Manages Z-stack organization and processing
+- **StitcherManager**: Handles image stitching operations
+
+### Example Usage
+
+```python
+from ezstitcher.core import (
+    ImageProcessor,
+    FocusDetector,
+    ZStackManager,
+    StitcherManager
+)
+
+# Preprocess the plate folder to detect and organize Z-stacks
+has_zstack, z_info = ZStackManager.preprocess_plate_folder('path/to/plate_folder')
+
+if has_zstack:
+    # Create projections from Z-stacks
+    projections = ZStackManager.create_zstack_projections(
+        'path/to/plate_folder/TimePoint_1',
+        'path/to/output/projections',
+        projection_types=["max", "mean"]
+    )
+
+    # Find best focused images
+    best_focus_results = ZStackManager.select_best_focus_zstack(
+        'path/to/plate_folder/TimePoint_1',
+        'path/to/output/best_focus',
+        focus_method="combined",
+        focus_wavelength="1"
+    )
+
+# Process images with custom preprocessing
+def custom_preprocessing(images):
+    # Apply multiple processing steps
+    processed = [ImageProcessor.blur(img, sigma=1) for img in images]
+    processed = [ImageProcessor.find_edge(img) for img in processed]
+    return processed
+
+# Process the plate folder
+StitcherManager.process_plate_folder(
+    'path/to/plate_folder',
+    reference_channels=["1", "2"],
+    composite_weights={"1": 0.3, "2": 0.7},
+    preprocessing_funcs={"1": custom_preprocessing},
+    tile_overlap=10,
+    max_shift=50,
+    focus_detect=True,
+    focus_method="combined",
+    create_projections=True,
+    projection_types=["max", "mean"],
+    stitch_z_reference="best_focus"
+)
+```
+
+### Benefits of the Class-Based API
+
+1. **Modularity**: Use only the components you need
+2. **Flexibility**: Create custom workflows by combining different operations
+3. **Readability**: Clear separation of concerns makes the code easier to understand
+4. **Extensibility**: Easier to add new features or modify existing ones
 
 ## License
 
