@@ -6,10 +6,14 @@ import imageio
 import tifffile
 import sys
 import traceback
+import shutil
 from pathlib import Path
 
 # Internal imports
-from ezstitcher.core.z_stack_handler import organize_zstack_folders, preprocess_plate_folder
+from ezstitcher.core.z_stack_handler import (
+    organize_zstack_folders, preprocess_plate_folder,
+    select_best_focus_zstack, create_zstack_projections
+)
 from ezstitcher.core.image_process import (
     assemble_image_subpixel, tophat, create_weighted_composite, process_bf
 )
@@ -35,7 +39,7 @@ def parse_filename(filename):
     match1 = re.search(r'([A-Z]\d+)_s(\d+)\.*', filename)
     match2 = re.search(r'([A-Z]\d+)_s(\d+)_w(\d).*', filename)
     match3 = re.search(r'([A-Z]\d+)_w(\d).*', filename)
-    
+
     # Pattern for Z-step - matches 1-3 digits
     z_match = re.search(r'_z(\d{1,3})', filename)
     z_step = z_match.group(1) if z_match else None
@@ -78,10 +82,10 @@ def get_pattern_string(pattern_entry):
     """
     Extract the pattern string from a potentially nested structure.
     This handles both string patterns and dictionary objects from auto_detect_patterns.
-    
+
     Args:
         pattern_entry: Either a string pattern or a dict with "pattern" key
-        
+
     Returns:
         str: The extracted pattern string
     """
@@ -98,12 +102,12 @@ def path_list_from_pattern(image_dir, image_pattern, z_step=None):
     1. {iii} placeholder for site numbers (replaced by \d{3})
     2. {zzz} placeholder for z-step (replaced by specific z-step or \d{3})
     3. Glob-style patterns with * wildcards (converted to regex)
-    
+
     Args:
         image_dir: Directory to search in
         image_pattern: Pattern with {iii} for site, {zzz} for z-step, or * wildcards
         z_step: If provided, match only files with this specific z-step
-        
+
     Returns:
         list: Sorted list of matching filenames
     """
@@ -114,7 +118,7 @@ def path_list_from_pattern(image_dir, image_pattern, z_step=None):
         print(f"WARNING: path_list_from_pattern detected {{series}} in pattern: {image_pattern}")
         print(f"Converting {{series}} to {{iii}} for consistency")
         image_pattern = image_pattern.replace("{series}", "{iii}")
-    
+
     # Check if this is a glob-style pattern with * wildcards
     if "*" in image_pattern:
         # Convert glob pattern to regex pattern
@@ -128,7 +132,7 @@ def path_list_from_pattern(image_dir, image_pattern, z_step=None):
     else:
         # Handle {iii} placeholder style
         file_pattern = image_pattern.replace("{iii}", r"\d{3}")
-        
+
         if "{zzz}" in file_pattern:
             if z_step is not None:
                 # Replace {zzz} with the specific z_step
@@ -136,15 +140,15 @@ def path_list_from_pattern(image_dir, image_pattern, z_step=None):
             else:
                 # Replace {zzz} with any 3 digits
                 file_pattern = file_pattern.replace("{zzz}", r"\d{3}")
-    
+
     print(f"path_list_from_pattern: Using regex pattern: '{file_pattern}' to match files in {image_dir}")
-    
+
     pattern = re.compile(f'^{file_pattern}$', re.IGNORECASE)
     matches = [f for f in os.listdir(image_dir) if pattern.match(f)]
     print(f"path_list_from_pattern: Found {len(matches)} matching files")
     if len(matches) > 0:
         print(f"  First few matches: {matches[:min(5, len(matches))]}")
-    
+
     return sorted(matches)
 
 def compute_stitched_name(file_pattern):
@@ -158,7 +162,7 @@ def compute_stitched_name(file_pattern):
     """
     # Handle dictionary patterns from auto_detect_patterns
     file_pattern = get_pattern_string(file_pattern)
-    
+
     file_pattern = re.sub(r"\{.*?\}", f"{{{'iii'}}}", file_pattern)
     if "s{iii}_" in file_pattern:
         stitched_name = file_pattern.replace("s{iii}_", "")
@@ -183,7 +187,7 @@ def clean_filename(filepath):
                 new_path = filepath.replace(old_part, new_part)
                 os.rename(filepath, new_path)
                 filepath = new_path  # Update path for further processing
-                
+
         # Also check for z pattern
         z_match = re.search(r'_z(\d{1,3})(?=_|\.)', os.path.basename(filepath))
         if z_match:
@@ -197,19 +201,19 @@ def clean_filename(filepath):
                 new_path = filepath.replace(old_part, new_part)
                 os.rename(filepath, new_path)
                 filepath = new_path  # Update path for further processing
-                
+
         # Now run the original logic to catch any other issues
         well, site, wavelength, z_step, newpath = parse_filename(filepath)
         if site is not None:
             padded = site.zfill(3)  # e.g. "002"
             new_filename = newpath.replace("_s"+site, "_s"+padded)
-            
+
             # Remove extra junk between site/wavelength
             if wavelength is not None:
                 wave_idx = new_filename.index("_w"+wavelength)
                 ext = new_filename.split(".")[-1]
                 new_filename = new_filename[:wave_idx] + f"_w{wavelength}." + ext
-                
+
             # Only rename if the filename actually changed
             if new_filename != filepath:
                 os.rename(filepath, new_filename)
@@ -231,7 +235,7 @@ def remove_not_tif(folder_path):
             os.remove(os.path.join(folder_path, fname))
 
 ############################
-# DATAFRAME OPERATIONS 
+# DATAFRAME OPERATIONS
 ############################
 
 def add_filepath_to_df(filepath, df):
@@ -278,7 +282,7 @@ def unique_wells_wavelengths(filepaths):
     return wells, wavelengths
 
 ############################
-# PATTERN DETECTION 
+# PATTERN DETECTION
 ############################
 
 def auto_detect_patterns(folder, placeholder="{iii}", z_placeholder="{zzz}"):
@@ -346,7 +350,7 @@ def auto_detect_patterns(folder, placeholder="{iii}", z_placeholder="{zzz}"):
 
             # Build the pattern
             pattern_candidate = base_name
-            
+
             # Replace numeric site (e.g. "s003") with "s{iii}"
             if site:
                 old_snippet = f"s{site}"
@@ -370,11 +374,11 @@ def auto_detect_patterns(folder, placeholder="{iii}", z_placeholder="{zzz}"):
 def generate_composite_reference_pattern(well, wavelength_patterns):
     """
     Generate a pattern name for a composite reference channel based on existing patterns.
-    
+
     Args:
         well: Well identifier
         wavelength_patterns: Dict of wavelength to image pattern
-        
+
     Returns:
         str: Composite reference pattern name
     """
@@ -382,7 +386,7 @@ def generate_composite_reference_pattern(well, wavelength_patterns):
     first_pattern = next(iter(wavelength_patterns.values()))
     # Get the pattern string if it's nested
     template_pattern = get_pattern_string(first_pattern)
-    
+
     base_name = compute_stitched_name(template_pattern)
     return f"composite_{well}_s{{iii}}_{base_name}"
 
@@ -435,12 +439,12 @@ def find_HTD_file(folder):
 def get_pixel_size_from_tiff(image_path):
     """
     Extract pixel size from TIFF metadata.
-    
+
     Looks for spatial-calibration-x in the ImageDescription tag.
-    
+
     Args:
         image_path: Path to a TIFF image
-        
+
     Returns:
         float: Pixel size in microns (default 1.0 if not found)
     """
@@ -456,18 +460,18 @@ def get_pixel_size_from_tiff(image_path):
                 if match:
                     print(f"Found pixel size metadata {str(float(match.group(1)))} in {image_path}")
                     return float(match.group(1))
-                
+
                 # Alternative pattern for some formats
                 match = re.search(r'Spatial Calibration: ([0-9.]+) [uµ]m', desc)
                 if match:
 
                     print(f"Found pixel size metadata {str(float(match.group(1)))} in {image_path}")
                     return float(match.group(1))
-        
+
         print(f"Could not find pixel size metadata in {image_path}, using default")
     except Exception as e:
         print(f"Error reading metadata from {image_path}: {e}")
-    
+
     # Default value if metadata not found
     return 1.0
 
@@ -478,17 +482,19 @@ def get_pixel_size_from_tiff(image_path):
 def process_imgs_from_pattern(image_dir, image_pattern, function, out_dir):
     """Process all images matching a pattern with the given function."""
     image_names = path_list_from_pattern(image_dir, image_pattern)
-    images = np.array([imageio.imread(os.path.join(image_dir, image)) for image in image_names])
+    # Use tifffile directly to avoid imagecodecs dependency
+    images = np.array([tifffile.imread(os.path.join(image_dir, image)) for image in image_names])
     processed = function(images)
     for img, name in zip(processed, image_names):
-        imageio.imwrite(os.path.join(out_dir, name), img)
+        # Use tifffile directly to avoid imagecodecs dependency
+        tifffile.imwrite(os.path.join(out_dir, name), img, compression=None)
 
-def create_composite_reference_files(image_dir, processed_dir, channel_files, 
-                                     composite_pattern, channel_weights=None, 
+def create_composite_reference_files(image_dir, processed_dir, channel_files,
+                                     composite_pattern, channel_weights=None,
                                      preprocessing_funcs=None):
     """
     Create composite reference files by combining multiple channels.
-    
+
     Args:
         image_dir: Base directory containing input images
         processed_dir: Directory to save processed and composite files
@@ -496,32 +502,34 @@ def create_composite_reference_files(image_dir, processed_dir, channel_files,
         composite_pattern: Pattern for naming composite files
         channel_weights: Dict mapping channel names to weights
         preprocessing_funcs: Dict mapping channel names to preprocessing functions
-        
+
     Returns:
         str: Composite reference pattern
     """
     if preprocessing_funcs is None:
         preprocessing_funcs = {}
-    
+
     # Use helper function to verify each channel has the same number of files
     file_counts = [len(files) for files in channel_files.values()]
     if len(set(file_counts)) != 1:
         raise ValueError(f"Channels have different file counts: {file_counts}")
-    
+
     # Get number of sites from first channel
     first_channel = next(iter(channel_files))
     num_files = len(channel_files[first_channel])
-    
+
     # Process each position/tile
     for i in range(num_files):
         # Load and preprocess images for this position
         position_images = {}
-        
+
         for channel, files in channel_files.items():
             # Load image from original directory
             img_path = os.path.join(image_dir, files[i])
-            img = imageio.imread(img_path)
-            
+            # Use tifffile directly to avoid imagecodecs dependency
+            import tifffile
+            img = tifffile.imread(img_path)
+
             # Apply preprocessing if specified for this channel
             if channel in preprocessing_funcs and preprocessing_funcs[channel] is not None:
                 print(f"Preprocessing channel {channel} for composite")
@@ -533,12 +541,12 @@ def create_composite_reference_files(image_dir, processed_dir, channel_files,
                 else:
                     # Process on the fly
                     img = preprocessing_funcs[channel]([img])[0]
-                
+
             position_images[channel] = img
-        
+
         # Create composite using the image processing function
         composite = create_weighted_composite(position_images, channel_weights)
-        
+
         # Extract site number from filename using existing pattern
         site_num = None
         filename = channel_files[first_channel][i]
@@ -547,14 +555,15 @@ def create_composite_reference_files(image_dir, processed_dir, channel_files,
             site_num = match.group(1)
         else:
             site_num = f"{i:03d}"
-            
+
         # Generate output filename with the correct site number
         out_filename = composite_pattern.replace("{iii}", site_num)
         out_path = os.path.join(processed_dir, out_filename)
-        
+
         # Save composite reference to processed directory
-        imageio.imwrite(out_path, composite)
-    
+        # Use tifffile directly to avoid imagecodecs dependency
+        tifffile.imwrite(out_path, composite, compression=None)
+
     return composite_pattern
 
 ############################
@@ -577,7 +586,7 @@ def generate_positions_df(image_dir, image_pattern, positions, grid_size_x, grid
     # Generate a list of (x, y) grid positions following a raster pattern
     positions_grid = [(x, y) for y in range(grid_size_y) for x in range(grid_size_x)]
     data_rows = []
-    
+
     for i, fname in enumerate(all_files):
         x, y = positions[i]
         row, col = positions_grid[i]
@@ -591,16 +600,16 @@ def generate_positions_df(image_dir, image_pattern, positions, grid_size_x, grid
     df = pd.DataFrame(data_rows)
     return df
 
-def ashlar_stitch_v2(image_dir, image_pattern, positions_path, 
-                    grid_size_x, grid_size_y, tile_overlap=10, 
+def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
+                    grid_size_x, grid_size_y, tile_overlap=10,
                     tile_overlap_x=None, tile_overlap_y=None,
                     max_shift=20, pixel_size=None):
     """
     Stitches images in 'image_dir' matching 'image_pattern' using the Ashlar library
     (FileSeriesReader, EdgeAligner, Mosaic, PyramidWriter) in a single cycle.
-    
+
     Generates a CSV file with tile positions.
-    
+
     Args:
         image_dir (str): Directory containing images (tiles).
         image_pattern (str): A pattern with '{iii}' or similar numeric placeholder
@@ -645,7 +654,7 @@ def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
     original_pattern = image_pattern
     # Replace {iii} with {series} for Ashlar
     image_pattern = image_pattern.replace("{iii}", "{series}")
-    
+
     # Create a single-cycle FileSeriesReader from these files
     fs_reader = fileseries.FileSeriesReader(
         path=os.path.abspath(image_dir),
@@ -678,12 +687,12 @@ def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
         aligner.mosaic_shape,
         **mosaic_args
     )
-    
+
     # Extract positions and generate CSV
     positions = [(y, x) for x, y in mosaic.aligner.positions]
     positions_df = generate_positions_df(image_dir, original_pattern, positions, grid_size_x, grid_size_y)
     positions_df.to_csv(positions_path, index=False, sep=";", header=False)
-    
+
     print(f"Finished writing CSV to {positions_path}")
 
 ############################
@@ -692,52 +701,102 @@ def ashlar_stitch_v2(image_dir, image_pattern, positions_path,
 
 def setup_directories(plate_folder):
     """Create all necessary output directories for the stitching process.
-    Also handles Z-stack structure if present and standardizes filenames."""
-    base_dir = Path(plate_folder).resolve()
+    Also handles Z-stack structure if present and standardizes filenames.
 
-    # Define and create all required directories
+    The directory structure is:
+    - input_plate/
+      - TimePoint_1/
+    - input_plate_stitched/
+      - TimePoint_1/
+    - input_plate_processed/
+      - TimePoint_1/
+    - input_plate_positions/
+      - TimePoint_1/
+
+    All output directories are at the same level as the input plate folder.
+    """
+    base_dir = Path(plate_folder).resolve()
+    parent_dir = base_dir.parent
+    plate_name = base_dir.name
+
+    # Define all directory paths at the same level as input plate
     dirs = {
-        'stitched': base_dir.with_name(f"{base_dir.name}_stitched") / "TimePoint_1",
-        'processed': base_dir.with_name(f"{base_dir.name}_processed") / "TimePoint_1",
-        'positions': base_dir.with_name(f"{base_dir.name}_positions") / "TimePoint_1",
+        'stitched': parent_dir / f"{plate_name}_stitched" / "TimePoint_1",
+        'processed': parent_dir / f"{plate_name}_processed" / "TimePoint_1",
+        'positions': parent_dir / f"{plate_name}_positions" / "TimePoint_1",
         'input': base_dir / "TimePoint_1"
     }
 
-    # Create the base stitched directory first
-    stitched_base = base_dir.with_name(f"{base_dir.name}_stitched")
-    stitched_base.mkdir(parents=True, exist_ok=True)
-    print(f"Base stitched directory created: {stitched_base}")
+    # Print info about our directory structure
+    print(f"Setting up directory structure:")
+    print(f"  Input plate: {base_dir}")
+    print(f"  Parent directory: {parent_dir}")
 
-    # Check for Z-stacks BEFORE creating other directories
+    # Create the base output directories first
+    parent_dirs = {
+        'stitched': parent_dir / f"{plate_name}_stitched",
+        'processed': parent_dir / f"{plate_name}_processed",
+        'positions': parent_dir / f"{plate_name}_positions"
+    }
+
+    for name, dir_path in parent_dirs.items():
+        dir_path.mkdir(parents=True, exist_ok=True)
+        print(f"Base {name} directory created: {dir_path}")
+
+    # Check for Z-stacks BEFORE creating TimePoint subdirectories
     input_path = dirs['input']
     if input_path.exists():
         # First, clean and standardize all filenames in the input directory
         print(f"Standardizing filenames in {input_path}")
         clean_folder(input_path)
-        
+
         # Then check for Z-stack structure
-        zstep_pattern = re.compile(r'^ZStep_(\d+)$')
+        zstep_pattern = re.compile(r'^ZStep_([0-9]+)$')
         has_zstack = any(zstep_pattern.match(item.name) for item in input_path.iterdir() if item.is_dir())
-        
+
         if has_zstack:
             print(f"Z-stack structure detected in {input_path}")
             # Handle Z-stack organization first
             organize_zstack_folders(plate_folder)
-            
+
             # Clean filenames in TimePoint_1 again after Z-stack reorganization
             print(f"Cleaning filenames after Z-stack organization")
             clean_folder(input_path)
 
-    # Now create the remaining directories
+    # Now create all the TimePoint_1 subdirectories
     for name, dir_path in dirs.items():
-        if name != 'stitched':  # Already created the base stitched directory
+        if name != 'input':  # Input directory already exists
             dir_path.mkdir(parents=True, exist_ok=True)
             print(f"Directory created: {dir_path}")
-    
-    # Ensure TimePoint_1 subdirectory exists in stitched directory
-    dirs['stitched'].mkdir(parents=True, exist_ok=True)
-    print(f"Stitched TimePoint_1 directory created: {dirs['stitched']}")
-    
+
+    # Copy HTD files to all output directories
+    htd_files = list(base_dir.glob("*.HTD"))
+    if htd_files:
+        for htd_file in htd_files:
+            for name, parent_dir_path in parent_dirs.items():
+                dest_path = parent_dir_path / htd_file.name
+                if htd_file.resolve() != dest_path.resolve():
+                    shutil.copy2(htd_file, dest_path)
+                    print(f"Copied HTD file to {dest_path}")
+
+    return dirs
+
+    # Now create all the TimePoint_1 subdirectories
+    for name, dir_path in dirs.items():
+        if name != 'input':  # Input directory already exists
+            dir_path.mkdir(parents=True, exist_ok=True)
+            print(f"Directory created: {dir_path}")
+
+    # Copy HTD files to all output directories
+    htd_files = list(base_dir.glob("*.HTD"))
+    if htd_files:
+        for htd_file in htd_files:
+            for name, parent_dir_path in parent_dirs.items():
+                dest_path = parent_dir_path / htd_file.name
+                if htd_file.resolve() != dest_path.resolve():
+                    shutil.copy2(htd_file, dest_path)
+                    print(f"Copied HTD file to {dest_path}")
+
     return dirs
 
 def setup_plate_processing(plate_folder):
@@ -765,7 +824,7 @@ def setup_plate_processing(plate_folder):
 
     return dirs, (grid_size_x, grid_size_y), patterns_by_well
 
-def prepare_reference_channel(well, wavelength_patterns, dirs, 
+def prepare_reference_channel(well, wavelength_patterns, dirs,
                            channels=None, preprocessing_funcs=None,
                            composite_weights=None):
     """
@@ -773,7 +832,7 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
     1. Preprocessing all specified channels
     2. Creating a composite if multiple channels are provided
     3. Using a single channel if only one is specified
-    
+
     Args:
         well: Well identifier
         wavelength_patterns: Dictionary mapping channel names to file patterns
@@ -781,13 +840,13 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
         channels: Channel(s) to use as reference - string for single channel or list for composite
         preprocessing_funcs: Dictionary mapping channels to preprocessing functions
         composite_weights: Optional weights for channels when creating a composite
-    
+
     Returns:
         Tuple: (ref_channel, ref_pattern, ref_dir, updated_wavelength_patterns)
     """
     # Make a copy of wavelength_patterns to avoid modifying the original
     wavelength_patterns = wavelength_patterns.copy()
-    
+
     # Ensure channels is a list and contains valid channels
     if channels is None:
         # Default to first available channel
@@ -795,16 +854,16 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
     elif isinstance(channels, str):
         # Single channel case
         channels = [channels]
-    
+
     # Filter to valid channels only
     valid_channels = sorted(list(wavelength_patterns.keys()))
     if not valid_channels:
         print(f"No valid channels specified, using first available")
         valid_channels = [next(iter(wavelength_patterns.keys()))]
-    
+
     # Determine create_composite based on number of channels
     create_composite = len(valid_channels) > 1
-    
+
     # Preprocess all required channels
     if preprocessing_funcs:
         for channel in valid_channels:
@@ -813,32 +872,32 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
                 # Get pattern string from potentially nested structure
                 pattern_string = get_pattern_string(wavelength_patterns[channel])
                 process_imgs_from_pattern(
-                    dirs['input'], 
+                    dirs['input'],
                     pattern_string,
                     preprocessing_funcs[channel],
                     dirs['processed']
                 )
-    
+
     # Set reference directory - will be 'processed' if any preprocessing happened
     ref_dir = dirs['input']
-    if preprocessing_funcs and any(ch in preprocessing_funcs and preprocessing_funcs[ch] 
+    if preprocessing_funcs and any(ch in preprocessing_funcs and preprocessing_funcs[ch]
                                   for ch in valid_channels):
         ref_dir = dirs['processed']
-    
+
     # Create composite if multiple channels specified
     if create_composite:
         print(f"Creating composite reference for well {well} from {valid_channels}")
-        
+
         # Get file lists for each channel
         channel_files = {}
         for channel in valid_channels:
             pattern_string = get_pattern_string(wavelength_patterns[channel])
             channel_files[channel] = path_list_from_pattern(dirs['input'], pattern_string)
-            
+
         # Generate a pattern for the new composite channel
-        composite_pattern = generate_composite_reference_pattern(well, 
+        composite_pattern = generate_composite_reference_pattern(well,
                                                               {ch: wavelength_patterns[ch] for ch in valid_channels})
-        
+
         # Create the composite reference files in the processed directory
         create_composite_reference_files(
             dirs['input'],
@@ -848,7 +907,7 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
             composite_weights,
             preprocessing_funcs
         )
-        
+
         # Add composite as a new "wavelength"
         wavelength_patterns['composite'] = composite_pattern
         reference_channel = 'composite'
@@ -858,10 +917,10 @@ def prepare_reference_channel(well, wavelength_patterns, dirs,
         # Single channel case
         reference_channel = valid_channels[0]
         ref_pattern = get_pattern_string(wavelength_patterns[reference_channel])
-    
+
     return reference_channel, ref_pattern, ref_dir, wavelength_patterns
 
-def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims, 
+def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims,
                            ref_channel, ref_pattern, ref_dir, margin_ratio=0.1,
                            tile_overlap=10, tile_overlap_x=None, tile_overlap_y=None,
                            max_shift=50):
@@ -878,7 +937,7 @@ def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims,
 
     print(f"Generating positions using Ashlar with pattern: {ref_pattern}")
     print(f"Reading reference images from: {ref_dir}")
-    
+
     # Use Ashlar to generate positions from the reference channel
     ashlar_stitch_v2(
         image_dir=ref_dir,
@@ -898,13 +957,13 @@ def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims,
         if wavelength == 'composite':
             print(f"Skipping assembly of composite channel (used only for alignment)")
             continue
-            
+
         # Use original image directory for assembly
         img_dir = dirs['input']
 
         # Get files for this wavelength to override the composite filenames
         override_names = path_list_from_pattern(img_dir, pattern)
-        
+
         # Assemble final image
         stitched_name = compute_stitched_name(pattern)
         output_path = dirs['stitched'] / stitched_name
@@ -918,35 +977,96 @@ def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims,
             override_names=override_names  # Use the correct filenames for this wavelength
         )
 
-def process_plate_folder(plate_folder, reference_channels=['1'], 
+def process_plate_folder(plate_folder, reference_channels=['1'],
                          preprocessing_funcs=None, margin_ratio=0.1,
                          composite_weights=None, well_filter=None,
                          tile_overlap=6.5, tile_overlap_x=None, tile_overlap_y=None,
-                         max_shift=50):
+                         max_shift=50, focus_detect=False, focus_method="combined",
+                         create_projections=False, projection_types=['max', 'mean'],
+                         stitch_z_reference='best_focus'):
     """
     Process an entire plate folder with microscopy images.
-    
+
+    This function handles all aspects of microscopy image processing including:
+    - Z-stack detection and organization
+    - Best focus selection for Z-stacks
+    - Projection creation (max, mean, median) for Z-stacks
+    - Composite image creation from multiple wavelengths
+    - Stitching with ashlar
+
     Args:
         plate_folder: Base folder for the plate
-        reference_channel: Channel to use as reference for alignment
+        reference_channels: List of channels to use as reference for alignment
         preprocessing_funcs: Dict mapping wavelength/channel to preprocessing function
         margin_ratio: Blending margin ratio for stitching
-        create_composite: Whether to create a composite reference channel
-        composite_channels: List of channels to include in composite
         composite_weights: Dict mapping channels to weights for composite
         well_filter: Optional list of wells to process (if None, process all)
         tile_overlap: Percentage of overlap between tiles (default 6.5%)
         tile_overlap_x: Horizontal overlap percentage (defaults to tile_overlap)
         tile_overlap_y: Vertical overlap percentage (defaults to tile_overlap)
         max_shift: Maximum shift allowed between tiles in microns (default 50)
+        focus_detect: Whether to enable focus detection for Z-stacks
+        focus_method: Focus detection method to use
+        create_projections: Whether to create Z-stack projections
+        projection_types: Types of projections to create
+        stitch_z_reference: Z-reference for stitching ('best_focus' or z-index)
     """
     try:
+        # First preprocess to handle Z-stacks if present
+        has_zstack, z_info = preprocess_plate_folder(plate_folder)
+
+        # Get the parent directory and plate name for correct folder structure
+        plate_path = Path(plate_folder)
+        parent_dir = plate_path.parent
+        plate_name = plate_path.name
+
+        # Handle Z-stack specific processing if detected
+        if has_zstack:
+            print(f"Z-stack detected in {plate_folder}")
+
+            # Handle focus detection if requested
+            best_focus_dir = None
+            if focus_detect:
+                print(f"Performing best focus detection using {focus_method} method")
+                success, best_focus_dir = select_best_focus_zstack(
+                    plate_folder,
+                    focus_wavelength=reference_channels[0],
+                    focus_method=focus_method
+                )
+                if not success:
+                    print(f"Warning: Best focus detection failed, using original images")
+
+            # Handle projections if requested
+            projections_dir = None
+            if create_projections:
+                print(f"Creating Z-stack projections: {', '.join(projection_types)}")
+                success, projections_dir = create_zstack_projections(
+                    plate_folder,
+                    projection_types=projection_types
+                )
+                if not success:
+                    print(f"Warning: Projection creation failed, using original images")
+
+            # Determine which directory to use for stitching
+            stitch_source = plate_folder
+            if stitch_z_reference == 'best_focus' and best_focus_dir:
+                stitch_source = best_focus_dir
+                print(f"Using best focus images for stitching from {best_focus_dir}")
+            elif stitch_z_reference in projection_types and projections_dir:
+                # Use the specified projection type
+                stitch_source = projections_dir
+                print(f"Using {stitch_z_reference} projections for stitching from {projections_dir}")
+        else:
+            # No Z-stack detected, use original folder
+            stitch_source = plate_folder
+            print(f"No Z-stack detected in {plate_folder}, using standard stitching")
+
         # 1. Setup and detection
         try:
-            dirs, grid_dims, patterns_by_well = setup_plate_processing(plate_folder)
+            dirs, grid_dims, patterns_by_well = setup_plate_processing(stitch_source)
         except ValueError as e:
             print(f"Error: {e}")
-            print(f"Skipping plate {plate_folder}")
+            print(f"Skipping plate {stitch_source}")
             return
 
         if not patterns_by_well:
@@ -954,7 +1074,7 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
 
         # Filter wells if requested
         if well_filter:
-            patterns_by_well = {well: patterns for well, patterns in patterns_by_well.items() 
+            patterns_by_well = {well: patterns for well, patterns in patterns_by_well.items()
                                if well in well_filter}
             if not patterns_by_well:
                 print(f"None of the requested wells {well_filter} found")
@@ -982,26 +1102,12 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
 
             print(f"Completed processing well {well}")
 
-        print(f"\nFinished stitching all wells in plate {plate_folder}")
+        print(f"\nFinished stitching all wells in plate {stitch_source}")
 
     except Exception as err:
         import traceback
         traceback.print_exc()
         print(f"Failed to process plate folder {plate_folder}: {err}")
-
-def modified_process_plate_folder(plate_folder, **kwargs):
-    """
-    Modified version of process_plate_folder that handles Z-stacks
-    
-    Args:
-        plate_folder: Base folder for the plate
-        **kwargs: All the original parameters for process_plate_folder
-    """
-    # Preprocess to handle Z-stacks
-    preprocess_plate_folder(plate_folder)
-    
-    # Now call the original process_plate_folder function
-    process_plate_folder(plate_folder, **kwargs)
 
 
 ############################
@@ -1019,17 +1125,22 @@ if __name__ == "__main__":
         # Example paths - replace with actual paths when running
         '/path/to/your/plate/folder'
     ]
-    
+
     if isinstance(plate_folders, str):
         plate_folders = [plate_folders]
 
     # Process each plate with Z-stack support
     for folder in plate_folders:
-        modified_process_plate_folder(
+        process_plate_folder(
             folder,
             reference_channels=["1", "2"],
             composite_weights={"1": 0.1, "2": 0.9},
             preprocessing_funcs={"1": process_bf},
             tile_overlap=10,
-            max_shift=50
+            max_shift=50,
+            focus_detect=True,
+            focus_method="combined",
+            create_projections=True,
+            projection_types=["max", "mean"],
+            stitch_z_reference="best_focus"
         )

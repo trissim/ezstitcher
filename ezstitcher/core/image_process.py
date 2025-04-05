@@ -45,57 +45,57 @@ def find_edge(image):
 def create_weighted_composite(images_dict, weights_dict=None):
     """
     Create a composite image by weighted combination of multiple input images.
-    
+
     Args:
         images_dict: Dict mapping channel names to images (numpy arrays)
         weights_dict: Dict mapping channel names to weights (default: equal weights)
-        
+
     Returns:
         np.ndarray: The composite image with the same dtype as input images
     """
     if not images_dict:
         raise ValueError("No images provided")
-        
+
     # Use equal weights if none provided
     if weights_dict is None:
         weight = 1.0 / len(images_dict)
         weights_dict = {channel: weight for channel in images_dict.keys()}
-    
+
     composite = None
     original_dtype = None
-    
+
     # Combine channels with their respective weights
     for channel, img in images_dict.items():
         if original_dtype is None:
             original_dtype = img.dtype
-            
+
         # Get weight for this channel (default to 0 if not in weights_dict)
         weight = weights_dict.get(channel, 0.0)
-        
+
         # Add weighted contribution
         if composite is None:
             composite = img.astype(np.float32) * weight
         else:
             composite += img.astype(np.float32) * weight
-    
+
     # Normalize and convert back to original dtype
     if original_dtype is None:
         # Should never happen if images_dict is not empty
         return None
-        
+
     if np.issubdtype(original_dtype, np.integer):
         max_val = np.iinfo(original_dtype).max
     else:
         max_val = 1.0  # For float dtypes, assume [0,1] range
-        
+
     composite = np.clip(composite, 0, max_val).astype(original_dtype)
     return composite
 
 def tophat(image, selem_radius=50, downsample_factor=4):
     # 1) Downsample
     #    For grayscale images: trans.resize with anti_aliasing=True
-    image_small = trans.resize(image, 
-                               (image.shape[0]//downsample_factor, 
+    image_small = trans.resize(image,
+                               (image.shape[0]//downsample_factor,
                                 image.shape[1]//downsample_factor),
                                anti_aliasing=True, preserve_range=True)
 
@@ -312,7 +312,9 @@ def assemble_image_subpixel(positions_path, images_dir, output_path, margin_rati
             raise RuntimeError(f"Missing image: {fname} in {images_dir}")
 
     # Read the first tile to get shape, dtype
-    first_tile = skimage.io.imread(os.path.join(images_dir, pos_entries[0][0]))
+    # Use tifffile directly to avoid imagecodecs dependency
+    import tifffile
+    first_tile = tifffile.imread(os.path.join(images_dir, pos_entries[0][0]))
     tile_h, tile_w = first_tile.shape[:2]
     dtype = first_tile.dtype
     num_channels = 1 if first_tile.ndim == 2 else first_tile.shape[2]
@@ -353,7 +355,8 @@ def assemble_image_subpixel(positions_path, images_dir, output_path, margin_rati
     for i, (fname, x_f, y_f) in enumerate(pos_entries):
         print(f"Placing tile {i+1}/{len(pos_entries)}: {fname} at subpixel ({x_f}, {y_f})")
 
-        tile_img = skimage.io.imread(os.path.join(images_dir, fname))
+        # Use tifffile directly to avoid imagecodecs dependency
+        tile_img = tifffile.imread(os.path.join(images_dir, fname))
         if tile_img.shape[:2] != (tile_h, tile_w):
             raise RuntimeError(f"Tile shape mismatch: {tile_img.shape} vs {tile_h}x{tile_w}")
         if tile_img.dtype != dtype:
@@ -400,5 +403,6 @@ def assemble_image_subpixel(positions_path, images_dir, output_path, margin_rati
     blended = np.clip(blended, 0, max_val).astype(dtype)
 
     print(f"Saving stitched image to {output_path}")
-    skimage.io.imsave(output_path, blended, check_contrast=False)
+    # Use tifffile directly to avoid imagecodecs dependency
+    tifffile.imwrite(output_path, blended, compression=None)
     print("Done.")

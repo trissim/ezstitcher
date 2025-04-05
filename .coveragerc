@@ -1,0 +1,7 @@
+[run]
+source = ezstitcher
+omit = 
+    */site-packages/*
+    */dist-packages/*
+    */tests/*
+    */config-*.py
