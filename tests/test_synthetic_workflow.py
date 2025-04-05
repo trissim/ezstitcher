@@ -34,7 +34,7 @@ sys.path.append(os.path.join(parent_dir, 'utils'))
 from generate_synthetic_data import SyntheticMicroscopyGenerator
 
 # Import core functionality
-from ezstitcher.core.stitcher import process_plate_folder
+from ezstitcher.core.main import process_plate_folder
 
 # Set up logging
 logging.basicConfig(
@@ -220,8 +220,8 @@ class TestSyntheticWorkflow(unittest.TestCase):
 
         try:
             # Test Z-stack detection on Z-stack data
-            from ezstitcher.core.z_stack_handler import preprocess_plate_folder
-            has_zstack, z_info = preprocess_plate_folder(self.zstack_dir)
+            from ezstitcher.core.z_stack_manager import ZStackManager
+            has_zstack, z_info = ZStackManager.preprocess_plate_folder(self.zstack_dir)
             self.assertTrue(has_zstack, "Failed to detect Z-stack in Z-stack data")
             self.assertTrue('z_indices_map' in z_info, "Z-indices map not found in Z-info")
 
@@ -248,16 +248,23 @@ class TestSyntheticWorkflow(unittest.TestCase):
 
         try:
             # First preprocess to organize Z-stacks
-            from ezstitcher.core.z_stack_handler import preprocess_plate_folder, select_best_focus_zstack
-            has_zstack, z_info = preprocess_plate_folder(self.zstack_dir)
+            from ezstitcher.core.z_stack_manager import ZStackManager
+            has_zstack, z_info = ZStackManager.preprocess_plate_folder(self.zstack_dir)
             self.assertTrue(has_zstack, "Failed to detect Z-stack in Z-stack data")
 
             # Select best focus images
-            success, best_focus_dir = select_best_focus_zstack(
-                self.zstack_dir,
-                focus_wavelength='1',
-                focus_method='combined'
+            # Create best focus directory
+            best_focus_dir = os.path.join(self.output_dir, "best_focus")
+            os.makedirs(best_focus_dir, exist_ok=True)
+
+            # Select best focus images
+            best_focus_results = ZStackManager.select_best_focus_zstack(
+                os.path.join(self.zstack_dir, "TimePoint_1"),
+                best_focus_dir,
+                focus_method="combined",
+                focus_wavelength="1"
             )
+            success = len(best_focus_results) > 0
 
             self.assertTrue(success, "Best focus selection failed")
             self.assertTrue(os.path.exists(best_focus_dir), f"Best focus directory not created: {best_focus_dir}")
@@ -282,16 +289,23 @@ class TestSyntheticWorkflow(unittest.TestCase):
 
         try:
             # First preprocess to organize Z-stacks
-            from ezstitcher.core.z_stack_handler import preprocess_plate_folder, create_zstack_projections
-            has_zstack, z_info = preprocess_plate_folder(self.zstack_dir)
+            from ezstitcher.core.z_stack_manager import ZStackManager
+            has_zstack, z_info = ZStackManager.preprocess_plate_folder(self.zstack_dir)
             self.assertTrue(has_zstack, "Failed to detect Z-stack in Z-stack data")
 
             # Create projections
             projection_types = ['max', 'mean']
-            success, proj_dir = create_zstack_projections(
-                self.zstack_dir,
+            # Create projections directory
+            proj_dir = os.path.join(self.output_dir, "projections")
+            os.makedirs(proj_dir, exist_ok=True)
+
+            # Create projections
+            projections = ZStackManager.create_zstack_projections(
+                os.path.join(self.zstack_dir, "TimePoint_1"),
+                proj_dir,
                 projection_types=projection_types
             )
+            success = len(projections) > 0
 
             self.assertTrue(success, "Projection creation failed")
             self.assertTrue(os.path.exists(proj_dir), f"Projections directory not created: {proj_dir}")
@@ -433,8 +447,8 @@ class TestSyntheticWorkflow(unittest.TestCase):
         print("\nTesting Z-stack workflow with per-plane stitching...")
 
         # First, we need to preprocess the Z-stack data to organize it
-        from ezstitcher.core.z_stack_handler import preprocess_plate_folder
-        has_zstack, z_info = preprocess_plate_folder(self.zstack_dir)
+        from ezstitcher.core.z_stack_manager import ZStackManager
+        has_zstack, z_info = ZStackManager.preprocess_plate_folder(self.zstack_dir)
         self.assertTrue(has_zstack, "Failed to detect Z-stack in Z-stack data")
 
         # Get the number of Z-planes
