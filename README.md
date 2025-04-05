@@ -19,18 +19,44 @@ An easy-to-use microscopy image stitching and processing tool for high-content i
 
 ## Installation
 
+### Requirements
+
+- **Python 3.11.9** (recommended for best compatibility with all dependencies)
+- Git
+
+### Linux/macOS
+
 ```bash
 # Clone the repository
 git clone https://github.com/trissim/ezstitcher.git
 cd ezstitcher
 
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
+# Create and activate a virtual environment with Python 3.11.9
+python3.11 -m venv .venv
+source .venv/bin/activate
 
 # Install the package in development mode
 pip install -e .
 ```
+
+### Windows
+
+```powershell
+# Clone the repository
+git clone https://github.com/trissim/ezstitcher.git
+cd ezstitcher
+
+# Create and activate a virtual environment with Python 3.11.9
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+
+# Install the package in development mode
+pip install -e .
+```
+
+### Python Version Note
+
+Python 3.11.9 is recommended because it provides the best compatibility with all required dependencies.
 
 ## Command Line Usage
 
@@ -147,6 +173,48 @@ Stitch microscopy tiles with Z-awareness:
 
 ## Testing
 
+### Running Tests
+
+EZStitcher includes a comprehensive test suite that verifies all core functionality. Here's how to run the tests:
+
+1. **Setup your environment**:
+
+```bash
+# Clone the repository
+git clone https://github.com/trissim/ezstitcher.git
+cd ezstitcher
+
+# Create and activate a virtual environment with Python 3.11.9
+python3.11 -m venv .venv
+source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
+
+# Install the package in development mode
+pip install -e .
+```
+
+2. **Run the tests**:
+
+```bash
+# Make sure PYTHONPATH is empty to avoid conflicts
+PYTHONPATH="" python -m unittest tests/test_synthetic_workflow.py
+```
+
+3. **Run with code coverage**:
+
+```bash
+# Install coverage package
+pip install coverage
+
+# Run tests with coverage analysis
+PYTHONPATH="" python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
+
+# Generate HTML report
+python -m coverage html
+
+# View the report in your browser
+open htmlcov/index.html  # On Linux, use: xdg-open htmlcov/index.html
+```
+
 ### Synthetic Data Generation
 
 EZStitcher includes a synthetic microscopy data generator for testing purposes:
@@ -179,24 +247,19 @@ This will create a synthetic microscopy dataset with:
 - Proper folder structure and file naming conventions
 - All images saved without compression
 
-### Comprehensive Testing
+### What the Tests Cover
 
-Run the comprehensive test suite that tests all core functionality:
+The comprehensive test suite tests all core functionality:
 
-```bash
-python -m unittest tests/test_synthetic_workflow.py
-```
-
-This test:
-- Generates synthetic microscopy data with Z-stacks
-- Tests Z-stack detection and organization
-- Tests best focus selection
-- Tests projection creation
-- Tests stitching with various reference methods
+- **Z-stack detection and organization**: Tests the ability to detect and organize Z-stack data
+- **Best focus selection**: Tests the algorithms for finding the best focused plane in a Z-stack
+- **Projection creation**: Tests the creation of various projection types (max, mean, etc.)
+- **Stitching**: Tests the stitching functionality with various reference methods
+- **Multi-channel processing**: Tests handling of multiple wavelengths and composite creation
 
 ### Code Coverage Analysis
 
-Run tests with code coverage analysis:
+The code coverage analysis helps identify which parts of the code are well-tested and which need more coverage:
 
 ```bash
 python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
@@ -220,7 +283,7 @@ This will:
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.8 - 3.11.9 (3.11.9 recommended)
 - numpy
 - scikit-image
 - scipy
