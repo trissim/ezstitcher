@@ -978,6 +978,12 @@ class ZStackManager:
             shutil.rmtree(temp_dir, ignore_errors=True)
             shutil.rmtree(parent_dir / f"{plate_name}_z{z_index:03d}_temp_stitched", ignore_errors=True)
             shutil.rmtree(parent_dir / f"{plate_name}_z{z_index:03d}_temp_positions", ignore_errors=True)
+
+            # Clean up any processed folders for this Z-plane using pattern matching
+            for z_processed_dir in parent_dir.glob(f"{plate_name}_z{z_index:03d}*_processed"):
+                shutil.rmtree(z_processed_dir, ignore_errors=True)
+                logger.info(f"Cleaned up Z-plane processed directory: {z_processed_dir}")
+
             logger.info(f"Cleaned up temporary directories for Z-plane {z_index}")
 
         # Clean up reference directory and positions if they were created specifically for this stitching
@@ -986,5 +992,10 @@ class ZStackManager:
             # But do clean up the positions directory
             shutil.rmtree(reference_positions_dir, ignore_errors=True)
             logger.info(f"Cleaned up reference positions directory: {reference_positions_dir}")
+
+        # Clean up any processed folders using pattern matching
+        for processed_dir in parent_dir.glob(f"{plate_name}*_processed"):
+            shutil.rmtree(processed_dir, ignore_errors=True)
+            logger.info(f"Cleaned up processed directory: {processed_dir}")
 
         return True
