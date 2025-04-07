@@ -1,11 +1,10 @@
 # EZStitcher
 
-An easy-to-use microscopy image stitching and processing tool for high-content imaging applications.
+An easy-to-use microscopy image stitching and processing tool for high-content imaging applications, currently optimized for ImageXpress microscopes with OperaPhenix support coming in future releases.
 
 ## Features
 
-- Microscopy image processing with various filters (blur, edge detection, tophat)
-- Histogram matching and normalization for consistent imaging
+- Microscopy image processing with various filters
 - Image stitching with subpixel precision
 - Enhanced Z-stack handling with advanced focus detection
 - 3D projections for Z-stack visualization (maximum, mean, etc.)
@@ -13,10 +12,13 @@ An easy-to-use microscopy image stitching and processing tool for high-content i
 - Support for multi-channel fluorescence microscopy
 - Well and pattern detection for plate-based experiments
 - Automatic metadata extraction from TIFF files
-- Synthetic microscopy data generation for testing
-- Comprehensive test suite with code coverage analysis
 - No dependency on imagecodecs (uses uncompressed TIFF)
 - Class-based architecture for improved code organization and modularity
+
+## Supported Microscopes
+
+- **ImageXpress**: Full support for all features
+- **OperaPhenix**: Coming in future releases
 
 ## Installation
 
@@ -72,17 +74,10 @@ ezstitcher /path/to/plate_folder --focus-detect --focus-method combined
 ezstitcher /path/to/plate_folder --create-projections --projection-types max,mean,std
 
 # Full Z-stack workflow with best focus detection and stitching
-ezstitcher /path/to/plate_folder --focus-detect --create-projections --stitch-z-reference best_focus
+ezstitcher /path/to/plate_folder --focus-detect --create-projections --stitch-method best_focus
 
 # Process specific wells
 ezstitcher /path/to/plate_folder --wells A01 B02 C03
-
-# Generate synthetic test data
-generate-synthetic-data --output-dir test_data --grid-size 3 3 --wavelengths 2 --z-stack-levels 3
-
-# Run tests with coverage analysis
-python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
-python -m coverage html
 ```
 
 ## Python API Usage
@@ -90,29 +85,26 @@ python -m coverage html
 ### Comprehensive Plate Processing
 
 ```python
-from ezstitcher.core.stitcher import process_plate_folder
-from ezstitcher.core.image_process import process_bf
+from ezstitcher.core import process_plate_folder
 
 # Process a single plate folder with all features
 process_plate_folder(
     'path/to/plate_folder',
     reference_channels=["1", "2"],
-    composite_weights={"1": 0.1, "2": 0.9},
-    preprocessing_funcs={"1": process_bf},
     tile_overlap=10,
     max_shift=50,
     focus_detect=True,                # Enable best focus detection for Z-stacks
     focus_method="combined",          # Use combined focus metrics
     create_projections=True,          # Create Z-stack projections
     projection_types=["max", "mean"], # Types of projections to create
-    stitch_z_reference="best_focus"   # Use best focus images for stitching
+    stitch_method="best_focus"        # Use best focus images for stitching
 )
 ```
 
 ### Basic Stitching (No Z-stacks)
 
 ```python
-from ezstitcher.core.stitcher import process_plate_folder
+from ezstitcher.core import process_plate_folder
 
 # Process a plate folder without Z-stack handling
 process_plate_folder(
@@ -126,13 +118,12 @@ process_plate_folder(
 ### Multi-Channel Reference Stitching
 
 ```python
-from ezstitcher.core.stitcher import process_plate_folder
+from ezstitcher.core import process_plate_folder
 
-# Process using multiple reference channels with custom weights
+# Process using multiple reference channels
 process_plate_folder(
     'path/to/plate_folder',
     reference_channels=["1", "2"],
-    composite_weights={"1": 0.3, "2": 0.7},
     tile_overlap=10
 )
 ```
@@ -161,9 +152,7 @@ Multiple algorithms for identifying the best focused plane in a Z-stack:
 Create various projection types from Z-stacks:
 - Maximum intensity projection
 - Mean intensity projection
-- Minimum intensity projection
 - Standard deviation projection
-- Sum projection
 
 ### 4. Z-Aware Stitching
 
@@ -172,132 +161,9 @@ Stitch microscopy tiles with Z-awareness:
 - Create consistent composite images from different wavelengths
 - Generate positions from reference Z-planes
 
-## Testing
+## Class-Based Architecture
 
-### Running Tests
-
-EZStitcher includes a comprehensive test suite that verifies all core functionality. Here's how to run the tests:
-
-1. **Setup your environment**:
-
-```bash
-# Clone the repository
-git clone https://github.com/trissim/ezstitcher.git
-cd ezstitcher
-
-# Create and activate a virtual environment with Python 3.11.9
-python3.11 -m venv .venv
-source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
-
-# Install the package in development mode
-pip install -e .
-```
-
-2. **Run the tests**:
-
-```bash
-# Make sure PYTHONPATH is empty to avoid conflicts
-PYTHONPATH="" python -m unittest tests/test_synthetic_workflow.py
-```
-
-3. **Run with code coverage**:
-
-```bash
-# Install coverage package
-pip install coverage
-
-# Run tests with coverage analysis
-PYTHONPATH="" python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
-
-# Generate HTML report
-python -m coverage html
-
-# View the report in your browser
-open htmlcov/index.html  # On Linux, use: xdg-open htmlcov/index.html
-```
-
-### Synthetic Data Generation
-
-EZStitcher includes a synthetic microscopy data generator for testing purposes:
-
-```python
-from utils.generate_synthetic_data import SyntheticMicroscopyGenerator
-
-# Create a generator for synthetic microscopy data
-generator = SyntheticMicroscopyGenerator(
-    output_dir="synthetic_data",
-    grid_size=(3, 3),           # 3x3 grid (9 tiles)
-    image_size=(1024, 1024),    # Image dimensions
-    tile_size=(512, 512),       # Tile dimensions
-    overlap_percent=10,         # Tile overlap
-    stage_error_px=5,           # Simulated stage positioning error
-    wavelengths=3,              # Number of wavelengths/channels
-    z_stack_levels=5,           # Number of Z-stack levels
-    num_cells=200,              # Number of synthetic cells
-    random_seed=42              # For reproducibility
-)
-
-# Generate the dataset
-generator.generate_dataset()
-```
-
-This will create a synthetic microscopy dataset with:
-- Multiple wavelengths/channels
-- Z-stacks with varying focus levels
-- Overlapping tiles with realistic stage positioning errors
-- Proper folder structure and file naming conventions
-- All images saved without compression
-
-### What the Tests Cover
-
-The comprehensive test suite tests all core functionality:
-
-- **Z-stack detection and organization**: Tests the ability to detect and organize Z-stack data
-- **Best focus selection**: Tests the algorithms for finding the best focused plane in a Z-stack
-- **Projection creation**: Tests the creation of various projection types (max, mean, etc.)
-- **Stitching**: Tests the stitching functionality with various reference methods
-- **Multi-channel processing**: Tests handling of multiple wavelengths and composite creation
-
-### Code Coverage Analysis
-
-The code coverage analysis helps identify which parts of the code are well-tested and which need more coverage:
-
-```bash
-python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
-python -m coverage html
-```
-
-This will:
-- Run the tests with coverage analysis
-- Generate an HTML report in the `htmlcov` directory
-- Show which parts of the code are well-tested
-- Identify areas that need more test coverage
-
-## Package Structure
-
-- `ezstitcher/core/image_process.py`: Core image processing functions
-- `ezstitcher/core/stitcher.py`: Main stitching pipeline with comprehensive `process_plate_folder`
-- `ezstitcher/core/z_stack_handler.py`: Z-stack organization and processing
-- `ezstitcher/core/focus_detect.py`: Focus quality detection algorithms
-- `utils/generate_synthetic_data.py`: Synthetic microscopy data generator
-- `tests/test_synthetic_workflow.py`: Comprehensive test suite
-
-## Requirements
-
-- Python 3.8 - 3.11.9 (3.11.9 recommended)
-- numpy
-- scikit-image
-- scipy
-- pandas
-- tifffile
-- ashlar
-- opencv-python
-- matplotlib (for visualization)
-- coverage (for test coverage analysis)
-
-## Class-Based API
-
-EZStitcher provides a class-based API for more flexibility and control. This API is available in the `class-based-refactor` branch and will be merged into the main branch after thorough testing.
+EZStitcher uses a class-based architecture for better organization and modularity:
 
 ### Key Classes
 
@@ -306,64 +172,26 @@ EZStitcher provides a class-based API for more flexibility and control. This API
 - **ZStackManager**: Manages Z-stack organization and processing
 - **StitcherManager**: Handles image stitching operations
 
-### Example Usage
+## Running Tests
 
-```python
-from ezstitcher.core import (
-    ImageProcessor,
-    FocusDetector,
-    ZStackManager,
-    StitcherManager
-)
+EZStitcher includes a comprehensive test suite that verifies all core functionality:
 
-# Preprocess the plate folder to detect and organize Z-stacks
-has_zstack, z_info = ZStackManager.preprocess_plate_folder('path/to/plate_folder')
-
-if has_zstack:
-    # Create projections from Z-stacks
-    projections = ZStackManager.create_zstack_projections(
-        'path/to/plate_folder/TimePoint_1',
-        'path/to/output/projections',
-        projection_types=["max", "mean"]
-    )
-
-    # Find best focused images
-    best_focus_results = ZStackManager.select_best_focus_zstack(
-        'path/to/plate_folder/TimePoint_1',
-        'path/to/output/best_focus',
-        focus_method="combined",
-        focus_wavelength="1"
-    )
-
-# Process images with custom preprocessing
-def custom_preprocessing(images):
-    # Apply multiple processing steps
-    processed = [ImageProcessor.blur(img, sigma=1) for img in images]
-    processed = [ImageProcessor.find_edge(img) for img in processed]
-    return processed
-
-# Process the plate folder
-StitcherManager.process_plate_folder(
-    'path/to/plate_folder',
-    reference_channels=["1", "2"],
-    composite_weights={"1": 0.3, "2": 0.7},
-    preprocessing_funcs={"1": custom_preprocessing},
-    tile_overlap=10,
-    max_shift=50,
-    focus_detect=True,
-    focus_method="combined",
-    create_projections=True,
-    projection_types=["max", "mean"],
-    stitch_z_reference="best_focus"
-)
+```bash
+# Make sure you're in the ezstitcher directory with your virtual environment activated
+python -m pytest tests/test_synthetic_workflow_class_based.py -v
 ```
 
-### Benefits of the Class-Based API
+## Requirements
 
-1. **Modularity**: Use only the components you need
-2. **Flexibility**: Create custom workflows by combining different operations
-3. **Readability**: Clear separation of concerns makes the code easier to understand
-4. **Extensibility**: Easier to add new features or modify existing ones
+- Python 3.11.9 (recommended)
+- numpy
+- scikit-image
+- scipy
+- pandas
+- tifffile
+- ashlar
+- opencv-python
+- pytest (for running tests)
 
 ## License
 
