@@ -135,6 +135,9 @@ class SyntheticMicroscopyGenerator:
         # Store the wells to generate
         self.wells = wells
 
+        # Store the base random seed
+        self.base_random_seed = random_seed
+
         # Set random seed if provided
         if random_seed is not None:
             np.random.seed(random_seed)
@@ -207,8 +210,12 @@ class SyntheticMicroscopyGenerator:
                 'rotation': rotation
             })
 
-        # Now generate completely different cells for each wavelength
-        self.cell_params = []
+        # We'll generate cell parameters for each well and wavelength on demand
+        # This is just a placeholder initialization
+        self.cell_params = {}
+
+        # Store wavelength-specific parameters for later use
+        self.wavelength_specific_params = []
         for w in range(wavelengths):
             wavelength_idx = w + 1  # 1-based wavelength index
 
@@ -218,18 +225,51 @@ class SyntheticMicroscopyGenerator:
             w_cell_size_range = w_params.get('cell_size_range', self.cell_size_range)
             w_cell_intensity_range = w_params.get('cell_intensity_range', self.cell_intensity_range)
 
+            self.wavelength_specific_params.append({
+                'wavelength_idx': wavelength_idx,
+                'num_cells': w_num_cells,
+                'cell_size_range': w_cell_size_range,
+                'cell_intensity_range': w_cell_intensity_range
+            })
+
+            # We'll generate cells on demand in generate_cell_image
+
+    def generate_cell_image(self, wavelength, z_level, well=None):
+        """
+        Generate a full image with cells for a specific wavelength and Z level.
+
+        Args:
+            wavelength: Wavelength channel index
+            z_level: Z-stack level index
+            well: Well identifier (e.g., 'A01')
+
+        Returns:
+            Full image with cells
+        """
+        # Generate a unique key for this well and wavelength
+        key = f"{well}_{wavelength}" if well else f"default_{wavelength}"
+
+        # Get wavelength-specific parameters
+        wavelength_idx = wavelength + 1  # Convert to 1-based index for params lookup
+        w_params = self.wavelength_params.get(wavelength_idx, {})
+
+        # Generate cells for this well and wavelength if not already generated
+        if key not in self.cell_params:
+            # Get parameters for cell generation
+            w_num_cells = w_params.get('num_cells', self.num_cells)
+            w_cell_size_range = w_params.get('cell_size_range', self.cell_size_range)
+            w_cell_intensity_range = w_params.get('cell_intensity_range', self.cell_intensity_range)
+
             # Generate cells for this wavelength
             cells = []
-
-            # Generate completely new cells for each wavelength
             for i in range(w_num_cells):
                 # Generate random position for this wavelength
-                x = np.random.randint(0, image_size[0])
-                y = np.random.randint(0, image_size[1])
+                x = np.random.randint(0, self.image_size[0])
+                y = np.random.randint(0, self.image_size[1])
 
                 # Generate random cell properties
-                size = np.random.uniform(*w_cell_size_range)
-                eccentricity = np.random.uniform(*self.cell_eccentricity_range)
+                size = np.random.uniform(w_cell_size_range[0], w_cell_size_range[1])
+                eccentricity = np.random.uniform(self.cell_eccentricity_range[0], self.cell_eccentricity_range[1])
                 rotation = np.random.uniform(0, 2*np.pi)
 
                 # Set very different intensities for each wavelength to make them easily distinguishable
@@ -252,22 +292,11 @@ class SyntheticMicroscopyGenerator:
                     'intensity': intensity
                 })
 
-            self.cell_params.append(cells)
+            # Store cells for this well and wavelength
+            self.cell_params[key] = cells
 
-    def generate_cell_image(self, wavelength, z_level):
-        """
-        Generate a full image with cells for a specific wavelength and Z level.
-
-        Args:
-            wavelength: Wavelength channel index
-            z_level: Z-stack level index
-
-        Returns:
-            Full image with cells
-        """
-        # Get wavelength-specific parameters
-        wavelength_idx = wavelength + 1  # Convert to 1-based index for params lookup
-        w_params = self.wavelength_params.get(wavelength_idx, {})
+        # Get cells for this well and wavelength
+        cells = self.cell_params[key]
 
         # Get background intensity from wavelength_backgrounds or use default
         w_background = self.wavelength_backgrounds.get(wavelength_idx, self.background_intensity)
@@ -276,8 +305,8 @@ class SyntheticMicroscopyGenerator:
         # Ensure image is 2D (not 3D) to avoid shape mismatch in ashlar
         image = np.ones(self.image_size, dtype=np.uint16) * w_background
 
-        # Get cell parameters for this wavelength
-        cells = self.cell_params[wavelength]
+        # Get cell parameters for this well and wavelength
+        cells = self.cell_params[key]
 
         # Calculate Z-focus factor (1.0 at center Z, decreasing toward edges)
         if self.z_stack_levels > 1:
@@ -332,58 +361,65 @@ class SyntheticMicroscopyGenerator:
 
     def generate_htd_file(self):
         """Generate HTD file with metadata in the format expected by ezstitcher."""
+        # Derive plate name from output directory name
+        plate_name = self.output_dir.name
+        htd_filename = f"{plate_name}.HTD"
+
         # Generate the main HTD file in the plate dir
-        htd_path = self.output_dir / f"test_plate.HTD"
+        htd_path = self.output_dir / htd_filename
 
-        # Basic HTD file content matching the format expected in stitcher.py find_HTD_file function
-        htd_content = f"""HTD,1.0
-Description,Test HTD file for synthetic plate
-Wells,{','.join(self.wells)}
-GridSizeX,{self.grid_size[1]}
-GridSizeY,{self.grid_size[0]}"""
+        # Basic HTD file content matching the format of real HTD files
+        htd_content = f""""HTSInfoFile", Version 1.0
+"Description", "Synthetic microscopy data for testing"
+"PlateType", 6
+"TimePoints", 1
+"ZSeries", {"TRUE" if self.z_stack_levels > 1 else "FALSE"}
+"ZSteps", {self.z_stack_levels}
+"ZProjection", FALSE
+"XWells", 4
+"YWells", 3"""
 
-        # Add site selection for each well
-        for well in self.wells:
-            htd_content += f"\nSiteSelection,{well},"
-            # Add site selection rows (all set to True)
-            for y in range(self.grid_size[0]):
-                row = []
-                for x in range(self.grid_size[1]):
-                    row.append("True")
-                htd_content += "\nSiteSelection," + ",".join(row)
+        # Add wells selection (only the wells we're using are TRUE)
+        for y in range(3):  # 3 rows (A, B, C)
+            row_wells = []
+            for x in range(4):  # 4 columns (1, 2, 3, 4)
+                well = f"{chr(65+y)}{x+1:02d}"  # A01, A02, etc.
+                row_wells.append("TRUE" if well in self.wells else "FALSE")
+            htd_content += f"\n\"WellsSelection{y+1}\", {', '.join(row_wells)}"
 
+        # Add sites information
+        htd_content += f"\n\"Sites\", TRUE"
+        htd_content += f"\n\"XSites\", {self.grid_size[1]}"
+        htd_content += f"\n\"YSites\", {self.grid_size[0]}"
+
+        # Add site selection rows (all set to FALSE except the ones we're using)
+        for y in range(self.grid_size[0]):
+            row = []
+            for x in range(self.grid_size[1]):
+                row.append("TRUE")  # All sites are used in our synthetic data
+            htd_content += f"\n\"SiteSelection{y+1}\", {', '.join(row)}"
+
+        # Add wavelength information
+        htd_content += f"\n\"Waves\", TRUE"
+        htd_content += f"\n\"NWavelengths\", {self.wavelengths}"
+
+        # Add wavelength names and collection flags
+        for w in range(self.wavelengths):
+            htd_content += f"\n\"WaveName{w+1}\", \"W{w+1}\""
+            htd_content += f"\n\"WaveCollect{w+1}\", 1"
+
+        # Add unique identifier and end file marker
+        htd_content += f"\n\"UniquePlateIdentifier\", \"{plate_name}-{datetime.now().strftime('%Y%m%d-%H%M%S')}\""
+        htd_content += "\n\"EndFile\""
+
+        # Write HTD file in plate root directory
         with open(htd_path, 'w') as f:
             f.write(htd_content)
 
-        # Also create a copy in the TimePoint directory for better compatibility
-        timepoint_htd_path = self.timepoint_dir / f"test_plate.HTD"
+        # Also create a copy in the TimePoint directory
+        timepoint_htd_path = self.timepoint_dir / htd_filename
         with open(timepoint_htd_path, 'w') as f:
             f.write(htd_content)
-
-        # Create individual HTD files for each well for backward compatibility
-        for well in self.wells:
-            well_htd_path = self.output_dir / f"test_{well}.HTD"
-            well_htd_content = f"""HTD,1.0
-Description,Test HTD file for {well}
-Wells,{well}
-GridSizeX,{self.grid_size[1]}
-GridSizeY,{self.grid_size[0]}
-SiteSelection,{well},"""
-
-            # Add site selection rows (all set to True)
-            for y in range(self.grid_size[0]):
-                row = []
-                for x in range(self.grid_size[1]):
-                    row.append("True")
-                well_htd_content += "\nSiteSelection," + ",".join(row)
-
-            with open(well_htd_path, 'w') as f:
-                f.write(well_htd_content)
-
-            # Also create a copy in the TimePoint directory
-            timepoint_well_htd_path = self.timepoint_dir / f"test_{well}.HTD"
-            with open(timepoint_well_htd_path, 'w') as f:
-                f.write(well_htd_content)
 
         return htd_path
 
@@ -400,8 +436,15 @@ SiteSelection,{well},"""
         print(f"Generated HTD file: {htd_path}")
 
         # Process each well
-        for well in self.wells:
+        for well_index, well in enumerate(self.wells):
             print(f"\nGenerating data for well {well}...")
+
+            # Use a different random seed for each well if base seed is provided
+            if self.base_random_seed is not None:
+                well_seed = self.base_random_seed + well_index
+                np.random.seed(well_seed)
+                random.seed(well_seed)
+                print(f"Using random seed {well_seed} for well {well}")
 
             # Pre-generate the positions for each site to ensure consistency across Z-levels
             # This creates a mapping of site_index -> (base_x_pos, base_y_pos)
@@ -448,7 +491,7 @@ SiteSelection,{well},"""
 
                         # Generate full image
                         print(f"Generating full image for wavelength {wavelength}, Z level {z_level}...")
-                        full_image = self.generate_cell_image(w, z)
+                        full_image = self.generate_cell_image(w, z, well=well)
 
                         # Save tiles for this Z level using the pre-generated positions
                         site_index = 1
@@ -482,7 +525,7 @@ SiteSelection,{well},"""
 
                     # Generate full image for the single Z level
                     print(f"Generating full image for wavelength {wavelength} (no Z-stack)...")
-                    full_image = self.generate_cell_image(w, 0)
+                    full_image = self.generate_cell_image(w, 0, well=well)
 
                     # Save tiles without Z-stack index
                     site_index = 1

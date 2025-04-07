@@ -130,8 +130,8 @@ def path_list_from_pattern(image_dir, image_pattern, z_step=None):
         # Convert * to regex equivalent
         file_pattern = file_pattern.replace("*", ".*")
     else:
-        # Handle {iii} placeholder style
-        file_pattern = image_pattern.replace("{iii}", r"\d{3}")
+        # Handle {iii} placeholder style - match any number of digits (1-3)
+        file_pattern = image_pattern.replace("{iii}", r"\d{1,3}")
 
         if "{zzz}" in file_pattern:
             if z_step is not None:

@@ -148,8 +148,13 @@ def path_list_from_pattern(directory, pattern):
     """
     directory = Path(directory)
 
+    # Handle substitution of {series} if present (from Ashlar)
+    if "{series}" in pattern:
+        logger.debug(f"Converting {{series}} to {{iii}} for consistency in pattern: {pattern}")
+        pattern = pattern.replace("{series}", "{iii}")
+
     # Convert pattern to regex
-    # Replace {iii} with (\d+) to match any number
+    # Replace {iii} with (\d+) to match any number of digits (padded or not)
     regex_pattern = pattern.replace('{iii}', '(\\d+)')
     regex = re.compile(regex_pattern)
 
@@ -158,6 +163,8 @@ def path_list_from_pattern(directory, pattern):
     for file_path in directory.glob('*'):
         if regex.match(file_path.name):
             matching_files.append(file_path.name)
+
+    logger.debug(f"Found {len(matching_files)} files matching pattern {pattern} in {directory}")
 
     return sorted(matching_files)
 

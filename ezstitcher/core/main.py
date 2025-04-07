@@ -18,13 +18,13 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
                          composite_weights=None, well_filter=None,
                          tile_overlap=6.5, tile_overlap_x=None, tile_overlap_y=None,
                          max_shift=50, focus_detect=False, focus_method="combined",
-                         create_projections=False, projection_types=['max', 'mean'],
-                         stitch_z_reference='best_focus'):
+                         create_projections=False, stitch_z_reference='best_focus',
+                         save_projections=True, stitch_all_z_planes=False):
     """
     Process an entire plate folder with microscopy images.
-    
+
     This function is a wrapper around StitcherManager.process_plate_folder.
-    
+
     Args:
         plate_folder (str or Path): Base folder for the plate
         reference_channels (list): List of channels to use as reference
@@ -39,9 +39,10 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         focus_detect (bool): Whether to enable focus detection for Z-stacks
         focus_method (str): Focus detection method to use
         create_projections (bool): Whether to create projections from Z-stacks
-        projection_types (list): List of projection types to create
-        stitch_z_reference (str): Z-plane to use for stitching
-        
+        stitch_z_reference (str): Z-plane to use for stitching ('best_focus', 'max', 'mean')
+        save_projections (bool): Whether to save projection images after stitching
+        stitch_all_z_planes (bool): Whether to stitch all Z-planes using reference positions
+
     Returns:
         bool: True if successful, False otherwise
     """
@@ -59,45 +60,46 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         focus_detect=focus_detect,
         focus_method=focus_method,
         create_projections=create_projections,
-        projection_types=projection_types,
-        stitch_z_reference=stitch_z_reference
+        stitch_z_reference=stitch_z_reference,
+        save_projections=save_projections,
+        stitch_all_z_planes=stitch_all_z_planes
     )
 
 def modified_process_plate_folder(plate_folder, **kwargs):
     """
     Process a plate folder with Z-stack handling.
-    
+
     This function is a wrapper around ZStackManager.stitch_across_z.
-    
+
     Args:
         plate_folder (str or Path): Path to the plate folder
         **kwargs: Additional arguments to pass to process_plate_folder
-        
+
     Returns:
         bool: Success status
     """
     # First preprocess to organize z-stacks if needed
     has_zstack, z_info = ZStackManager.preprocess_plate_folder(plate_folder)
-    
+
     if not has_zstack:
         logger.warning(f"No Z-stack detected in {plate_folder}, using standard stitching")
         return process_plate_folder(plate_folder, **kwargs)
-    
+
     # Get reference_z from kwargs or use default
     reference_z = kwargs.pop('stitch_z_reference', 'best_focus')
-    
+
     # Use the Z-stack manager to handle stitching
     return ZStackManager.stitch_across_z(plate_folder, reference_z=reference_z, **kwargs)
 
 def process_bf(imgs):
     """
     Process brightfield images.
-    
+
     This function is a wrapper around ImageProcessor.process_bf.
-    
+
     Args:
         imgs (list): List of brightfield images
-        
+
     Returns:
         list: List of processed images
     """
@@ -106,14 +108,14 @@ def process_bf(imgs):
 def find_best_focus(image_stack, method='combined', roi=None):
     """
     Find the best focused image in a stack.
-    
+
     This function is a wrapper around FocusDetector.find_best_focus.
-    
+
     Args:
         image_stack (list): List of images
         method (str): Focus detection method
         roi (tuple): Optional region of interest
-        
+
     Returns:
         tuple: (best_focus_index, focus_scores)
     """
