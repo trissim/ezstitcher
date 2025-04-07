@@ -727,6 +727,7 @@ class StitcherManager:
                         plate_folder,
                         reference_z=stitch_z_reference,
                         stitch_all_z_planes=True,
+                        process_plate_folder=StitcherManager.process_plate_folder,
                         **{
                             'reference_channels': reference_channels,
                             'preprocessing_funcs': preprocessing_funcs,

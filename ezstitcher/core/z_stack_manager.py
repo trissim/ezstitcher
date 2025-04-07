@@ -705,7 +705,7 @@ class ZStackManager:
         return has_zstack, z_info
 
     @staticmethod
-    def stitch_across_z(plate_folder, reference_z='max', stitch_all_z_planes=False, **kwargs):
+    def stitch_across_z(plate_folder, reference_z='max', stitch_all_z_planes=False, process_plate_folder=None, **kwargs):
         """
         Stitch Z-stack images using a reference Z-plane or projection for alignment.
 
