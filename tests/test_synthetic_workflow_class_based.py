@@ -164,6 +164,25 @@ class TestSyntheticWorkflowClassBased(unittest.TestCase):
 
         return enhanced_images
 
+    def _needs_zstack_data(self):
+        """Determine if the current test needs Z-stack data."""
+        # Tests that need Z-stack data
+        zstack_tests = [
+            'test_zstack_best_focus_stitching',
+            'test_zstack_per_plane_stitching',
+            'test_zstack_projection_stitching'
+        ]
+        return self._testMethodName in zstack_tests
+
+    def _needs_non_zstack_data(self):
+        """Determine if the current test needs non-Z-stack data."""
+        # Tests that need non-Z-stack data
+        non_zstack_tests = [
+            'test_non_zstack_workflow',
+            'test_multi_channel_reference'
+        ]
+        return self._testMethodName in non_zstack_tests
+
     def setUp(self):
         """Set up test-specific directory."""
         # Create a unique test directory for this test
@@ -172,31 +191,50 @@ class TestSyntheticWorkflowClassBased(unittest.TestCase):
         os.makedirs(self.test_dir, exist_ok=True)
         print(f"\nSetting up test directory for {test_name}: {self.test_dir}")
 
-        # Create synthetic Z-stack data
-        self.zstack_dir = os.path.join(self.test_dir, "synthetic_plate")
-        print(f"Creating synthetic data with Z-stacks in {self.zstack_dir}")
-        os.makedirs(self.zstack_dir, exist_ok=True)
-
         # Define paths for output directories that will be created by process_plate_folder
         self.best_focus_dir = os.path.join(self.test_dir, "synthetic_plate_BestFocus")
         self.projection_dir = os.path.join(self.test_dir, "synthetic_plate_max")
-        self._create_synthetic_data(output_dir=self.zstack_dir, z_stack_levels=5, z_step_size=2.0)
 
-        # Create a copy of the original Z-stack data for inspection
-        self.zstack_original_dir = os.path.join(self.test_dir, "synthetic_plate_original")
-        print(f"Creating copy of original Z-stack data in {self.zstack_original_dir}")
-        shutil.copytree(self.zstack_dir, self.zstack_original_dir)
+        # Determine if we need Z-stack data
+        needs_zstack = self._needs_zstack_data()
+        needs_non_zstack = self._needs_non_zstack_data()
 
-        # Create synthetic non-Z-stack data
-        self.no_zstack_dir = os.path.join(self.test_dir, "synthetic_plate_flat")
-        print(f"Creating synthetic data without Z-stacks in {self.no_zstack_dir}")
-        os.makedirs(self.no_zstack_dir, exist_ok=True)
-        self._create_synthetic_data(output_dir=self.no_zstack_dir, z_stack_levels=1)
+        # If neither is explicitly needed, default to both for backward compatibility
+        if not needs_zstack and not needs_non_zstack:
+            needs_zstack = True
+            needs_non_zstack = True
 
-        # Create a copy of the original non-Z-stack data for inspection
-        self.no_zstack_original_dir = os.path.join(self.test_dir, "synthetic_plate_flat_original")
-        print(f"Creating copy of original non-Z-stack data in {self.no_zstack_original_dir}")
-        shutil.copytree(self.no_zstack_dir, self.no_zstack_original_dir)
+        # Create synthetic Z-stack data if needed
+        if needs_zstack:
+            self.zstack_dir = os.path.join(self.test_dir, "synthetic_plate")
+            print(f"Creating synthetic data with Z-stacks in {self.zstack_dir}")
+            os.makedirs(self.zstack_dir, exist_ok=True)
+            self._create_synthetic_data(output_dir=self.zstack_dir, z_stack_levels=5, z_step_size=2.0)
+
+            # Create a copy of the original Z-stack data for inspection
+            self.zstack_original_dir = os.path.join(self.test_dir, "synthetic_plate_original")
+            print(f"Creating copy of original Z-stack data in {self.zstack_original_dir}")
+            shutil.copytree(self.zstack_dir, self.zstack_original_dir)
+        else:
+            # Still define the paths for tests that might reference them
+            self.zstack_dir = os.path.join(self.test_dir, "synthetic_plate")
+            self.zstack_original_dir = os.path.join(self.test_dir, "synthetic_plate_original")
+
+        # Create synthetic non-Z-stack data if needed
+        if needs_non_zstack:
+            self.no_zstack_dir = os.path.join(self.test_dir, "synthetic_plate_flat")
+            print(f"Creating synthetic data without Z-stacks in {self.no_zstack_dir}")
+            os.makedirs(self.no_zstack_dir, exist_ok=True)
+            self._create_synthetic_data(output_dir=self.no_zstack_dir, z_stack_levels=1)
+
+            # Create a copy of the original non-Z-stack data for inspection
+            self.no_zstack_original_dir = os.path.join(self.test_dir, "synthetic_plate_flat_original")
+            print(f"Creating copy of original non-Z-stack data in {self.no_zstack_original_dir}")
+            shutil.copytree(self.no_zstack_dir, self.no_zstack_original_dir)
+        else:
+            # Still define the paths for tests that might reference them
+            self.no_zstack_dir = os.path.join(self.test_dir, "synthetic_plate_flat")
+            self.no_zstack_original_dir = os.path.join(self.test_dir, "synthetic_plate_flat_original")
 
     @classmethod
     def tearDownClass(cls):
