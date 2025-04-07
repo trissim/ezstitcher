@@ -883,6 +883,14 @@ class ZStackManager:
             logger.error(f"Failed to stitch reference images from {reference_dir}")
             return False
 
+        # Get the reference positions directory
+        reference_positions_dir = parent_dir / f"{os.path.basename(reference_dir)}_positions"
+        if not reference_positions_dir.exists():
+            logger.error(f"Reference positions directory not found: {reference_positions_dir}")
+            return False
+
+        logger.info(f"Using reference positions from {reference_positions_dir}")
+
         # If we're not stitching all Z-planes, we're done
         if not stitch_all_z_planes:
             return True
@@ -937,6 +945,16 @@ class ZStackManager:
                     dest_htd = temp_dir / htd_file.name
                     shutil.copy2(htd_file, dest_htd)
                     logger.info(f"Copied HTD file {htd_file} to {dest_htd}")
+
+            # Create positions directory for this Z-plane
+            temp_positions_dir = parent_dir / f"{plate_name}_z{z_index:03d}_temp_positions"
+            ensure_directory(temp_positions_dir)
+
+            # Copy reference positions to this Z-plane's positions directory
+            for pos_file in reference_positions_dir.glob("*.csv"):
+                dest_path = temp_positions_dir / pos_file.name
+                shutil.copy2(pos_file, dest_path)
+                logger.info(f"Copied reference positions from {pos_file} to {dest_path}")
 
             # Process this Z-plane using the reference positions
             z_stitching_kwargs = stitching_kwargs.copy()

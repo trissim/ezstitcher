@@ -519,7 +519,7 @@ class StitcherManager:
             return False
 
     @staticmethod
-    def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims, ref_channel, ref_pattern, ref_dir, margin_ratio=0.1, tile_overlap=10, tile_overlap_x=None, tile_overlap_y=None, max_shift=50):
+    def process_well_wavelengths(well, wavelength_patterns, dirs, grid_dims, ref_channel, ref_pattern, ref_dir, margin_ratio=0.1, tile_overlap=10, tile_overlap_x=None, tile_overlap_y=None, max_shift=50, use_existing_positions=False):
         """
         Process all wavelengths for a well.
 
@@ -536,35 +536,45 @@ class StitcherManager:
             tile_overlap_x (float): Horizontal overlap percentage
             tile_overlap_y (float): Vertical overlap percentage
             max_shift (int): Maximum allowed error in microns
+            use_existing_positions (bool): Whether to use existing positions file instead of generating new ones
 
         Returns:
             bool: True if successful, False otherwise
         """
         grid_size_x, grid_size_y = grid_dims
 
-        # Generate positions using Ashlar
+        # Generate or use existing positions
         stitched_name = StitcherManager.compute_stitched_name(ref_pattern)
         positions_path = dirs['positions'] / f"{Path(stitched_name).stem}.csv"
 
-        logger.info(f"Generating positions using Ashlar with pattern: {ref_pattern}")
-        logger.info(f"Reading reference images from: {ref_dir}")
+        if use_existing_positions:
+            # Check if positions file exists
+            if not positions_path.exists():
+                logger.error(f"Positions file not found: {positions_path}")
+                return False
 
-        # Run Ashlar to generate positions
-        success = StitcherManager.ashlar_stitch_v2(
-            image_dir=ref_dir,
-            image_pattern=ref_pattern,
-            positions_path=positions_path,
-            grid_size_x=grid_size_x,
-            grid_size_y=grid_size_y,
-            tile_overlap=tile_overlap,
-            tile_overlap_x=tile_overlap_x,
-            tile_overlap_y=tile_overlap_y,
-            max_shift=max_shift
-        )
+            logger.info(f"Using existing positions from: {positions_path}")
+        else:
+            # Generate positions using Ashlar
+            logger.info(f"Generating positions using Ashlar with pattern: {ref_pattern}")
+            logger.info(f"Reading reference images from: {ref_dir}")
 
-        if not success:
-            logger.error(f"Failed to generate positions for {well}")
-            return False
+            # Run Ashlar to generate positions
+            success = StitcherManager.ashlar_stitch_v2(
+                image_dir=ref_dir,
+                image_pattern=ref_pattern,
+                positions_path=positions_path,
+                grid_size_x=grid_size_x,
+                grid_size_y=grid_size_y,
+                tile_overlap=tile_overlap,
+                tile_overlap_x=tile_overlap_x,
+                tile_overlap_y=tile_overlap_y,
+                max_shift=max_shift
+            )
+
+            if not success:
+                logger.error(f"Failed to generate positions for {well}")
+                return False
 
         # Process each wavelength
         for wavelength, pattern in wavelength_patterns.items():
@@ -789,16 +799,41 @@ class StitcherManager:
                     logger.error(f"Failed to prepare reference channel for well {well}")
                     continue
 
-                # Process all wavelengths using the reference
-                success = StitcherManager.process_well_wavelengths(
-                    well, updated_patterns, dirs, grid_dims,
-                    ref_channel, ref_pattern, ref_dir,
-                    margin_ratio=margin_ratio,
-                    tile_overlap=tile_overlap,
-                    tile_overlap_x=tile_overlap_x,
-                    tile_overlap_y=tile_overlap_y,
-                    max_shift=max_shift
-                )
+                # Check if we should use reference positions
+                if use_reference_positions:
+                    # Look for existing positions file
+                    stitched_name = StitcherManager.compute_stitched_name(ref_pattern)
+                    positions_path = dirs['positions'] / f"{Path(stitched_name).stem}.csv"
+
+                    if not positions_path.exists():
+                        logger.error(f"Reference positions file not found: {positions_path}")
+                        logger.error("Cannot stitch using reference positions")
+                        return False
+
+                    logger.info(f"Using existing reference positions from {positions_path}")
+
+                    # Process all wavelengths using the existing positions
+                    success = StitcherManager.process_well_wavelengths(
+                        well, updated_patterns, dirs, grid_dims,
+                        ref_channel, ref_pattern, ref_dir,
+                        margin_ratio=margin_ratio,
+                        tile_overlap=tile_overlap,
+                        tile_overlap_x=tile_overlap_x,
+                        tile_overlap_y=tile_overlap_y,
+                        max_shift=max_shift,
+                        use_existing_positions=True
+                    )
+                else:
+                    # Process all wavelengths using the reference
+                    success = StitcherManager.process_well_wavelengths(
+                        well, updated_patterns, dirs, grid_dims,
+                        ref_channel, ref_pattern, ref_dir,
+                        margin_ratio=margin_ratio,
+                        tile_overlap=tile_overlap,
+                        tile_overlap_x=tile_overlap_x,
+                        tile_overlap_y=tile_overlap_y,
+                        max_shift=max_shift
+                    )
 
                 if success:
                     logger.info(f"Completed processing well {well}")
