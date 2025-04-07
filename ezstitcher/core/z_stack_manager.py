@@ -23,6 +23,115 @@ class ZStackManager:
     Class for handling Z-stack organization and processing.
     """
 
+    def __init__(self):
+        """
+        Initialize the ZStackManager.
+        """
+        self._z_info = None
+        self._z_indices = []
+
+    def detect_z_stacks(self, plate_folder):
+        """
+        Detect Z-stacks in a plate folder.
+
+        Args:
+            plate_folder (str or Path): Path to the plate folder
+
+        Returns:
+            bool: True if Z-stacks were detected, False otherwise
+        """
+        has_zstack, self._z_info = self.preprocess_plate_folder(plate_folder)
+
+        # Extract all unique z-indices from the z_indices_map
+        if has_zstack and 'z_indices_map' in self._z_info and self._z_info['z_indices_map']:
+            all_z_indices = set()
+            for base_name, indices in self._z_info['z_indices_map'].items():
+                all_z_indices.update(indices)
+            self._z_indices = sorted(list(all_z_indices))
+
+        return has_zstack
+
+    def get_z_indices(self):
+        """
+        Get the list of Z-indices detected in the plate folder.
+
+        Returns:
+            list: List of Z-indices
+        """
+        return self._z_indices
+
+    def find_best_focus(self, focus_wavelength='1', focus_method='combined', output_dir=None):
+        """
+        Find the best focused image for each Z-stack and save to output directory.
+
+        Args:
+            focus_wavelength (str): Wavelength to use for focus detection
+            focus_method (str): Focus detection method
+            output_dir (str or Path): Directory to save best focus images
+
+        Returns:
+            bool: True if best focus images were created, False otherwise
+        """
+        if not self._z_info or not self._z_info.get('z_indices_map'):
+            logger.error("No Z-stack information available. Call detect_z_stacks first.")
+            return False
+
+        # Get the plate folder from the z_info
+        plate_folder = None
+        if 'z_folders' in self._z_info and self._z_info['z_folders']:
+            # Get the parent of the first Z-stack folder
+            _, folder = self._z_info['z_folders'][0]
+            plate_folder = folder.parent.parent
+
+        if not plate_folder:
+            logger.error("Could not determine plate folder from Z-stack information")
+            return False
+
+        # Call the static method to select best focus images
+        success, _ = self.select_best_focus_zstack(
+            plate_folder,
+            output_dir,
+            focus_method=focus_method,
+            focus_wavelength=focus_wavelength
+        )
+
+        return success
+
+    def create_projections(self, projection_types=None, output_dir=None):
+        """
+        Create projections for each Z-stack and save to output directory.
+
+        Args:
+            projection_types (list): List of projection types
+            output_dir (str or Path): Directory to save projections
+
+        Returns:
+            bool: True if projections were created, False otherwise
+        """
+        if not self._z_info or not self._z_info.get('z_indices_map'):
+            logger.error("No Z-stack information available. Call detect_z_stacks first.")
+            return False
+
+        # Get the plate folder from the z_info
+        plate_folder = None
+        if 'z_folders' in self._z_info and self._z_info['z_folders']:
+            # Get the parent of the first Z-stack folder
+            _, folder = self._z_info['z_folders'][0]
+            plate_folder = folder.parent.parent
+
+        if not plate_folder:
+            logger.error("Could not determine plate folder from Z-stack information")
+            return False
+
+        # Call the static method to create projections
+        success, _ = self.create_zstack_projections(
+            plate_folder,
+            output_dir,
+            projection_types=projection_types
+        )
+
+        return success
+
     @staticmethod
     def detect_zstack_folders(plate_folder):
         """
@@ -616,8 +725,6 @@ class ZStackManager:
         Returns:
             bool: Success status
         """
-        # Import here to avoid circular imports
-        from ezstitcher.core.stitcher import process_plate_folder
 
         # First preprocess to organize z-stacks if needed
         has_zstack, z_info = ZStackManager.preprocess_plate_folder(plate_folder)
@@ -764,90 +871,93 @@ class ZStackManager:
         # Process the reference images to generate positions
         logger.info(f"Stitching reference images from {reference_dir} to generate positions")
         stitching_kwargs = kwargs.copy()
-        process_plate_folder(reference_dir, **stitching_kwargs)
 
-        # Step 3: If requested, stitch all Z-planes using the reference positions
-        if stitch_all_z_planes:
-            logger.info("Stitching all Z-planes using reference positions")
+        # Use the process_plate_folder function that was passed in
+        if process_plate_folder is None:
+            logger.error("process_plate_folder function is required for stitching")
+            return False
 
-            # Process each Z-plane
-            for z_index in z_indices:
-                logger.info(f"Processing Z-plane {z_index}")
+        # First stitch the reference images to generate positions
+        success = process_plate_folder(reference_dir, **stitching_kwargs)
+        if not success:
+            logger.error(f"Failed to stitch reference images from {reference_dir}")
+            return False
 
-                # Create temporary directory for this Z-plane
-                temp_dir = parent_dir / f"{plate_name}_z{z_index:03d}_temp"
-                temp_timepoint = ensure_directory(temp_dir / "TimePoint_1")
+        # If we're not stitching all Z-planes, we're done
+        if not stitch_all_z_planes:
+            return True
 
-                # Copy only the images for this Z-plane to the temporary directory
-                z_pattern = f"_z{z_index:03d}"
-                count = 0
+        # Step 3: Stitch each Z-plane using the reference positions
+        logger.info("Stitching all Z-planes using reference positions")
 
-                # First check for images with _z pattern in the filename
-                for img_file in plate_path.glob(f"**/*{z_pattern}*.tif"):
-                    # Load the image and ensure it's 2D grayscale
-                    img = load_image(img_file)
-                    if img is None:
-                        continue
+        # Process each Z-plane
+        for z_index in z_indices:
+            logger.info(f"Processing Z-plane {z_index}")
 
-                    # Create the new filename without z-index
-                    new_name = img_file.name.replace(z_pattern, "")
-                    dest_path = temp_timepoint / new_name
+            # Create temporary directory for this Z-plane
+            temp_dir = parent_dir / f"{plate_name}_z{z_index:03d}_temp"
+            temp_timepoint = ensure_directory(temp_dir / "TimePoint_1")
 
-                    # Save the 2D grayscale image
-                    if save_image(dest_path, img):
-                        count += 1
+            # Copy only the images for this Z-plane to the temporary directory
+            z_pattern = f"_z{z_index:03d}"
+            count = 0
 
-                # If no images found with _z pattern, check for ZStep folders
-                if count == 0:
-                    zstep_dir = plate_path / "TimePoint_1" / f"ZStep_{z_index}"
-                    if zstep_dir.exists():
-                        for img_file in zstep_dir.glob("*.tif"):
-                            # Load the image and ensure it's 2D grayscale
-                            img = load_image(img_file)
-                            if img is None:
-                                continue
+            # First check for images with _z pattern in the filename
+            for img_file in plate_path.glob(f"**/*{z_pattern}*.tif"):
+                # Create the new filename without z-index
+                new_name = img_file.name.replace(z_pattern, "")
+                dest_path = temp_timepoint / new_name
 
-                            # Use the filename as is (no z-index to remove)
-                            dest_path = temp_timepoint / img_file.name
+                # Copy the file
+                shutil.copy2(img_file, dest_path)
+                count += 1
 
-                            # Save the 2D grayscale image
-                            if save_image(dest_path, img):
-                                count += 1
-
-                logger.info(f"Copied {count} images for Z-plane {z_index}")
-
-                if count == 0:
-                    logger.warning(f"No images found for Z-plane {z_index}")
-                    continue
-
-                # Copy HTD file if it exists
-                htd_files = list(plate_path.glob("*.HTD"))
-                if htd_files:
-                    for htd_file in htd_files:
-                        dest_htd = temp_dir / htd_file.name
-                        shutil.copy2(htd_file, dest_htd)
-                        logger.info(f"Copied HTD file {htd_file} to {dest_htd}")
-
-                # Process this Z-plane using the reference positions
-                # TODO: Implement reusing positions from reference
-                stitching_kwargs = kwargs.copy()
-                process_plate_folder(temp_dir, **stitching_kwargs)
-
-                # Copy the stitched results to the main stitched directory with z-index in the filename
-                temp_stitched_dir = parent_dir / f"{plate_name}_z{z_index:03d}_temp_stitched" / "TimePoint_1"
-                if temp_stitched_dir.exists():
-                    for stitched_file in temp_stitched_dir.glob("*.tif"):
-                        # Add z-index to the filename
-                        base, ext = os.path.splitext(stitched_file.name)
-                        new_name = f"{base}_z{z_index:03d}{ext}"
-                        dest_path = stitched_timepoint / new_name
+            # If no images found with _z pattern, check for ZStep folders
+            if count == 0:
+                zstep_dir = plate_path / "TimePoint_1" / f"ZStep_{z_index}"
+                if zstep_dir.exists():
+                    for img_file in zstep_dir.glob("*.tif"):
+                        # Use the filename as is (no z-index to remove)
+                        dest_path = temp_timepoint / img_file.name
 
                         # Copy the file
-                        shutil.copy2(stitched_file, dest_path)
-                        logger.info(f"Copied stitched Z-plane {z_index} to {dest_path}")
+                        shutil.copy2(img_file, dest_path)
+                        count += 1
 
-                # Clean up temporary directories
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                shutil.rmtree(parent_dir / f"{plate_name}_z{z_index:03d}_temp_stitched", ignore_errors=True)
+            logger.info(f"Copied {count} images for Z-plane {z_index}")
+
+            if count == 0:
+                logger.warning(f"No images found for Z-plane {z_index}")
+                continue
+
+            # Copy HTD file if it exists
+            htd_files = list(plate_path.glob("*.HTD"))
+            if htd_files:
+                for htd_file in htd_files:
+                    dest_htd = temp_dir / htd_file.name
+                    shutil.copy2(htd_file, dest_htd)
+                    logger.info(f"Copied HTD file {htd_file} to {dest_htd}")
+
+            # Process this Z-plane using the reference positions
+            z_stitching_kwargs = stitching_kwargs.copy()
+            z_stitching_kwargs['use_reference_positions'] = True  # Use positions from reference
+            process_plate_folder(temp_dir, **z_stitching_kwargs)
+
+            # Copy the stitched results to the main stitched directory with z-index in the filename
+            temp_stitched_dir = parent_dir / f"{plate_name}_z{z_index:03d}_temp_stitched" / "TimePoint_1"
+            if temp_stitched_dir.exists():
+                for stitched_file in temp_stitched_dir.glob("*.tif"):
+                    # Add z-index to the filename
+                    base, ext = os.path.splitext(stitched_file.name)
+                    new_name = f"{base}_z{z_index:03d}{ext}"
+                    dest_path = stitched_timepoint / new_name
+
+                    # Copy the file
+                    shutil.copy2(stitched_file, dest_path)
+                    logger.info(f"Copied stitched Z-plane {z_index} to {dest_path}")
+
+            # Clean up temporary directories
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            shutil.rmtree(parent_dir / f"{plate_name}_z{z_index:03d}_temp_stitched", ignore_errors=True)
 
         return True

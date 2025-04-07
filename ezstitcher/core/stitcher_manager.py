@@ -21,6 +21,37 @@ from ezstitcher.core.utils import (
 from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.z_stack_manager import ZStackManager
 
+
+def generate_positions_df(image_dir, image_pattern, positions, grid_size_x, grid_size_y):
+    """
+    Given an image_dir, an image_pattern (with '{iii}' or similar placeholder)
+    and a list of (x, y) tuples 'positions', build a DataFrame with lines like:
+
+      file: <filename>; position: (x, y); grid: (col, row);
+    """
+    all_files = path_list_from_pattern(image_dir, image_pattern)
+    if len(all_files) != len(positions):
+        raise ValueError(
+            f"Number of matched files ({len(all_files)}) != number of positions ({len(positions)})"
+        )
+
+    # Generate a list of (x, y) grid positions following a raster pattern
+    positions_grid = [(x, y) for y in range(grid_size_y) for x in range(grid_size_x)]
+    data_rows = []
+
+    for i, fname in enumerate(all_files):
+        x, y = positions[i]
+        row, col = positions_grid[i]
+
+        data_rows.append({
+            "file": "file: " + fname,
+            "grid": " grid: " + "("+str(row)+", "+str(col)+")",
+            "position": " position: " + "("+str(x)+", "+str(y)+")",
+        })
+
+    df = pd.DataFrame(data_rows)
+    return df
+
 logger = logging.getLogger(__name__)
 
 class StitcherManager:
@@ -470,9 +501,6 @@ class StitcherManager:
             # Extract positions and generate CSV
             positions = [(y, x) for x, y in mosaic.aligner.positions]
 
-            # Import the generate_positions_df function from stitcher.py
-            from ezstitcher.core.stitcher import generate_positions_df
-
             # Use the original pattern (with {iii} instead of {series})
             original_pattern = image_pattern.replace("{series}", "{iii}")
 
@@ -594,7 +622,7 @@ class StitcherManager:
         return stitched_name
 
     @staticmethod
-    def process_plate_folder(plate_folder, reference_channels=['1'], preprocessing_funcs=None, margin_ratio=0.1, composite_weights=None, well_filter=None, tile_overlap=6.5, tile_overlap_x=None, tile_overlap_y=None, max_shift=50, focus_detect=False, focus_method="combined", create_projections=False, stitch_z_reference='best_focus', save_projections=True, stitch_all_z_planes=False):
+    def process_plate_folder(plate_folder, reference_channels=['1'], preprocessing_funcs=None, margin_ratio=0.1, composite_weights=None, well_filter=None, tile_overlap=6.5, tile_overlap_x=None, tile_overlap_y=None, max_shift=50, focus_detect=False, focus_method="combined", create_projections=False, stitch_z_reference='best_focus', save_projections=True, stitch_all_z_planes=False, use_reference_positions=False):
         """
         Process an entire plate folder with microscopy images.
 
@@ -694,7 +722,7 @@ class StitcherManager:
                     # Handle 3D stitching using reference for alignment
                     logger.info(f"Stitching all Z-planes using {stitch_z_reference} as reference")
 
-                    # Capture the return value from stitch_across_z
+                    # Prepare for Z-stack stitching
                     success = ZStackManager.stitch_across_z(
                         plate_folder,
                         reference_z=stitch_z_reference,
