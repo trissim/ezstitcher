@@ -977,5 +977,14 @@ class ZStackManager:
             # Clean up temporary directories
             shutil.rmtree(temp_dir, ignore_errors=True)
             shutil.rmtree(parent_dir / f"{plate_name}_z{z_index:03d}_temp_stitched", ignore_errors=True)
+            shutil.rmtree(parent_dir / f"{plate_name}_z{z_index:03d}_temp_positions", ignore_errors=True)
+            logger.info(f"Cleaned up temporary directories for Z-plane {z_index}")
+
+        # Clean up reference directory and positions if they were created specifically for this stitching
+        if reference_z in ['max', 'mean', 'best_focus']:
+            # Don't delete the reference directory itself as it might be useful for inspection
+            # But do clean up the positions directory
+            shutil.rmtree(reference_positions_dir, ignore_errors=True)
+            logger.info(f"Cleaned up reference positions directory: {reference_positions_dir}")
 
         return True
