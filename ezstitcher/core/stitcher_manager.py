@@ -688,7 +688,7 @@ class StitcherManager:
 
                 if focus_detect:
                     # Create best focus directory with correct capitalization
-                    best_focus_dir = parent_dir / f"{plate_name}_BestFocus" / "TimePoint_1"
+                    best_focus_dir = parent_dir / f"{plate_name}_best_focus" / "TimePoint_1"
                     ensure_directory(best_focus_dir)
 
                     # Find best focused images

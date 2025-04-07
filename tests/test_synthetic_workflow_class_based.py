@@ -192,7 +192,7 @@ class TestSyntheticWorkflowClassBased(unittest.TestCase):
         print(f"\nSetting up test directory for {test_name}: {self.test_dir}")
 
         # Define paths for output directories that will be created by process_plate_folder
-        self.best_focus_dir = os.path.join(self.test_dir, "synthetic_plate_BestFocus")
+        self.best_focus_dir = os.path.join(self.test_dir, "synthetic_plate_best_focus")
         self.projection_dir = os.path.join(self.test_dir, "synthetic_plate_max")
 
         # Determine if we need Z-stack data
@@ -404,7 +404,7 @@ class TestSyntheticWorkflowClassBased(unittest.TestCase):
             self.assertTrue(success, "process_plate_folder returned False or raised an exception")
 
             # Check if best focus directory was created
-            best_focus_dir = os.path.join(self.test_dir, f"{os.path.basename(self.zstack_dir)}_BestFocus")
+            best_focus_dir = os.path.join(self.test_dir, f"{os.path.basename(self.zstack_dir)}_best_focus")
             self.assertTrue(os.path.exists(best_focus_dir), "Best focus directory not created")
 
             # Check if best focus images were created

@@ -523,7 +523,7 @@ class ZStackManager:
 
         Args:
             input_dir (str or Path): Directory with Z-stack images
-            output_dir (str or Path): Directory to save best focus images. If None, creates a directory named {plate_name}_BestFocus
+            output_dir (str or Path): Directory to save best focus images. If None, creates a directory named {plate_name}_best_focus
             focus_method (str): Focus detection method
             focus_wavelength (str): Wavelength to use for focus detection
 
@@ -537,7 +537,7 @@ class ZStackManager:
             plate_path = input_dir.parent if input_dir.name == "TimePoint_1" else input_dir
             parent_dir = plate_path.parent
             plate_name = plate_path.name
-            output_dir = parent_dir / f"{plate_name}_BestFocus"
+            output_dir = parent_dir / f"{plate_name}_best_focus"
 
         output_dir = ensure_directory(output_dir)
 
@@ -765,7 +765,7 @@ class ZStackManager:
             focus_method = kwargs.get('focus_method', 'combined')
 
             # Create best focus directory
-            best_focus_dir = parent_dir / f"{plate_name}_BestFocus" / "TimePoint_1"
+            best_focus_dir = parent_dir / f"{plate_name}_best_focus" / "TimePoint_1"
             ensure_directory(best_focus_dir)
 
             # Select best focus images
