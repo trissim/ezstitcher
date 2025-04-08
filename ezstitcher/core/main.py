@@ -7,6 +7,17 @@ This module provides the main entry point for the ezstitcher package.
 import logging
 from pathlib import Path
 
+from ezstitcher.core.config import (
+    PlateProcessorConfig, StitcherConfig, ZStackProcessorConfig,
+    FocusAnalyzerConfig, ImagePreprocessorConfig
+)
+from ezstitcher.core.plate_processor import PlateProcessor
+from ezstitcher.core.zstack_processor import ZStackProcessor
+from ezstitcher.core.stitcher import Stitcher
+from ezstitcher.core.focus_analyzer import FocusAnalyzer
+from ezstitcher.core.image_preprocessor import ImagePreprocessor
+
+# Legacy imports for backward compatibility
 from ezstitcher.core.stitcher_manager import StitcherManager
 from ezstitcher.core.z_stack_manager import ZStackManager
 from ezstitcher.core.image_processor import ImageProcessor
@@ -23,7 +34,7 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
     """
     Process an entire plate folder with microscopy images.
 
-    This function is a wrapper around StitcherManager.process_plate_folder.
+    This function creates and uses a PlateProcessor instance with the specified configuration.
 
     Args:
         plate_folder (str or Path): Base folder for the plate
@@ -46,6 +57,8 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
     Returns:
         bool: True if successful, False otherwise
     """
+    # For backward compatibility, we'll still use the StitcherManager static method
+    # In the future, this will be replaced with the PlateProcessor implementation
     return StitcherManager.process_plate_folder(
         plate_folder=plate_folder,
         reference_channels=reference_channels,
@@ -65,11 +78,52 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         stitch_all_z_planes=stitch_all_z_planes
     )
 
+    # TODO: Replace with PlateProcessor implementation
+    # Create configurations
+    # stitcher_config = StitcherConfig(
+    #     tile_overlap=tile_overlap,
+    #     tile_overlap_x=tile_overlap_x,
+    #     tile_overlap_y=tile_overlap_y,
+    #     max_shift=max_shift,
+    #     margin_ratio=margin_ratio
+    # )
+    #
+    # zstack_config = ZStackProcessorConfig(
+    #     focus_detect=focus_detect,
+    #     focus_method=focus_method,
+    #     create_projections=create_projections,
+    #     stitch_z_reference=stitch_z_reference,
+    #     save_projections=save_projections,
+    #     stitch_all_z_planes=stitch_all_z_planes
+    # )
+    #
+    # focus_config = FocusAnalyzerConfig(
+    #     method=focus_method
+    # )
+    #
+    # image_preprocessor_config = ImagePreprocessorConfig(
+    #     preprocessing_funcs=preprocessing_funcs or {},
+    #     composite_weights=composite_weights
+    # )
+    #
+    # plate_config = PlateProcessorConfig(
+    #     reference_channels=reference_channels,
+    #     well_filter=well_filter,
+    #     stitcher=stitcher_config,
+    #     focus_analyzer=focus_config,
+    #     image_preprocessor=image_preprocessor_config,
+    #     z_stack_processor=zstack_config
+    # )
+    #
+    # # Create and run the plate processor
+    # processor = PlateProcessor(plate_config)
+    # return processor.run(plate_folder)
+
 def modified_process_plate_folder(plate_folder, **kwargs):
     """
     Process a plate folder with Z-stack handling.
 
-    This function is a wrapper around ZStackManager.stitch_across_z.
+    This function uses ZStackProcessor to handle Z-stack detection and processing.
 
     Args:
         plate_folder (str or Path): Path to the plate folder
@@ -78,8 +132,12 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     Returns:
         bool: Success status
     """
-    # First preprocess to organize z-stacks if needed
-    has_zstack, z_info = ZStackManager.preprocess_plate_folder(plate_folder)
+    # Create a ZStackProcessor with default config
+    z_config = ZStackProcessorConfig()
+    z_processor = ZStackProcessor(z_config)
+
+    # Detect Z-stacks
+    has_zstack = z_processor.detect_z_stacks(plate_folder)
 
     if not has_zstack:
         logger.warning(f"No Z-stack detected in {plate_folder}, using standard stitching")
@@ -88,14 +146,15 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     # Get reference_z from kwargs or use default
     reference_z = kwargs.pop('stitch_z_reference', 'best_focus')
 
-    # Use the Z-stack manager to handle stitching
+    # For backward compatibility, we'll still use the ZStackManager static method
+    # In the future, this will be replaced with the ZStackProcessor implementation
     return ZStackManager.stitch_across_z(plate_folder, reference_z=reference_z, **kwargs)
 
 def process_bf(imgs):
     """
     Process brightfield images.
 
-    This function is a wrapper around ImageProcessor.process_bf.
+    This function uses ImagePreprocessor to process brightfield images.
 
     Args:
         imgs (list): List of brightfield images
@@ -103,13 +162,15 @@ def process_bf(imgs):
     Returns:
         list: List of processed images
     """
-    return ImageProcessor.process_bf(imgs)
+    # Create an ImagePreprocessor with default config
+    preprocessor = ImagePreprocessor()
+    return preprocessor.process_bf(imgs)
 
 def find_best_focus(image_stack, method='combined', roi=None):
     """
     Find the best focused image in a stack.
 
-    This function is a wrapper around FocusDetector.find_best_focus.
+    This function uses FocusAnalyzer to find the best focused image.
 
     Args:
         image_stack (list): List of images
@@ -119,5 +180,7 @@ def find_best_focus(image_stack, method='combined', roi=None):
     Returns:
         tuple: (best_focus_index, focus_scores)
     """
-    from ezstitcher.core.focus_detector import FocusDetector
-    return FocusDetector.find_best_focus(image_stack, method, roi)
+    # Create a FocusAnalyzer with the specified method
+    config = FocusAnalyzerConfig(method=method, roi=roi)
+    analyzer = FocusAnalyzer(config)
+    return analyzer.find_best_focus(image_stack)

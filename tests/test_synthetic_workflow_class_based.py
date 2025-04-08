@@ -40,8 +40,14 @@ sys.path.append(os.path.join(parent_dir, 'utils'))
 from generate_synthetic_data import SyntheticMicroscopyGenerator
 
 # Import core functionality
-from ezstitcher.core.main import process_plate_folder
-from ezstitcher.core.z_stack_manager import ZStackManager
+from ezstitcher.core.main import process_plate_folder, find_best_focus, process_bf
+from ezstitcher.core.zstack_processor import ZStackProcessor
+from ezstitcher.core.config import ZStackProcessorConfig, PlateProcessorConfig, StitcherConfig
+from ezstitcher.core.focus_analyzer import FocusAnalyzer
+from ezstitcher.core.image_preprocessor import ImagePreprocessor
+from ezstitcher.core.plate_processor import PlateProcessor
+
+# Legacy imports for backward compatibility
 from ezstitcher.core.stitcher_manager import StitcherManager
 from ezstitcher.core.image_processor import ImageProcessor
 
@@ -513,13 +519,13 @@ class TestSyntheticWorkflowClassBased(unittest.TestCase):
 
         try:
             # First, we need to preprocess the Z-stack data to organize it
-            from ezstitcher.core.z_stack_manager import ZStackManager
-            z_stack_manager = ZStackManager()
-            has_zstack = z_stack_manager.detect_z_stacks(self.zstack_dir)
+            z_config = ZStackProcessorConfig()
+            z_stack_processor = ZStackProcessor(z_config)
+            has_zstack = z_stack_processor.detect_z_stacks(self.zstack_dir)
             self.assertTrue(has_zstack, "Failed to detect Z-stack in Z-stack data")
 
             # Get the number of Z-planes
-            z_indices = z_stack_manager.get_z_indices()
+            z_indices = z_stack_processor.get_z_indices()
 
             # Process Z-stack data with all Z-planes stitched using max projection as reference
             success = process_plate_folder(
