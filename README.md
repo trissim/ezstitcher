@@ -9,11 +9,12 @@ An easy-to-use microscopy image stitching and processing tool for high-content i
 - Enhanced Z-stack handling with advanced focus detection
 - 3D projections for Z-stack visualization (maximum, mean, etc.)
 - Automatic best-focus plane detection across Z-stacks
+- Per-plane Z-stack stitching using projection-derived positions
 - Support for multi-channel fluorescence microscopy
 - Well and pattern detection for plate-based experiments
 - Automatic metadata extraction from TIFF files
 - No dependency on imagecodecs (uses uncompressed TIFF)
-- Class-based architecture for improved code organization and modularity
+- Class-based architecture with instance methods for improved code organization and modularity
 
 ## Supported Microscopes
 
@@ -97,7 +98,8 @@ process_plate_folder(
     focus_method="combined",          # Use combined focus metrics
     create_projections=True,          # Create Z-stack projections
     projection_types=["max", "mean"], # Types of projections to create
-    stitch_z_reference="best_focus"   # Use best focus images for stitching
+    stitch_z_reference="max",         # Use max projection images for stitching
+    stitch_all_z_planes=True          # Stitch all Z-planes using projection-derived positions
 )
 ```
 
@@ -125,6 +127,23 @@ process_plate_folder(
     'path/to/plate_folder',
     reference_channels=["1", "2"],
     tile_overlap=10
+)
+```
+
+### Z-Stack Per-Plane Stitching
+
+```python
+from ezstitcher.core import process_plate_folder
+
+# Process Z-stack data with per-plane stitching
+process_plate_folder(
+    'path/to/plate_folder',
+    reference_channels=["1"],
+    tile_overlap=10,
+    create_projections=True,          # Create projections for position detection
+    projection_types=["max"],         # Use max projection
+    stitch_z_reference="max",         # Use max projection for reference positions
+    stitch_all_z_planes=True          # Stitch each Z-plane using the same positions
 )
 ```
 
@@ -177,9 +196,9 @@ zstack_config = ZStackProcessorConfig(
     focus_detect=True,           # Enable focus detection
     focus_method="combined",     # Focus detection method
     create_projections=True,     # Create projections from Z-stacks
-    stitch_z_reference="best_focus",  # Z-plane to use for stitching
+    stitch_z_reference="max",    # Z-plane to use for stitching
     save_projections=True,       # Save projection images
-    stitch_all_z_planes=True,    # Stitch all Z-planes
+    stitch_all_z_planes=True,    # Stitch all Z-planes using projection-derived positions
     projection_types=["max", "mean"]  # Types of projections to create
 )
 
@@ -233,15 +252,22 @@ Stitch microscopy tiles with Z-awareness:
 - Create consistent composite images from different wavelengths
 - Generate positions from reference Z-planes
 
+### 5. Per-Plane Z-Stack Stitching
+
+Stitch each Z-plane independently while maintaining alignment:
+- Use projection images (e.g., max projection) to generate tiling positions
+- Apply the same positions to all Z-planes for consistent alignment
+- Preserve 3D structure while creating stitched Z-stack volumes
+
 ## Class-Based Architecture
 
-EZStitcher uses a class-based architecture for better organization and modularity:
+EZStitcher uses a class-based architecture with instance methods for better organization and modularity:
 
 ### Core Components
 
 1. **PlateProcessor**: Main entry point for processing a plate folder. Coordinates the overall workflow.
 2. **Stitcher**: Handles image stitching operations, including position detection and image assembly.
-3. **ZStackProcessor**: Manages Z-stack specific operations like focus detection and projection creation.
+3. **ZStackProcessor**: Manages Z-stack specific operations like focus detection, projection creation, and per-plane stitching.
 4. **FocusAnalyzer**: Analyzes focus quality in Z-stack images to find the best focus plane.
 5. **ImagePreprocessor**: Handles image preprocessing operations like contrast enhancement and composite creation.
 6. **FileSystemManager**: Manages file system operations like finding files, creating directories, and cleaning up.
@@ -250,11 +276,11 @@ EZStitcher uses a class-based architecture for better organization and modularit
 
 Each component has a corresponding configuration object that encapsulates its settings:
 
-1. **PlateProcessorConfig**: Configuration for the PlateProcessor.
-2. **StitcherConfig**: Configuration for the Stitcher.
-3. **ZStackProcessorConfig**: Configuration for the ZStackProcessor.
-4. **FocusAnalyzerConfig**: Configuration for the FocusAnalyzer.
-5. **ImagePreprocessorConfig**: Configuration for the ImagePreprocessor.
+1. **PlateProcessorConfig**: Configuration for the PlateProcessor, including directory naming conventions.
+2. **StitcherConfig**: Configuration for the Stitcher, including tile overlap and margin settings.
+3. **ZStackProcessorConfig**: Configuration for the ZStackProcessor, including focus detection and projection settings.
+4. **FocusAnalyzerConfig**: Configuration for the FocusAnalyzer, including focus detection methods.
+5. **ImagePreprocessorConfig**: Configuration for the ImagePreprocessor, including preprocessing functions and composite weights.
 
 ## Running Tests
 
@@ -262,6 +288,9 @@ EZStitcher includes a comprehensive test suite that verifies all core functional
 
 ```bash
 # Make sure you're in the ezstitcher directory with your virtual environment activated
+source .venv/bin/activate  # On Linux/macOS
+# or
+.venv\Scripts\activate  # On Windows
 
 # Run all tests
 python -m unittest discover -s tests
@@ -272,9 +301,25 @@ python -m unittest tests/test_stitcher.py
 python -m unittest tests/test_zstack_processor.py
 python -m unittest tests/test_integration.py
 
-# Run synthetic workflow tests
-python -m pytest tests/test_synthetic_workflow_class_based.py -v
+# Run synthetic workflow tests (these test the full pipeline)
+python -m unittest tests/test_synthetic_workflow_class_based.py
+
+# Run specific test methods
+python -m unittest tests.test_synthetic_workflow_class_based.TestSyntheticWorkflowClassBased.test_zstack_projection_stitching
+python -m unittest tests.test_synthetic_workflow_class_based.TestSyntheticWorkflowClassBased.test_zstack_per_plane_stitching
 ```
+
+### Tested Features
+
+The following features have been thoroughly tested and verified:
+
+- Basic image stitching for non-Z-stack data
+- Z-stack detection and organization
+- Z-stack projection creation (max, mean)
+- Z-stack projection-based stitching
+- Z-stack per-plane stitching using projection-derived positions
+- Multi-channel reference stitching
+- File system operations and directory management
 
 ## Requirements
 
