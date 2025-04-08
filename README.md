@@ -97,7 +97,7 @@ process_plate_folder(
     focus_method="combined",          # Use combined focus metrics
     create_projections=True,          # Create Z-stack projections
     projection_types=["max", "mean"], # Types of projections to create
-    stitch_method="best_focus"        # Use best focus images for stitching
+    stitch_z_reference="best_focus"   # Use best focus images for stitching
 )
 ```
 
@@ -126,6 +126,78 @@ process_plate_folder(
     reference_channels=["1", "2"],
     tile_overlap=10
 )
+```
+
+### Advanced Usage with Configuration Objects
+
+```python
+from ezstitcher.core.config import (
+    StitcherConfig,
+    FocusAnalyzerConfig,
+    ImagePreprocessorConfig,
+    ZStackProcessorConfig,
+    PlateProcessorConfig
+)
+from ezstitcher.core.plate_processor import PlateProcessor
+
+# Create configuration objects
+stitcher_config = StitcherConfig(
+    tile_overlap=10.0,  # Percentage overlap between tiles
+    max_shift=50,       # Maximum shift allowed between tiles in microns
+    margin_ratio=0.1    # Blending margin ratio for stitching
+)
+
+focus_config = FocusAnalyzerConfig(
+    method="combined"   # Focus detection method
+)
+
+# Define preprocessing functions
+def enhance_contrast(img):
+    """Simple contrast enhancement."""
+    import numpy as np
+    return np.clip(img * 1.2, 0, 255).astype(np.uint8)
+
+preprocessing_funcs = {
+    "1": enhance_contrast,  # Apply to channel 1
+    "2": enhance_contrast   # Apply to channel 2
+}
+
+# Define composite weights
+composite_weights = {
+    "1": 0.7,  # 70% weight for channel 1
+    "2": 0.3   # 30% weight for channel 2
+}
+
+image_config = ImagePreprocessorConfig(
+    preprocessing_funcs=preprocessing_funcs,
+    composite_weights=composite_weights
+)
+
+zstack_config = ZStackProcessorConfig(
+    focus_detect=True,           # Enable focus detection
+    focus_method="combined",     # Focus detection method
+    create_projections=True,     # Create projections from Z-stacks
+    stitch_z_reference="best_focus",  # Z-plane to use for stitching
+    save_projections=True,       # Save projection images
+    stitch_all_z_planes=True,    # Stitch all Z-planes
+    projection_types=["max", "mean"]  # Types of projections to create
+)
+
+plate_config = PlateProcessorConfig(
+    reference_channels=["1", "2"],  # Use both channels as reference
+    well_filter=["A01", "A02"],     # Only process these wells
+    use_reference_positions=False,  # Generate new positions
+    preprocessing_funcs=preprocessing_funcs,
+    composite_weights=composite_weights,
+    stitcher=stitcher_config,
+    focus_analyzer=focus_config,
+    image_preprocessor=image_config,
+    z_stack_processor=zstack_config
+)
+
+# Create and run the plate processor
+processor = PlateProcessor(plate_config)
+processor.run("path/to/plate_folder")
 ```
 
 ## Z-Stack Processing Features
@@ -165,12 +237,24 @@ Stitch microscopy tiles with Z-awareness:
 
 EZStitcher uses a class-based architecture for better organization and modularity:
 
-### Key Classes
+### Core Components
 
-- **ImageProcessor**: Handles all image processing operations
-- **FocusDetector**: Handles focus detection algorithms
-- **ZStackManager**: Manages Z-stack organization and processing
-- **StitcherManager**: Handles image stitching operations
+1. **PlateProcessor**: Main entry point for processing a plate folder. Coordinates the overall workflow.
+2. **Stitcher**: Handles image stitching operations, including position detection and image assembly.
+3. **ZStackProcessor**: Manages Z-stack specific operations like focus detection and projection creation.
+4. **FocusAnalyzer**: Analyzes focus quality in Z-stack images to find the best focus plane.
+5. **ImagePreprocessor**: Handles image preprocessing operations like contrast enhancement and composite creation.
+6. **FileSystemManager**: Manages file system operations like finding files, creating directories, and cleaning up.
+
+### Configuration Objects
+
+Each component has a corresponding configuration object that encapsulates its settings:
+
+1. **PlateProcessorConfig**: Configuration for the PlateProcessor.
+2. **StitcherConfig**: Configuration for the Stitcher.
+3. **ZStackProcessorConfig**: Configuration for the ZStackProcessor.
+4. **FocusAnalyzerConfig**: Configuration for the FocusAnalyzer.
+5. **ImagePreprocessorConfig**: Configuration for the ImagePreprocessor.
 
 ## Running Tests
 
@@ -178,6 +262,17 @@ EZStitcher includes a comprehensive test suite that verifies all core functional
 
 ```bash
 # Make sure you're in the ezstitcher directory with your virtual environment activated
+
+# Run all tests
+python -m unittest discover -s tests
+
+# Run specific test files
+python -m unittest tests/test_file_system_manager.py
+python -m unittest tests/test_stitcher.py
+python -m unittest tests/test_zstack_processor.py
+python -m unittest tests/test_integration.py
+
+# Run synthetic workflow tests
 python -m pytest tests/test_synthetic_workflow_class_based.py -v
 ```
 

@@ -29,7 +29,8 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
                          tile_overlap=6.5, tile_overlap_x=None, tile_overlap_y=None,
                          max_shift=50, focus_detect=False, focus_method="combined",
                          create_projections=False, stitch_z_reference='best_focus',
-                         save_projections=True, stitch_all_z_planes=False):
+                         save_projections=True, stitch_all_z_planes=False,
+                         use_reference_positions=False):
     """
     Process an entire plate folder with microscopy images.
 
@@ -52,6 +53,7 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         stitch_z_reference (str): Z-plane to use for stitching ('best_focus', 'max', 'mean')
         save_projections (bool): Whether to save projection images after stitching
         stitch_all_z_planes (bool): Whether to stitch all Z-planes using reference positions
+        use_reference_positions (bool): Whether to use existing reference positions
 
     Returns:
         bool: True if successful, False otherwise
@@ -86,6 +88,9 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
     plate_config = PlateProcessorConfig(
         reference_channels=reference_channels,
         well_filter=well_filter,
+        use_reference_positions=use_reference_positions,
+        preprocessing_funcs=preprocessing_funcs,
+        composite_weights=composite_weights,
         stitcher=stitcher_config,
         focus_analyzer=focus_config,
         image_preprocessor=image_preprocessor_config,
@@ -155,6 +160,9 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     plate_config = PlateProcessorConfig(
         reference_channels=kwargs.get('reference_channels', ['1']),
         well_filter=kwargs.get('well_filter', None),
+        use_reference_positions=kwargs.get('use_reference_positions', False),
+        preprocessing_funcs=kwargs.get('preprocessing_funcs', {}),
+        composite_weights=kwargs.get('composite_weights', None),
         stitcher=stitcher_config,
         focus_analyzer=focus_config,
         image_preprocessor=image_preprocessor_config,

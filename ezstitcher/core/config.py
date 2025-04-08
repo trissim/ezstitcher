@@ -50,9 +50,22 @@ class ZStackProcessorConfig:
 @dataclass
 class PlateProcessorConfig:
     """Configuration for the PlateProcessor class."""
+    # Basic parameters
     reference_channels: List[str] = field(default_factory=lambda: ["1"])
     well_filter: Optional[List[str]] = None
     use_reference_positions: bool = False
+
+    # File system parameters
+    output_dir_suffix: str = "_processed"
+    positions_dir_suffix: str = "_positions"
+    stitched_dir_suffix: str = "_stitched"
+    best_focus_dir_suffix: str = "_best_focus"
+    projections_dir_suffix: str = "_Projections"
+    timepoint_dir_name: str = "TimePoint_1"
+
+    # Preprocessing parameters
+    preprocessing_funcs: Optional[Dict[str, Callable]] = None
+    composite_weights: Optional[Dict[str, float]] = None
 
     # Nested configurations
     stitcher: StitcherConfig = field(default_factory=StitcherConfig)

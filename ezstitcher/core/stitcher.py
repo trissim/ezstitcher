@@ -15,57 +15,13 @@ from scipy.ndimage import shift as subpixel_shift
 from ashlar import fileseries, reg
 
 from ezstitcher.core.config import StitcherConfig
-from ezstitcher.core.utils import (
-    ensure_directory, load_image, save_image, path_list_from_pattern,
-    parse_positions_csv, create_linear_weight_mask
-)
+from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.core.utils import create_linear_weight_mask
 
 logger = logging.getLogger(__name__)
 
 
-def generate_positions_df(image_dir, image_pattern, positions, grid_size_x, grid_size_y):
-    """
-    Given an image_dir, an image_pattern (with '{iii}' or similar placeholder)
-    and a list of (x, y) tuples 'positions', build a DataFrame with lines like:
 
-      file: <filename>; position: (x, y); grid: (col, row);
-    """
-    all_files = path_list_from_pattern(image_dir, image_pattern)
-    if len(all_files) != len(positions):
-        logger.warning(
-            f"Number of matched files ({len(all_files)}) != number of positions ({len(positions)}). "
-            f"Adjusting grid size to match file count."
-        )
-
-    # Adjust grid size if needed
-    total_grid_size = grid_size_x * grid_size_y
-    if total_grid_size < len(all_files):
-        # If grid is too small, increase it to fit all files
-        new_size = int(np.ceil(np.sqrt(len(all_files))))
-        logger.warning(f"Grid size {grid_size_x}x{grid_size_y} is too small for {len(all_files)} files. "
-                      f"Adjusting to {new_size}x{new_size}.")
-        grid_size_x = grid_size_y = new_size
-
-    # Generate a list of (x, y) grid positions following a raster pattern
-    positions_grid = [(x, y) for y in range(grid_size_y) for x in range(grid_size_x)]
-
-    # Ensure we don't try to access beyond the available positions
-    num_positions = min(len(all_files), len(positions), len(positions_grid))
-    data_rows = []
-
-    for i in range(num_positions):
-        fname = all_files[i]
-        x, y = positions[i]
-        row, col = positions_grid[i]
-
-        data_rows.append({
-            "file": "file: " + fname,
-            "grid": " grid: " + "("+str(row)+", "+str(col)+")",
-            "position": " position: " + "("+str(x)+", "+str(y)+")",
-        })
-
-    df = pd.DataFrame(data_rows)
-    return df
 
 
 class Stitcher:
@@ -81,6 +37,51 @@ class Stitcher:
             config (StitcherConfig): Configuration for stitching
         """
         self.config = config or StitcherConfig()
+        self.fs_manager = FileSystemManager()
+
+    def generate_positions_df(self, image_dir, image_pattern, positions, grid_size_x, grid_size_y):
+        """
+        Given an image_dir, an image_pattern (with '{iii}' or similar placeholder)
+        and a list of (x, y) tuples 'positions', build a DataFrame with lines like:
+
+          file: <filename>; position: (x, y); grid: (col, row);
+        """
+        all_files = self.fs_manager.path_list_from_pattern(image_dir, image_pattern)
+        if len(all_files) != len(positions):
+            logger.warning(
+                f"Number of matched files ({len(all_files)}) != number of positions ({len(positions)}). "
+                f"Adjusting grid size to match file count."
+            )
+
+        # Adjust grid size if needed
+        total_grid_size = grid_size_x * grid_size_y
+        if total_grid_size < len(all_files):
+            # If grid is too small, increase it to fit all files
+            new_size = int(np.ceil(np.sqrt(len(all_files))))
+            logger.warning(f"Grid size {grid_size_x}x{grid_size_y} is too small for {len(all_files)} files. "
+                          f"Adjusting to {new_size}x{new_size}.")
+            grid_size_x = grid_size_y = new_size
+
+        # Generate a list of (x, y) grid positions following a raster pattern
+        positions_grid = [(x, y) for y in range(grid_size_y) for x in range(grid_size_x)]
+
+        # Ensure we don't try to access beyond the available positions
+        num_positions = min(len(all_files), len(positions), len(positions_grid))
+        data_rows = []
+
+        for i in range(num_positions):
+            fname = all_files[i]
+            x, y = positions[i]
+            row, col = positions_grid[i]
+
+            data_rows.append({
+                "file": "file: " + fname,
+                "grid": " grid: " + "("+str(row)+", "+str(col)+")",
+                "position": " position: " + "("+str(x)+", "+str(y)+")",
+            })
+
+        df = pd.DataFrame(data_rows)
+        return df
 
     def auto_detect_patterns(self, folder_path, well_filter=None):
         """
@@ -95,10 +96,8 @@ class Stitcher:
         """
         folder_path = Path(folder_path)
 
-        # Get all image files
-        image_files = []
-        for ext in ['.tif', '.TIF', '.tiff', '.TIFF', '.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']:
-            image_files.extend([f.name for f in folder_path.glob(f"*{ext}")])
+        # Get all image files using FileSystemManager
+        image_files = [f.name for f in self.fs_manager.list_image_files(folder_path)]
 
         # Group by well and wavelength
         patterns_by_well = {}
@@ -155,7 +154,7 @@ class Stitcher:
             tuple: (ref_channel, ref_pattern, ref_dir, updated_patterns)
         """
         # Create processed directory if needed
-        processed_dir = ensure_directory(dirs['processed'])
+        processed_dir = self.fs_manager.ensure_directory(dirs['processed'])
         logger.info(f"Using processed directory: {processed_dir}")
 
         # Make a copy of patterns that we can modify
@@ -220,7 +219,7 @@ class Stitcher:
             updated_patterns['composite'] = composite_pattern
 
             # Check if composite files were created
-            composite_files = path_list_from_pattern(processed_dir, composite_pattern)
+            composite_files = self.fs_manager.path_list_from_pattern(processed_dir, composite_pattern)
             logger.info(f"Created {len(composite_files)} composite files: {composite_files}")
 
             logger.info(f"Created composite reference with pattern {composite_pattern}")
@@ -243,7 +242,7 @@ class Stitcher:
             str: Pattern for the composite images
         """
         input_dir = Path(input_dir)
-        processed_dir = ensure_directory(processed_dir)
+        processed_dir = self.fs_manager.ensure_directory(processed_dir)
 
         # Create composite pattern
         first_channel = reference_channels[0]
@@ -256,7 +255,7 @@ class Stitcher:
         channel_files = {}
         for channel in reference_channels:
             pattern = channel_patterns[channel]
-            files = path_list_from_pattern(input_dir, pattern)
+            files = self.fs_manager.path_list_from_pattern(input_dir, pattern)
             channel_files[channel] = files
 
         # Check if all channels have the same number of files
@@ -276,7 +275,7 @@ class Stitcher:
                 file_path = input_dir / filename
 
                 # Load image
-                img = load_image(file_path)
+                img = self.fs_manager.load_image(file_path)
                 if img is None:
                     logger.error(f"Failed to load image: {file_path}")
                     continue
@@ -305,12 +304,12 @@ class Stitcher:
             out_filename = composite_pattern.replace("{iii}", site_num)
 
             # Ensure the processed directory exists
-            processed_dir.mkdir(parents=True, exist_ok=True)
+            self.fs_manager.ensure_directory(processed_dir)
 
             # Save composite reference to processed directory
             out_path = processed_dir / out_filename
             logger.info(f"Saving composite image to {out_path}")
-            save_image(out_path, composite)
+            self.fs_manager.save_image(out_path, composite)
 
         return composite_pattern
 
@@ -328,10 +327,10 @@ class Stitcher:
             int: Number of processed images
         """
         image_dir = Path(image_dir)
-        out_dir = ensure_directory(out_dir)
+        out_dir = self.fs_manager.ensure_directory(out_dir)
 
         # Get matching files
-        image_names = path_list_from_pattern(image_dir, image_pattern)
+        image_names = self.fs_manager.path_list_from_pattern(image_dir, image_pattern)
         if not image_names:
             logger.warning(f"No images found matching pattern {image_pattern} in {image_dir}")
             return 0
@@ -339,7 +338,7 @@ class Stitcher:
         # Load images
         images = []
         for name in image_names:
-            img = load_image(image_dir / name)
+            img = self.fs_manager.load_image(image_dir / name)
             if img is not None:
                 images.append(img)
 
@@ -348,7 +347,7 @@ class Stitcher:
 
         # Save processed images
         for img, name in zip(processed, image_names):
-            save_image(out_dir / name, img)
+            self.fs_manager.save_image(out_dir / name, img)
 
         return len(processed)
 
@@ -508,10 +507,10 @@ class Stitcher:
             original_pattern = image_pattern.replace("{series}", "{iii}")
 
             # Generate positions DataFrame
-            positions_df = generate_positions_df(str(image_dir), original_pattern, positions, grid_size_x, grid_size_y)
+            positions_df = self.generate_positions_df(str(image_dir), original_pattern, positions, grid_size_x, grid_size_y)
 
             # Save to CSV
-            positions_path.parent.mkdir(parents=True, exist_ok=True)
+            self.fs_manager.ensure_directory(positions_path.parent)
             positions_df.to_csv(positions_path, index=False, sep=";", header=False)
 
             logger.info(f"Saved positions to {positions_path}")
@@ -543,10 +542,10 @@ class Stitcher:
 
             # Ensure output directory exists
             output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            self.fs_manager.ensure_directory(output_path.parent)
 
             # Parse CSV file
-            pos_entries = parse_positions_csv(positions_path)
+            pos_entries = self.fs_manager.parse_positions_csv(positions_path)
             if not pos_entries:
                 logger.error(f"No valid entries found in {positions_path}")
                 return False
@@ -567,7 +566,7 @@ class Stitcher:
                     return False
 
             # Read the first tile to get shape, dtype
-            first_tile = load_image(images_dir / pos_entries[0][0])
+            first_tile = self.fs_manager.load_image(images_dir / pos_entries[0][0])
             if first_tile is None:
                 logger.error(f"Failed to load first tile: {pos_entries[0][0]}")
                 return False
@@ -601,7 +600,7 @@ class Stitcher:
                 logger.info(f"Placing tile {i+1}/{len(pos_entries)}: {fname} at ({x_f}, {y_f})")
 
                 # Load tile
-                tile_img = load_image(images_dir / fname)
+                tile_img = self.fs_manager.load_image(images_dir / fname)
                 if tile_img is None:
                     logger.error(f"Failed to load tile: {fname}")
                     continue
@@ -668,7 +667,7 @@ class Stitcher:
 
             # Save stitched image
             logger.info(f"Saving stitched image to {output_path}")
-            save_image(output_path, blended)
+            self.fs_manager.save_image(output_path, blended)
 
             return True
 
@@ -676,7 +675,7 @@ class Stitcher:
             logger.error(f"Error in assemble_image: {e}")
             return False
 
-    def process_well_wavelengths(self, well, wavelength_patterns, dirs, grid_dims, ref_channel, ref_pattern, ref_dir, margin_ratio=0.1, tile_overlap=10, tile_overlap_x=None, tile_overlap_y=None, max_shift=50, use_existing_positions=False):
+    def process_well_wavelengths(self, well, wavelength_patterns, dirs, grid_dims, ref_channel, ref_pattern, ref_dir, use_existing_positions=False):
         """
         Process all wavelengths for a well.
 
@@ -688,11 +687,6 @@ class Stitcher:
             ref_channel (str): Reference channel
             ref_pattern (str): Reference pattern
             ref_dir (str or Path): Reference directory
-            margin_ratio (float): Blending margin ratio
-            tile_overlap (float): Overlap percentage
-            tile_overlap_x (float): Horizontal overlap percentage
-            tile_overlap_y (float): Vertical overlap percentage
-            max_shift (int): Maximum allowed error in microns
             use_existing_positions (bool): Whether to use existing positions file instead of generating new ones
 
         Returns:
@@ -740,7 +734,7 @@ class Stitcher:
             img_dir = dirs['input']
 
             # Get files for this wavelength to override the composite filenames
-            override_names = path_list_from_pattern(img_dir, pattern)
+            override_names = self.fs_manager.path_list_from_pattern(img_dir, pattern)
 
             # Assemble final image
             stitched_name = self.compute_stitched_name(pattern)
@@ -783,13 +777,13 @@ class Stitcher:
             output_dir = Path(output_dir)
 
             # Create output directory
-            output_dir.parent.mkdir(parents=True, exist_ok=True)
+            self.fs_manager.ensure_directory(output_dir.parent)
 
             # Create positions directory if needed
             if positions_dir is None:
                 positions_dir = image_dir.parent / f"{image_dir.name}_positions"
             positions_dir = Path(positions_dir)
-            positions_dir.mkdir(parents=True, exist_ok=True)
+            self.fs_manager.ensure_directory(positions_dir)
 
             # Generate positions
             positions_path = positions_dir / f"{pattern.replace('{iii}', 'positions')}.csv"
