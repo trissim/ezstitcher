@@ -12,6 +12,11 @@ from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
 import numpy as np
 
+from ezstitcher.core.filename_parser import FilenameParser
+from ezstitcher.core.csv_handler import CSVHandler
+from ezstitcher.core.pattern_matcher import PatternMatcher
+from ezstitcher.core.directory_manager import DirectoryManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,6 +37,10 @@ class FileSystemManager:
         self.default_extensions = ['.tif', '.TIF', '.tiff', '.TIFF', 
                                   '.jpg', '.JPG', '.jpeg', '.JPEG', 
                                   '.png', '.PNG']
+        self.filename_parser = FilenameParser()
+        self.csv_handler = CSVHandler()
+        self.pattern_matcher = PatternMatcher()
+        self.directory_manager = DirectoryManager()
     
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
         """
@@ -43,9 +52,7 @@ class FileSystemManager:
         Returns:
             Path: Path object for the directory
         """
-        directory = Path(directory)
-        directory.mkdir(parents=True, exist_ok=True)
-        return directory
+        return self.directory_manager.ensure_directory(directory)
     
     def list_image_files(self, directory: Union[str, Path], 
                          extensions: Optional[List[str]] = None) -> List[Path]:
@@ -81,27 +88,7 @@ class FileSystemManager:
         Returns:
             list: List of matching filenames
         """
-        directory = Path(directory)
-
-        # Handle substitution of {series} if present (from Ashlar)
-        if "{series}" in pattern:
-            logger.debug(f"Converting {{series}} to {{iii}} for consistency in pattern: {pattern}")
-            pattern = pattern.replace("{series}", "{iii}")
-
-        # Convert pattern to regex
-        # Replace {iii} with (\d+) to match any number of digits (padded or not)
-        regex_pattern = pattern.replace('{iii}', '(\\d+)')
-        regex = re.compile(regex_pattern)
-
-        # Find all matching files
-        matching_files = []
-        for file_path in directory.glob('*'):
-            if regex.match(file_path.name):
-                matching_files.append(file_path.name)
-
-        logger.debug(f"Found {len(matching_files)} files matching pattern {pattern} in {directory}")
-
-        return sorted(matching_files)
+        return self.pattern_matcher.path_list_from_pattern(directory, pattern)
     
     def load_image(self, file_path: Union[str, Path]) -> Optional[np.ndarray]:
         """
@@ -195,22 +182,34 @@ class FileSystemManager:
         Returns:
             list: List of tuples (filename, x_float, y_float)
         """
-        entries = []
-        with open(csv_path, 'r') as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                # Example line:
-                # file: some_image.tif; grid: (0, 0); position: (123.45, 67.89)
-                file_match = re.search(r'file:\s*([^;]+);', line)
-                pos_match = re.search(r'position:\s*\(([^,]+),\s*([^)]+)\)', line)
-                if file_match and pos_match:
-                    fname = file_match.group(1).strip()
-                    x_val = float(pos_match.group(1).strip())
-                    y_val = float(pos_match.group(2).strip())
-                    entries.append((fname, x_val, y_val))
-        return entries
+        return self.csv_handler.parse_positions_csv(csv_path)
+    
+    def generate_positions_df(self, image_files, positions, grid_positions):
+        """
+        Generate a DataFrame with position information.
+        
+        Args:
+            image_files (list): List of image filenames
+            positions (list): List of (x, y) position tuples
+            grid_positions (list): List of (row, col) grid position tuples
+            
+        Returns:
+            pandas.DataFrame: DataFrame with position information
+        """
+        return self.csv_handler.generate_positions_df(image_files, positions, grid_positions)
+    
+    def save_positions_df(self, df, positions_path):
+        """
+        Save a positions DataFrame to CSV.
+        
+        Args:
+            df (pandas.DataFrame): DataFrame to save
+            positions_path (str or Path): Path to save the CSV file
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        return self.csv_handler.save_positions_df(df, positions_path)
     
     def find_htd_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
         """
@@ -288,36 +287,82 @@ class FileSystemManager:
         Returns:
             list: List of well names (e.g., ['A01', 'A02', ...])
         """
-        timepoint_dir = Path(timepoint_dir)
-        well_pattern = re.compile(r'([A-Z]\d{2})_')
-        wells = set()
-
-        for file in timepoint_dir.glob("*.tif"):
-            match = well_pattern.search(file.name)
-            if match:
-                wells.add(match.group(1))
-
-        return sorted(list(wells))
+        return self.directory_manager.find_wells(timepoint_dir)
     
-    def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str) -> None:
+    def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
         """
         Clean up temporary folders created during processing.
         
         Args:
             parent_dir (str or Path): Parent directory
             base_name (str): Base name of the plate folder
+            keep_suffixes (list, optional): List of suffixes to keep
         """
-        parent_dir = Path(parent_dir)
+        self.directory_manager.clean_temp_folders(parent_dir, base_name, keep_suffixes)
+    
+    def create_output_directories(self, parent_dir, plate_name, suffixes):
+        """
+        Create output directories for a plate.
         
-        # Pattern to match temporary folders
-        temp_folder_pattern = re.compile(f"{re.escape(base_name)}_(processed|positions|stitched|best_focus|Projections|max|mean|std)")
+        Args:
+            parent_dir (str or Path): Parent directory
+            plate_name (str): Name of the plate
+            suffixes (dict): Dictionary mapping directory types to suffixes
+            
+        Returns:
+            dict: Dictionary mapping directory types to Path objects
+        """
+        return self.directory_manager.create_output_directories(parent_dir, plate_name, suffixes)
+    
+    def parse_filename(self, filename):
+        """
+        Parse a microscopy image filename.
         
-        for item in parent_dir.glob(f"{base_name}_*"):
-            if item.is_dir() and temp_folder_pattern.match(item.name):
-                try:
-                    logger.info(f"Removing temporary folder: {item}")
-                    # Use shutil.rmtree to remove directory and contents
-                    import shutil
-                    shutil.rmtree(item)
-                except Exception as e:
-                    logger.warning(f"Failed to remove temporary folder {item}: {e}")
+        Args:
+            filename (str): Filename to parse
+            
+        Returns:
+            dict: Dictionary with extracted components
+        """
+        return self.filename_parser.parse_filename(filename)
+    
+    def pad_site_number(self, filename):
+        """
+        Ensure site number is padded to 3 digits.
+        
+        Args:
+            filename (str): Filename to pad
+            
+        Returns:
+            str: Filename with padded site number
+        """
+        return self.filename_parser.pad_site_number(filename)
+    
+    def construct_filename(self, well, site, wavelength, z_index=None, extension='.tif'):
+        """
+        Construct a filename from components.
+        
+        Args:
+            well (str): Well ID (e.g., 'A01')
+            site (int): Site number
+            wavelength (int): Wavelength number
+            z_index (int, optional): Z-index
+            extension (str, optional): File extension
+            
+        Returns:
+            str: Constructed filename
+        """
+        return self.filename_parser.construct_filename(well, site, wavelength, z_index, extension)
+    
+    def auto_detect_patterns(self, folder_path, well_filter=None):
+        """
+        Automatically detect image patterns in a folder.
+        
+        Args:
+            folder_path (str or Path): Path to the folder
+            well_filter (list): Optional list of wells to include
+            
+        Returns:
+            dict: Dictionary mapping wells to wavelength patterns
+        """
+        return self.pattern_matcher.auto_detect_patterns(folder_path, well_filter)

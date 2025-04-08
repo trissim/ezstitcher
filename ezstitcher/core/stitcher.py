@@ -94,47 +94,14 @@ class Stitcher:
         Returns:
             dict: Dictionary mapping wells to wavelength patterns
         """
-        folder_path = Path(folder_path)
+        # Use the PatternMatcher class through the FileSystemManager
+        patterns_by_well = self.fs_manager.auto_detect_patterns(folder_path, well_filter)
 
-        # Get all image files using FileSystemManager
-        image_files = [f.name for f in self.fs_manager.list_image_files(folder_path)]
-
-        # Group by well and wavelength
-        patterns_by_well = {}
-
-        # Pattern to extract well, site, wavelength from filename
-        # Example: A01_s001_w1.tif or A01_s001_w1_z001.tif
-        filename_pattern = re.compile(r'([A-Z]\d+)_s(\d+)_w(\d+)(?:_z\d+)?\..*')
-
-        for filename in image_files:
-            match = filename_pattern.match(filename)
-            if match:
-                well = match.group(1)
-                site_str = match.group(2)
-                site = int(site_str)
-                wavelength = int(match.group(3))
-
-                # Skip if well is not in filter
-                if well_filter and well not in well_filter:
-                    continue
-
-                # Add to patterns dictionary
-                if well not in patterns_by_well:
-                    patterns_by_well[well] = {}
-
-                # Create pattern for this wavelength
-                # First, ensure the site number is padded to 3 digits
-                padded_site = f"{site:03d}"
-                padded_filename = filename.replace(f"_s{site_str}", f"_s{padded_site}")
-
-                # Now replace the padded site with the placeholder
-                pattern = re.sub(r'_s\d{3}', '_s{iii}', padded_filename)
-
-                # Remove z-index if present
-                pattern = re.sub(r'_z\d+', '', pattern)
-
-                # Add to patterns
-                patterns_by_well[well][str(wavelength)] = pattern
+        # Convert wavelength keys to strings for backward compatibility
+        for well, wavelength_patterns in patterns_by_well.items():
+            for wavelength in list(wavelength_patterns.keys()):
+                if not isinstance(wavelength, str):
+                    wavelength_patterns[str(wavelength)] = wavelength_patterns.pop(wavelength)
 
         return patterns_by_well
 

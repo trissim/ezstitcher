@@ -256,7 +256,7 @@ class PlateProcessor:
                     logger.error(f"Failed to process well {well}")
 
             # Clean up temporary folders if needed
-            # self.fs_manager.clean_temp_folders(parent_dir, plate_name)
+            self.fs_manager.clean_temp_folders(parent_dir, plate_name, keep_suffixes=['_stitched'])
 
             return True
 

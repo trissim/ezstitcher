@@ -17,3 +17,10 @@ from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.zstack_processor import ZStackProcessor
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.plate_processor import PlateProcessor
+
+# Import utility classes
+from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.core.filename_parser import FilenameParser
+from ezstitcher.core.csv_handler import CSVHandler
+from ezstitcher.core.pattern_matcher import PatternMatcher
+from ezstitcher.core.directory_manager import DirectoryManager
