@@ -10,6 +10,7 @@ An easy-to-use microscopy image stitching and processing tool for high-content i
 - 3D projections for Z-stack visualization (maximum, mean, etc.)
 - Automatic best-focus plane detection across Z-stacks
 - Per-plane Z-stack stitching using projection-derived positions
+- Custom projection functions for Z-stack reference generation
 - Support for multi-channel fluorescence microscopy
 - Well and pattern detection for plate-based experiments
 - Automatic metadata extraction from TIFF files
@@ -294,6 +295,7 @@ Stitch microscopy tiles with Z-awareness:
 - Use best focused planes for alignment references
 - Create consistent composite images from different wavelengths
 - Generate positions from reference Z-planes
+- Support for custom projection functions for reference generation
 
 ### 5. Per-Plane Z-Stack Stitching
 
@@ -321,7 +323,7 @@ Each component has a corresponding configuration object that encapsulates its se
 
 1. **PlateProcessorConfig**: Configuration for the PlateProcessor, including directory naming conventions.
 2. **StitcherConfig**: Configuration for the Stitcher, including tile overlap and margin settings.
-3. **ZStackProcessorConfig**: Configuration for the ZStackProcessor, including focus detection and projection settings.
+3. **ZStackProcessorConfig**: Configuration for the ZStackProcessor, including focus detection, projection settings, and custom projection functions.
 4. **FocusAnalyzerConfig**: Configuration for the FocusAnalyzer, including focus detection methods.
 5. **ImagePreprocessorConfig**: Configuration for the ImagePreprocessor, including preprocessing functions and composite weights.
 
