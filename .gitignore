@@ -58,6 +58,9 @@ ENV/
 tests/**/test_data/
 tests/**/__pycache__/
 
+# Documentation build files
+docs/build/
+
 # Temporary files
 *.log
 *.tmp
