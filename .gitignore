@@ -54,7 +54,9 @@ ENV/
 *.PNG
 
 # Test directories
-tests/
+# Ignore test data but not test files
+tests/**/test_data/
+tests/**/__pycache__/
 
 # Temporary files
 *.log
