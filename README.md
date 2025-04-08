@@ -2,6 +2,12 @@
 
 An easy-to-use microscopy image stitching and processing tool for high-content imaging applications, currently optimized for ImageXpress microscopes with OperaPhenix support coming in future releases.
 
+[![Documentation Status](https://readthedocs.org/projects/ezstitcher/badge/?version=latest)](https://ezstitcher.readthedocs.io/en/latest/?badge=latest)
+
+## Documentation
+
+Full documentation is available at [https://ezstitcher.readthedocs.io/](https://ezstitcher.readthedocs.io/)
+
 ## Features
 
 - Microscopy image processing with various filters
