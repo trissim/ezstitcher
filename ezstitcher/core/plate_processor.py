@@ -148,8 +148,11 @@ class PlateProcessor:
                 elif stitch_z_reference in ['max', 'mean'] and projections_dir:
                     stitch_source = projections_dir
                     logger.info(f"Using {stitch_z_reference} projections for stitching from {projections_dir}")
-                elif stitch_z_reference in ['max', 'mean', 'best_focus'] and stitch_all_z_planes:
-                    logger.info(f"Stitching all Z-planes using {stitch_z_reference} as reference")
+                elif (isinstance(stitch_z_reference, str) and stitch_z_reference in ['max', 'mean', 'best_focus']) or callable(stitch_z_reference):
+                    if callable(stitch_z_reference):
+                        logger.info(f"Stitching all Z-planes using custom function as reference")
+                    else:
+                        logger.info(f"Stitching all Z-planes using {stitch_z_reference} as reference")
                     # Create a new config for Z-plane stitching
                     z_plane_config = PlateProcessorConfig(
                         reference_channels=reference_channels,

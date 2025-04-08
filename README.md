@@ -147,6 +147,33 @@ process_plate_folder(
 )
 ```
 
+### Custom Z-Stack Projection Function
+
+```python
+from ezstitcher.core import process_plate_folder
+
+# Define a custom function that takes a Z-stack and returns a 2D image
+def middle_plane_projection(z_stack):
+    """Custom projection function that takes the middle plane of the Z-stack."""
+    import numpy as np
+    # Convert to numpy array if it's a list
+    if isinstance(z_stack, list):
+        z_stack = np.array(z_stack)
+    # Get the middle plane
+    middle_idx = len(z_stack) // 2
+    return z_stack[middle_idx]
+
+# Process Z-stack data with custom projection function
+process_plate_folder(
+    'path/to/plate_folder',
+    reference_channels=["1"],
+    tile_overlap=10,
+    create_projections=True,
+    stitch_z_reference=middle_plane_projection,  # Use custom function
+    stitch_all_z_planes=True
+)
+```
+
 ### Advanced Usage with Configuration Objects
 
 ```python
@@ -192,11 +219,27 @@ image_config = ImagePreprocessorConfig(
     composite_weights=composite_weights
 )
 
+# Define a custom function for Z-stack projection
+def weighted_projection(z_stack):
+    """Custom weighted projection that emphasizes the middle planes."""
+    import numpy as np
+    if isinstance(z_stack, list):
+        z_stack = np.array(z_stack)
+
+    # Create weights that emphasize the middle planes
+    num_planes = len(z_stack)
+    middle = num_planes // 2
+    weights = 1 - np.abs(np.arange(num_planes) - middle) / (num_planes / 2)
+
+    # Apply weights and sum
+    weighted_stack = z_stack * weights[:, np.newaxis, np.newaxis]
+    return np.sum(weighted_stack, axis=0) / np.sum(weights)
+
 zstack_config = ZStackProcessorConfig(
     focus_detect=True,           # Enable focus detection
     focus_method="combined",     # Focus detection method
     create_projections=True,     # Create projections from Z-stacks
-    stitch_z_reference="max",    # Z-plane to use for stitching
+    stitch_z_reference=weighted_projection,  # Use custom function for stitching reference
     save_projections=True,       # Save projection images
     stitch_all_z_planes=True,    # Stitch all Z-planes using projection-derived positions
     projection_types=["max", "mean"]  # Types of projections to create

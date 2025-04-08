@@ -426,7 +426,9 @@ class ZStackProcessor:
 
         Args:
             plate_folder (str or Path): Path to the plate folder
-            reference_z (str): Reference Z-plane to use for positions ('max', 'mean', 'best_focus')
+            reference_z (str or callable): Reference Z-plane to use for positions.
+                If str: 'max', 'mean', or 'best_focus'
+                If callable: A function that takes a Z-stack (list of images) and returns a 2D image
             stitch_all_z_planes (bool): Whether to stitch all Z-planes
             processor (PlateProcessor): Processor to use for stitching
 
@@ -460,14 +462,66 @@ class ZStackProcessor:
             plate_name = plate_path.name
 
             # Determine reference directory based on reference_z
-            if reference_z == 'max':
-                reference_dir = parent_dir / f"{plate_name}_projections_max" / timepoint_dir
-            elif reference_z == 'mean':
-                reference_dir = parent_dir / f"{plate_name}_projections_mean" / timepoint_dir
-            elif reference_z == 'best_focus':
-                reference_dir = parent_dir / f"{plate_name}_best_focus" / timepoint_dir
+            if isinstance(reference_z, str):
+                if reference_z == 'max':
+                    reference_dir = parent_dir / f"{plate_name}_projections_max" / timepoint_dir
+                elif reference_z == 'mean':
+                    reference_dir = parent_dir / f"{plate_name}_projections_mean" / timepoint_dir
+                elif reference_z == 'best_focus':
+                    reference_dir = parent_dir / f"{plate_name}_best_focus" / timepoint_dir
+                else:
+                    logger.error(f"Invalid reference_z string: {reference_z}. Must be 'max', 'mean', or 'best_focus'.")
+                    return False
+            elif callable(reference_z):
+                # If reference_z is a function, we need to create a custom projection directory
+                custom_proj_dir = parent_dir / f"{plate_name}_projections_custom" / timepoint_dir
+                self.fs_manager.ensure_directory(custom_proj_dir)
+
+                # Create custom projections for each Z-stack
+                logger.info(f"Creating custom projections using provided function")
+
+                # Process each Z-stack
+                for base_name, z_indices in z_indices_map.items():
+                    # Load all images in the Z-stack
+                    image_stack = []
+                    for z_idx in sorted(z_indices):
+                        # Check if images are in ZStep folders or have _z in the filename
+                        zstep_folder = timepoint_path / f"ZStep_{z_idx}"
+                        if zstep_folder.exists():
+                            # Images are in ZStep folders
+                            filename = f"{base_name}.tif"
+                            file_path = zstep_folder / filename
+                        else:
+                            # Images have _z in the filename
+                            filename = f"{base_name}_z{z_idx:03d}.tif"
+                            file_path = timepoint_path / filename
+
+                        if file_path.exists():
+                            img = self.fs_manager.load_image(file_path)
+                            if img is not None:
+                                image_stack.append(img)
+
+                    if not image_stack:
+                        logger.warning(f"No images found for Z-stack {base_name}")
+                        continue
+
+                    # Apply the custom function to create the projection
+                    try:
+                        custom_projection = reference_z(image_stack)
+
+                        # Save the custom projection
+                        output_filename = f"{base_name}.tif"
+                        output_path = custom_proj_dir / output_filename
+                        self.fs_manager.save_image(output_path, custom_projection)
+                        logger.info(f"Saved custom projection for {base_name} to {output_path}")
+                    except Exception as e:
+                        logger.error(f"Error creating custom projection for {base_name}: {e}")
+                        continue
+
+                # Use the custom projections directory as reference
+                reference_dir = custom_proj_dir
             else:
-                logger.error(f"Invalid reference_z: {reference_z}")
+                logger.error(f"Invalid reference_z type: {type(reference_z)}. Must be str or callable.")
                 return False
 
             if not reference_dir.exists():

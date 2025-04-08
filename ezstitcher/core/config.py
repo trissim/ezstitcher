@@ -41,7 +41,7 @@ class ZStackProcessorConfig:
     focus_detect: bool = False
     focus_method: str = "combined"
     create_projections: bool = False
-    stitch_z_reference: str = "best_focus"
+    stitch_z_reference: Union[str, Callable[[List[Any]], Any]] = "max"
     save_projections: bool = True
     stitch_all_z_planes: bool = False
     projection_types: List[str] = field(default_factory=lambda: ["max"])
