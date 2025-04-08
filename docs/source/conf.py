@@ -6,6 +6,40 @@ import os
 import sys
 import sphinx_rtd_theme
 
+# Check if we're on Read the Docs
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+
+# If we're on Read the Docs, use mock modules for dependencies that are hard to install
+if on_rtd:
+    try:
+        from unittest.mock import MagicMock
+
+        class Mock(MagicMock):
+            @classmethod
+            def __getattr__(cls, name):
+                return MagicMock()
+
+        # Systems modules that might cause issues during doc building
+        MOCK_MODULES = [
+            'cv2',
+            'ashlar',
+            'imageio',
+            'tifffile',
+            'skimage',
+            'skimage.feature',
+            'skimage.filters',
+            'skimage.transform',
+            'skimage.util',
+            'skimage.measure',
+            'skimage.morphology',
+            'skimage.segmentation',
+            'skimage.exposure',
+        ]
+
+        sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+    except ImportError:
+        pass
+
 # Add the project root directory to the Python path
 sys.path.insert(0, os.path.abspath('../..'))
 
@@ -33,7 +67,12 @@ language = 'en'
 
 # HTML output configuration
 html_theme = 'sphinx_rtd_theme'
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
+# Only set html_theme_path if not on Read the Docs
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+if not on_rtd:
+    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
 html_static_path = ['_static']
 html_theme_options = {
     'navigation_depth': 4,
