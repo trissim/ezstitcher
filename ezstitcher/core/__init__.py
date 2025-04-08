@@ -11,8 +11,9 @@ from ezstitcher.core.main import (
     find_best_focus
 )
 
-# Import classes for new class-based API
-from ezstitcher.core.image_processor import ImageProcessor
-from ezstitcher.core.focus_detector import FocusDetector
-from ezstitcher.core.z_stack_manager import ZStackManager
-from ezstitcher.core.stitcher_manager import StitcherManager
+# Import classes for instance-based API
+from ezstitcher.core.image_preprocessor import ImagePreprocessor
+from ezstitcher.core.focus_analyzer import FocusAnalyzer
+from ezstitcher.core.zstack_processor import ZStackProcessor
+from ezstitcher.core.stitcher import Stitcher
+from ezstitcher.core.plate_processor import PlateProcessor

@@ -47,9 +47,7 @@ from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.plate_processor import PlateProcessor
 
-# Legacy imports for backward compatibility
-from ezstitcher.core.stitcher_manager import StitcherManager
-from ezstitcher.core.image_processor import ImageProcessor
+# No legacy imports - using only instance-based classes
 
 # Set up logging
 logging.basicConfig(

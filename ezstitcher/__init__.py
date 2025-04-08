@@ -14,10 +14,11 @@ from ezstitcher.core import (
     find_best_focus
 )
 
-# Import classes for new class-based API
+# Import classes for instance-based API
 from ezstitcher.core import (
-    ImageProcessor,
-    FocusDetector,
-    ZStackManager,
-    StitcherManager
+    ImagePreprocessor,
+    FocusAnalyzer,
+    ZStackProcessor,
+    Stitcher,
+    PlateProcessor
 )

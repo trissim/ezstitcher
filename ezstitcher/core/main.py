@@ -18,9 +18,8 @@ from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 
 # Legacy imports for backward compatibility
-from ezstitcher.core.stitcher_manager import StitcherManager
-from ezstitcher.core.z_stack_manager import ZStackManager
-from ezstitcher.core.image_processor import ImageProcessor
+# Removed imports for static method-based classes
+# Removed import for static method-based ImageProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -96,30 +95,8 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
     # Create and run the plate processor
     processor = PlateProcessor(plate_config)
 
-    # For backward compatibility, if the PlateProcessor implementation fails,
-    # fall back to the StitcherManager static method
-    try:
-        return processor.run(plate_folder)
-    except Exception as e:
-        logger.warning(f"PlateProcessor implementation failed: {e}. Falling back to StitcherManager.")
-        return StitcherManager.process_plate_folder(
-            plate_folder=plate_folder,
-            reference_channels=reference_channels,
-            preprocessing_funcs=preprocessing_funcs,
-            margin_ratio=margin_ratio,
-            composite_weights=composite_weights,
-            well_filter=well_filter,
-            tile_overlap=tile_overlap,
-            tile_overlap_x=tile_overlap_x,
-            tile_overlap_y=tile_overlap_y,
-            max_shift=max_shift,
-            focus_detect=focus_detect,
-            focus_method=focus_method,
-            create_projections=create_projections,
-            stitch_z_reference=stitch_z_reference,
-            save_projections=save_projections,
-            stitch_all_z_planes=stitch_all_z_planes
-        )
+    # No fallback to static methods - using only instance-based implementation
+    return processor.run(plate_folder)
 
 def modified_process_plate_folder(plate_folder, **kwargs):
     """
@@ -187,13 +164,8 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     # Create and run the plate processor
     processor = PlateProcessor(plate_config)
 
-    # For backward compatibility, if the PlateProcessor implementation fails,
-    # fall back to the ZStackManager static method
-    try:
-        return processor.run(plate_folder)
-    except Exception as e:
-        logger.warning(f"PlateProcessor implementation failed: {e}. Falling back to ZStackManager.")
-        return ZStackManager.stitch_across_z(plate_folder, reference_z=reference_z, **kwargs)
+    # No fallback to static methods - using only instance-based implementation
+    return processor.run(plate_folder)
 
 def process_bf(imgs):
     """
