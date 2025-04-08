@@ -225,4 +225,124 @@ class ZStackProcessor:
             logger.info(f"No Z-stack images detected in {folder_path}")
 
         return has_zstack, dict(z_indices)
-    # (rest of class unchanged)
+
+    def create_best_focus_images(self, input_dir, output_dir=None, focus_method='combined', focus_wavelength='all'):
+        """
+        Select the best focused image from each Z-stack and save to output directory.
+
+        Args:
+            input_dir (str or Path): Directory with Z-stack images
+            output_dir (str or Path): Directory to save best focus images. If None, creates a directory named {plate_name}_best_focus
+            focus_method (str): Focus detection method
+            focus_wavelength (str): Wavelength to use for focus detection
+
+        Returns:
+            tuple: (success, output_dir) where success is a boolean and output_dir is the path to the output directory
+        """
+        from ezstitcher.core.utils import ensure_directory, load_image, save_image
+
+        input_dir = Path(input_dir)
+
+        # If output_dir is None, create a directory named {plate_name}_best_focus
+        if output_dir is None:
+            plate_path = input_dir.parent if input_dir.name == "TimePoint_1" else input_dir
+            parent_dir = plate_path.parent
+            plate_name = plate_path.name
+            output_dir = parent_dir / f"{plate_name}_best_focus"
+
+        # Create TimePoint_1 directory in output_dir
+        timepoint_dir = output_dir / "TimePoint_1"
+        timepoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check if folder contains Z-stack images
+        has_zstack, z_indices_map = self.detect_zstack_images(input_dir)
+        if not has_zstack:
+            logger.warning(f"No Z-stack images found in {input_dir}")
+            return False, None
+
+        # Group images by well, site, and wavelength
+        images_by_coordinates = defaultdict(list)
+
+        # Pattern to extract well, site, wavelength from filename
+        filename_pattern = re.compile(r'([A-Z]\d+)_s(\d+)_w(\d+).*')
+
+        # Group Z-indices by coordinates
+        for base_name, z_indices in z_indices_map.items():
+            match = filename_pattern.match(base_name)
+            if match:
+                well = match.group(1)
+                site = int(match.group(2))
+                wavelength = int(match.group(3))
+
+                # Create coordinates key
+                coordinates = (well, site, wavelength)
+
+                # Add to dictionary
+                images_by_coordinates[coordinates] = (base_name, z_indices)
+            else:
+                logger.warning(f"Could not parse coordinates from {base_name}")
+
+        # Process each set of coordinates
+        best_focus_results = {}
+
+        # Filter by wavelength if specified
+        if focus_wavelength != 'all':
+            focus_wavelength = int(focus_wavelength)
+            focus_coordinates = [coords for coords in images_by_coordinates.keys() if coords[2] == focus_wavelength]
+        else:
+            focus_coordinates = list(images_by_coordinates.keys())
+
+        # Process each set of focus coordinates
+        for coordinates in focus_coordinates:
+            well, site, wavelength = coordinates
+            base_name, z_indices = images_by_coordinates[coordinates]
+
+            # Load all Z-stack images for this coordinate
+            image_stack = []
+            for z_index in sorted(z_indices):
+                img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
+                img = load_image(img_path)
+                if img is not None:
+                    image_stack.append(img)
+
+            if not image_stack:
+                logger.warning(f"No valid images found for {base_name}")
+                continue
+
+            # Find best focus using FocusAnalyzer
+            best_img, best_z, scores = self.focus_analyzer.select_best_focus(image_stack, method=focus_method)
+            z_index = sorted(z_indices)[best_z]
+
+            # Save best focus image
+            output_filename = f"{well}_s{site:03d}_w{wavelength}.tif"
+            output_path = timepoint_dir / output_filename
+            save_image(output_path, best_img)
+            logger.info(f"Saved best focus image for {base_name} (z={z_index}) to {output_path}")
+
+            # Store best Z-index for this coordinate
+            best_focus_results[coordinates] = z_index
+
+        # If focus_wavelength is not 'all', use the same Z-index for other wavelengths
+        if focus_wavelength != 'all':
+            for coordinates in images_by_coordinates.keys():
+                well, site, wavelength = coordinates
+                if wavelength != focus_wavelength:
+                    # Find the corresponding focus coordinates
+                    focus_coords = (well, site, focus_wavelength)
+                    if focus_coords in best_focus_results:
+                        # Use the same Z-index as the focus wavelength
+                        best_z = best_focus_results[focus_coords]
+                        base_name, z_indices = images_by_coordinates[coordinates]
+
+                        # Load the image at the best Z-index
+                        img_path = input_dir / f"{base_name}_z{best_z:03d}.tif"
+                        img = load_image(img_path)
+                        if img is not None:
+                            # Save the image
+                            output_filename = f"{well}_s{site:03d}_w{wavelength}.tif"
+                            output_path = timepoint_dir / output_filename
+                            save_image(output_path, img)
+                            logger.info(f"Saved best focus image for {base_name} (z={best_z}) to {output_path}")
+                            best_focus_results[coordinates] = best_z
+
+        return len(best_focus_results) > 0, output_dir
