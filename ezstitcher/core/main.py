@@ -57,19 +57,16 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
     Returns:
         bool: True if successful, False otherwise
     """
-    # For backward compatibility, we'll still use the StitcherManager static method
-    # In the future, this will be replaced with the PlateProcessor implementation
-    return StitcherManager.process_plate_folder(
-        plate_folder=plate_folder,
-        reference_channels=reference_channels,
-        preprocessing_funcs=preprocessing_funcs,
-        margin_ratio=margin_ratio,
-        composite_weights=composite_weights,
-        well_filter=well_filter,
+    # Create configurations
+    stitcher_config = StitcherConfig(
         tile_overlap=tile_overlap,
         tile_overlap_x=tile_overlap_x,
         tile_overlap_y=tile_overlap_y,
         max_shift=max_shift,
+        margin_ratio=margin_ratio
+    )
+
+    zstack_config = ZStackProcessorConfig(
         focus_detect=focus_detect,
         focus_method=focus_method,
         create_projections=create_projections,
@@ -78,46 +75,51 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         stitch_all_z_planes=stitch_all_z_planes
     )
 
-    # TODO: Replace with PlateProcessor implementation
-    # Create configurations
-    # stitcher_config = StitcherConfig(
-    #     tile_overlap=tile_overlap,
-    #     tile_overlap_x=tile_overlap_x,
-    #     tile_overlap_y=tile_overlap_y,
-    #     max_shift=max_shift,
-    #     margin_ratio=margin_ratio
-    # )
-    #
-    # zstack_config = ZStackProcessorConfig(
-    #     focus_detect=focus_detect,
-    #     focus_method=focus_method,
-    #     create_projections=create_projections,
-    #     stitch_z_reference=stitch_z_reference,
-    #     save_projections=save_projections,
-    #     stitch_all_z_planes=stitch_all_z_planes
-    # )
-    #
-    # focus_config = FocusAnalyzerConfig(
-    #     method=focus_method
-    # )
-    #
-    # image_preprocessor_config = ImagePreprocessorConfig(
-    #     preprocessing_funcs=preprocessing_funcs or {},
-    #     composite_weights=composite_weights
-    # )
-    #
-    # plate_config = PlateProcessorConfig(
-    #     reference_channels=reference_channels,
-    #     well_filter=well_filter,
-    #     stitcher=stitcher_config,
-    #     focus_analyzer=focus_config,
-    #     image_preprocessor=image_preprocessor_config,
-    #     z_stack_processor=zstack_config
-    # )
-    #
-    # # Create and run the plate processor
-    # processor = PlateProcessor(plate_config)
-    # return processor.run(plate_folder)
+    focus_config = FocusAnalyzerConfig(
+        method=focus_method
+    )
+
+    image_preprocessor_config = ImagePreprocessorConfig(
+        preprocessing_funcs=preprocessing_funcs or {},
+        composite_weights=composite_weights
+    )
+
+    plate_config = PlateProcessorConfig(
+        reference_channels=reference_channels,
+        well_filter=well_filter,
+        stitcher=stitcher_config,
+        focus_analyzer=focus_config,
+        image_preprocessor=image_preprocessor_config,
+        z_stack_processor=zstack_config
+    )
+
+    # Create and run the plate processor
+    processor = PlateProcessor(plate_config)
+
+    # For backward compatibility, if the PlateProcessor implementation fails,
+    # fall back to the StitcherManager static method
+    try:
+        return processor.run(plate_folder)
+    except Exception as e:
+        logger.warning(f"PlateProcessor implementation failed: {e}. Falling back to StitcherManager.")
+        return StitcherManager.process_plate_folder(
+            plate_folder=plate_folder,
+            reference_channels=reference_channels,
+            preprocessing_funcs=preprocessing_funcs,
+            margin_ratio=margin_ratio,
+            composite_weights=composite_weights,
+            well_filter=well_filter,
+            tile_overlap=tile_overlap,
+            tile_overlap_x=tile_overlap_x,
+            tile_overlap_y=tile_overlap_y,
+            max_shift=max_shift,
+            focus_detect=focus_detect,
+            focus_method=focus_method,
+            create_projections=create_projections,
+            stitch_z_reference=stitch_z_reference,
+            save_projections=save_projections,
+            stitch_all_z_planes=stitch_all_z_planes
+        )
 
 def modified_process_plate_folder(plate_folder, **kwargs):
     """
@@ -146,9 +148,52 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     # Get reference_z from kwargs or use default
     reference_z = kwargs.pop('stitch_z_reference', 'best_focus')
 
-    # For backward compatibility, we'll still use the ZStackManager static method
-    # In the future, this will be replaced with the ZStackProcessor implementation
-    return ZStackManager.stitch_across_z(plate_folder, reference_z=reference_z, **kwargs)
+    # Create a PlateProcessor with the appropriate configuration
+    stitcher_config = StitcherConfig(
+        tile_overlap=kwargs.get('tile_overlap', 6.5),
+        tile_overlap_x=kwargs.get('tile_overlap_x', None),
+        tile_overlap_y=kwargs.get('tile_overlap_y', None),
+        max_shift=kwargs.get('max_shift', 50),
+        margin_ratio=kwargs.get('margin_ratio', 0.1)
+    )
+
+    zstack_config = ZStackProcessorConfig(
+        focus_detect=kwargs.get('focus_detect', False),
+        focus_method=kwargs.get('focus_method', 'combined'),
+        create_projections=kwargs.get('create_projections', False),
+        stitch_z_reference=reference_z,
+        save_projections=kwargs.get('save_projections', True),
+        stitch_all_z_planes=kwargs.get('stitch_all_z_planes', False)
+    )
+
+    focus_config = FocusAnalyzerConfig(
+        method=kwargs.get('focus_method', 'combined')
+    )
+
+    image_preprocessor_config = ImagePreprocessorConfig(
+        preprocessing_funcs=kwargs.get('preprocessing_funcs', {}),
+        composite_weights=kwargs.get('composite_weights', None)
+    )
+
+    plate_config = PlateProcessorConfig(
+        reference_channels=kwargs.get('reference_channels', ['1']),
+        well_filter=kwargs.get('well_filter', None),
+        stitcher=stitcher_config,
+        focus_analyzer=focus_config,
+        image_preprocessor=image_preprocessor_config,
+        z_stack_processor=zstack_config
+    )
+
+    # Create and run the plate processor
+    processor = PlateProcessor(plate_config)
+
+    # For backward compatibility, if the PlateProcessor implementation fails,
+    # fall back to the ZStackManager static method
+    try:
+        return processor.run(plate_folder)
+    except Exception as e:
+        logger.warning(f"PlateProcessor implementation failed: {e}. Falling back to ZStackManager.")
+        return ZStackManager.stitch_across_z(plate_folder, reference_z=reference_z, **kwargs)
 
 def process_bf(imgs):
     """
