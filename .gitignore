@@ -32,6 +32,7 @@ axon_quant_v2/
 venv/
 env/
 ENV/
+.venv/
 
 # IDE
 .idea/
@@ -51,6 +52,9 @@ ENV/
 *.JPG
 *.png
 *.PNG
+
+# Test directories
+tests/
 
 # Temporary files
 *.log

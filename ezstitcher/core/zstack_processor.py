@@ -1,9 +1,12 @@
 import re
+import csv
 import shutil
 import logging
+import numpy as np
 from pathlib import Path
 from collections import defaultdict
-from ezstitcher.core.config import ZStackConfig
+from ezstitcher.core.config import ZStackProcessorConfig
+from ezstitcher.core.file_system_manager import FileSystemManager
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +18,9 @@ class ZStackProcessor:
     - Best focus selection
     - Per-plane stitching
     """
-    def __init__(self, config: ZStackConfig):
+    def __init__(self, config: ZStackProcessorConfig):
         self.config = config
+        self.fs_manager = FileSystemManager()
         self._z_info = None
         self._z_indices = []
 
@@ -68,10 +72,11 @@ class ZStackProcessor:
 
         try:
             plate_path = Path(plate_folder)
-            timepoint_path = plate_path / "TimePoint_1"
+            timepoint_dir = self.config.timepoint_dir_name if hasattr(self.config, 'timepoint_dir_name') else "TimePoint_1"
+            timepoint_path = plate_path / timepoint_dir
 
             if not timepoint_path.exists():
-                logger.error(f"TimePoint_1 folder does not exist in {plate_folder}")
+                logger.error(f"{timepoint_dir} folder does not exist in {plate_folder}")
                 logger.debug("Returning (False, []) due to missing TimePoint_1")
                 return False, []
 
@@ -135,14 +140,15 @@ class ZStackProcessor:
             return False
 
         plate_path = Path(plate_folder)
-        timepoint_path = plate_path / "TimePoint_1"
+        timepoint_dir = self.config.timepoint_dir_name if hasattr(self.config, 'timepoint_dir_name') else "TimePoint_1"
+        timepoint_path = plate_path / timepoint_dir
+        self.fs_manager.ensure_directory(timepoint_path)
 
         for z_index, z_folder in z_folders:
             logger.info(f"Processing Z-stack folder: {z_folder.name}")
 
-            image_files = []
-            for ext in ['.tif', '.TIF', '.tiff', '.TIFF', '.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']:
-                image_files.extend(list(z_folder.glob(f"*{ext}")))
+            # Use FileSystemManager to list image files
+            image_files = self.fs_manager.list_image_files(z_folder)
 
             for img_file in image_files:
                 filename = self.pad_site_number(img_file.name)
@@ -190,9 +196,8 @@ class ZStackProcessor:
         """
         folder_path = Path(folder_path)
 
-        all_files = []
-        for ext in ['.tif', '.TIF', '.tiff', '.TIFF', '.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']:
-            all_files.extend(list(folder_path.glob(f"*{ext}")))
+        # Use FileSystemManager to list image files
+        all_files = self.fs_manager.list_image_files(folder_path)
 
         z_pattern = re.compile(r'(.+)_z(\d+)(.+)')
 
@@ -239,8 +244,6 @@ class ZStackProcessor:
         Returns:
             tuple: (success, output_dir) where success is a boolean and output_dir is the path to the output directory
         """
-        from ezstitcher.core.utils import ensure_directory, load_image, save_image
-
         input_dir = Path(input_dir)
 
         # If output_dir is None, create a directory named {plate_name}_best_focus
@@ -248,11 +251,13 @@ class ZStackProcessor:
             plate_path = input_dir.parent if input_dir.name == "TimePoint_1" else input_dir
             parent_dir = plate_path.parent
             plate_name = plate_path.name
-            output_dir = parent_dir / f"{plate_name}_best_focus"
+            best_focus_suffix = self.config.best_focus_dir_suffix if hasattr(self.config, 'best_focus_dir_suffix') else "_best_focus"
+            output_dir = parent_dir / f"{plate_name}{best_focus_suffix}"
 
         # Create TimePoint_1 directory in output_dir
-        timepoint_dir = output_dir / "TimePoint_1"
-        timepoint_dir.mkdir(parents=True, exist_ok=True)
+        timepoint_dir = self.config.timepoint_dir_name if hasattr(self.config, 'timepoint_dir_name') else "TimePoint_1"
+        timepoint_dir = output_dir / timepoint_dir
+        self.fs_manager.ensure_directory(timepoint_dir)
 
         # Check if folder contains Z-stack images
         has_zstack, z_indices_map = self.detect_zstack_images(input_dir)
@@ -301,7 +306,7 @@ class ZStackProcessor:
             image_stack = []
             for z_index in sorted(z_indices):
                 img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
-                img = load_image(img_path)
+                img = self.fs_manager.load_image(img_path)
                 if img is not None:
                     image_stack.append(img)
 
@@ -316,7 +321,7 @@ class ZStackProcessor:
             # Save best focus image
             output_filename = f"{well}_s{site:03d}_w{wavelength}.tif"
             output_path = timepoint_dir / output_filename
-            save_image(output_path, best_img)
+            self.fs_manager.save_image(output_path, best_img)
             logger.info(f"Saved best focus image for {base_name} (z={z_index}) to {output_path}")
 
             # Store best Z-index for this coordinate
@@ -336,13 +341,254 @@ class ZStackProcessor:
 
                         # Load the image at the best Z-index
                         img_path = input_dir / f"{base_name}_z{best_z:03d}.tif"
-                        img = load_image(img_path)
+                        img = self.fs_manager.load_image(img_path)
                         if img is not None:
                             # Save the image
                             output_filename = f"{well}_s{site:03d}_w{wavelength}.tif"
                             output_path = timepoint_dir / output_filename
-                            save_image(output_path, img)
+                            self.fs_manager.save_image(output_path, img)
                             logger.info(f"Saved best focus image for {base_name} (z={best_z}) to {output_path}")
                             best_focus_results[coordinates] = best_z
 
         return len(best_focus_results) > 0, output_dir
+
+    def create_zstack_projections(self, input_dir, output_dir, projection_types=['max', 'mean']):
+        """Create projections from Z-stack images.
+
+        Args:
+            input_dir: Directory containing Z-stack images
+            output_dir: Directory to save projections
+            projection_types: List of projection types to create
+
+        Returns:
+            Tuple of (success, projections_info)
+        """
+        import numpy as np
+        from pathlib import Path
+
+        input_dir = Path(input_dir)
+        output_dir = Path(output_dir)
+
+        # Check if folder contains Z-stack images
+        has_zstack, z_indices_map = self.detect_zstack_images(input_dir)
+        if not has_zstack:
+            logger.warning(f"No Z-stack images found in {input_dir}")
+            return False, None
+
+        # For projections, we'll save directly to the output directory
+        # This is because the output directory already includes the projection type in its name
+        # (e.g., synthetic_plate_projections_max/TimePoint_1)
+        projection_dirs = {}
+        for proj_type in projection_types:
+            # Always use the output directory directly
+            proj_dir = self.fs_manager.ensure_directory(output_dir)
+            projection_dirs[proj_type] = proj_dir
+            logger.info(f"Saving {proj_type} projections to {proj_dir}")
+
+        # Process each base name
+        for base_name, z_indices in z_indices_map.items():
+            # Load all Z-stack images for this base name
+            image_stack = []
+            for z_index in sorted(z_indices):
+                img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
+                img = self.fs_manager.load_image(img_path)
+                if img is not None:
+                    image_stack.append(img)
+
+            if not image_stack:
+                logger.warning(f"No valid images found for {base_name}")
+                continue
+
+            # Convert to numpy array
+            image_stack = np.array(image_stack)
+
+            # Create and save projections
+            for proj_type in projection_types:
+                if proj_type == 'max':
+                    projection = np.max(image_stack, axis=0)
+                elif proj_type == 'mean':
+                    projection = np.mean(image_stack, axis=0).astype(image_stack.dtype)
+                else:
+                    logger.warning(f"Unknown projection type: {proj_type}")
+                    continue
+
+                # Save projection
+                output_filename = f"{base_name}.tif"
+                output_path = projection_dirs[proj_type] / output_filename
+                self.fs_manager.save_image(output_path, projection)
+                logger.info(f"Saved {proj_type} projection for {base_name} to {output_path}")
+
+        return True, projection_dirs
+
+    def stitch_across_z(self, plate_folder, reference_z='max', stitch_all_z_planes=True, processor=None):
+        """
+        Stitch all Z-planes in a plate using a reference Z-plane for positions.
+
+        Args:
+            plate_folder (str or Path): Path to the plate folder
+            reference_z (str): Reference Z-plane to use for positions ('max', 'mean', 'best_focus')
+            stitch_all_z_planes (bool): Whether to stitch all Z-planes
+            processor (PlateProcessor): Processor to use for stitching
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            plate_path = Path(plate_folder)
+            timepoint_dir = "TimePoint_1"
+            timepoint_path = plate_path / timepoint_dir
+
+            if not timepoint_path.exists():
+                logger.error(f"{timepoint_dir} folder does not exist in {plate_folder}")
+                return False
+
+            # Check if folder contains Z-stack images
+            has_zstack, z_indices_map = self.detect_zstack_images(timepoint_path)
+            if not has_zstack:
+                logger.warning(f"No Z-stack images found in {timepoint_path}")
+                return False
+
+            # Get all unique Z-indices
+            all_z_indices = set()
+            for base_name, indices in z_indices_map.items():
+                all_z_indices.update(indices)
+            z_indices = sorted(list(all_z_indices))
+            logger.info(f"Found {len(z_indices)} Z-planes: {z_indices}")
+
+            # Get reference positions
+            parent_dir = plate_path.parent
+            plate_name = plate_path.name
+
+            # Determine reference directory based on reference_z
+            if reference_z == 'max':
+                reference_dir = parent_dir / f"{plate_name}_projections_max" / timepoint_dir
+            elif reference_z == 'mean':
+                reference_dir = parent_dir / f"{plate_name}_projections_mean" / timepoint_dir
+            elif reference_z == 'best_focus':
+                reference_dir = parent_dir / f"{plate_name}_best_focus" / timepoint_dir
+            else:
+                logger.error(f"Invalid reference_z: {reference_z}")
+                return False
+
+            if not reference_dir.exists():
+                logger.error(f"Reference directory does not exist: {reference_dir}")
+                return False
+
+            # Get positions from reference directory
+            positions_dir = parent_dir / f"{plate_name}_positions"
+            if not positions_dir.exists():
+                logger.error(f"Positions directory does not exist: {positions_dir}")
+                return False
+
+            # Get all position files
+            position_files = list(positions_dir.glob("*.csv"))
+            if not position_files:
+                logger.error(f"No position files found in {positions_dir}")
+                return False
+
+            logger.info(f"Found {len(position_files)} position files in {positions_dir}")
+
+            # Stitch each Z-plane using the reference positions
+            stitched_dir = parent_dir / f"{plate_name}_stitched" / timepoint_dir
+            self.fs_manager.ensure_directory(stitched_dir)
+
+            # For each Z-plane, stitch all wells and wavelengths
+            for z_index in z_indices:
+                logger.info(f"Stitching Z-plane {z_index}")
+
+                # For each position file (which corresponds to a well and wavelength)
+                for pos_file in position_files:
+                    # Extract well and wavelength from position file name
+                    match = re.match(r'(.+)_w(\d+)\.csv', pos_file.name)
+                    if not match:
+                        logger.warning(f"Could not parse position file name: {pos_file.name}")
+                        continue
+
+                    well_pattern = match.group(1)
+                    wavelength = match.group(2)
+
+                    # Read positions from CSV
+                    positions = []
+                    with open(pos_file, 'r') as f:
+                        for line in f:
+                            # Parse the line format: "file: C01_s001_w1.tif; grid: (0, 0); position: (0.0, 0.0)"
+                            if 'file:' in line and 'position:' in line:
+                                # Extract the site number from the filename
+                                file_part = line.split(';')[0].strip()
+                                filename = file_part.split('file:')[1].strip()
+                                site_match = re.search(r's(\d+)_', filename)
+                                if site_match:
+                                    site = int(site_match.group(1))
+
+                                    # Extract the position coordinates
+                                    pos_part = line.split('position:')[1].strip()
+                                    pos_match = re.search(r'\((\d+\.\d+), (\d+\.\d+)\)', pos_part)
+                                    if pos_match:
+                                        x = float(pos_match.group(1))
+                                        y = float(pos_match.group(2))
+                                        positions.append((site, x, y))
+
+                    if not positions:
+                        logger.warning(f"No positions found in {pos_file}")
+                        continue
+
+                    # Get all tiles for this well, wavelength, and Z-plane
+                    tiles = []
+                    for site, x, y in positions:
+                        # Construct the filename and path
+                        # First, check if files are in ZStep folders
+                        zstep_folder = timepoint_path / f"ZStep_{z_index}"
+                        if zstep_folder.exists():
+                            # Files are in ZStep folders
+                            filename = f"{well_pattern}_s{site:03d}_w{wavelength}.tif"
+                            file_path = zstep_folder / filename
+                            logger.info(f"Looking for file in ZStep folder: {file_path}")
+                        else:
+                            # Files have _z in the filename
+                            filename = f"{well_pattern}_s{site:03d}_w{wavelength}_z{z_index:03d}.tif"
+                            file_path = timepoint_path / filename
+                            logger.info(f"Looking for file with _z suffix: {file_path}")
+
+                        if file_path.exists():
+                            # Load the image
+                            img = self.fs_manager.load_image(file_path)
+                            if img is not None:
+                                tiles.append((site, x, y, img))
+                        else:
+                            logger.warning(f"Tile not found: {file_path}")
+
+                    if not tiles:
+                        logger.warning(f"No tiles found for {well_pattern}_w{wavelength}_z{z_index}")
+                        continue
+
+                    # Stitch the tiles
+                    logger.info(f"Stitching {len(tiles)} tiles for {well_pattern}_w{wavelength}_z{z_index}")
+
+                    # Determine canvas size
+                    max_x = max(x + img.shape[1] for _, x, _, img in tiles)
+                    max_y = max(y + img.shape[0] for _, _, y, img in tiles)
+                    canvas = np.zeros((int(max_y), int(max_x)), dtype=np.uint16)
+
+                    # Place tiles on canvas
+                    for site, x, y, img in tiles:
+                        x_start, y_start = int(x), int(y)
+                        x_end, y_end = x_start + img.shape[1], y_start + img.shape[0]
+
+                        # Ensure we don't go out of bounds
+                        x_end = min(x_end, canvas.shape[1])
+                        y_end = min(y_end, canvas.shape[0])
+
+                        # Place the tile
+                        canvas[y_start:y_end, x_start:x_end] = img[:y_end-y_start, :x_end-x_start]
+
+                    # Save the stitched image
+                    output_filename = f"{well_pattern}_w{wavelength}_z{z_index:03d}.tif"
+                    output_path = stitched_dir / output_filename
+                    self.fs_manager.save_image(output_path, canvas)
+                    logger.info(f"Saved stitched image to {output_path}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error in stitch_across_z: {e}", exc_info=True)
+            return False
