@@ -290,5 +290,94 @@ class TestFileSystemManager(unittest.TestCase):
         # self.assertTrue(keep_folder.exists())
 
 
+    def test_find_files_by_parser(self):
+        """Test the find_files_by_parser method."""
+        # Create test files
+        test_dir = Path(self.temp_dir) / "test_parser"
+        test_dir.mkdir()
+
+        # Create test files
+        test_files = [
+            test_dir / "A01_s001_w1.tif",
+            test_dir / "A01_s002_w1.tif",
+            test_dir / "A01_s001_w2.tif",
+            test_dir / "A01_s001_w1_z001.tif",
+            test_dir / "A02_s001_w1.tif",
+            test_dir / "B01_s001_w1.tif",
+            test_dir / "other_file.txt"
+        ]
+
+        for file_path in test_files:
+            file_path.touch()
+
+        # Test with default parser and no filters
+        result = self.fs_manager.find_files_by_parser(test_dir)
+        self.assertEqual(len(result), 6)  # All valid microscopy files
+
+        # Check that the first result is a tuple with (Path, metadata)
+        self.assertTrue(isinstance(result[0], tuple))
+        self.assertTrue(isinstance(result[0][0], Path))
+        self.assertTrue(isinstance(result[0][1], dict))
+
+        # Test with well filter
+        result = self.fs_manager.find_files_by_parser(test_dir, well="A01")
+        self.assertEqual(len(result), 4)  # Only A01 files
+        for file_path, metadata in result:
+            self.assertEqual(metadata['well'], 'A01')
+
+        # Test with site filter
+        result = self.fs_manager.find_files_by_parser(test_dir, site=1)
+        self.assertEqual(len(result), 5)  # Only site 1 files
+        for file_path, metadata in result:
+            self.assertEqual(metadata['site'], 1)
+
+        # Test with channel filter
+        result = self.fs_manager.find_files_by_parser(test_dir, channel=2)
+        self.assertEqual(len(result), 1)  # Only channel 2 files
+        self.assertEqual(result[0][1]['channel'], 2)
+
+        # Test with z_plane filter - this depends on how the parser handles z_plane
+        # For ImageXpress format, z_plane might be extracted from filenames with _z001 suffix
+        # Let's create a file with a more explicit z-plane format
+        z_plane_file = test_dir / "A01_s001_w1_z001.tif"
+        z_plane_file.touch()
+
+        # Now try the z_plane filter
+        result = self.fs_manager.find_files_by_parser(test_dir, z_plane=1)
+        # We should have at least one file with z_plane=1
+        self.assertGreaterEqual(len(result), 1)
+        # Check that all results have z_plane=1
+        for file_path, metadata in result:
+            # The z_plane might be stored as 'z_index' or 'z_plane' depending on the parser
+            z_value = metadata.get('z_index', metadata.get('z_plane'))
+            self.assertEqual(z_value, 1)
+
+        # Test with multiple filters
+        result = self.fs_manager.find_files_by_parser(test_dir, well="A01", site=1)
+        self.assertEqual(len(result), 3)  # A01 site 1 files
+        for file_path, metadata in result:
+            self.assertEqual(metadata['well'], 'A01')
+            self.assertEqual(metadata['site'], 1)
+
+        # Test with TimePoint_1 directory
+        timepoint_dir = test_dir / "TimePoint_1"
+        timepoint_dir.mkdir()
+
+        # Create test files in TimePoint_1
+        timepoint_files = [
+            timepoint_dir / "A03_s001_w1.tif",
+            timepoint_dir / "A03_s002_w1.tif"
+        ]
+
+        for file_path in timepoint_files:
+            file_path.touch()
+
+        # Test that it finds files in TimePoint_1
+        result = self.fs_manager.find_files_by_parser(test_dir, well="A03")
+        self.assertEqual(len(result), 2)  # Only A03 files in TimePoint_1
+        for file_path, metadata in result:
+            self.assertEqual(metadata['well'], 'A03')
+
+
 if __name__ == "__main__":
     unittest.main()
