@@ -1,6 +1,6 @@
 # EZStitcher
 
-An easy-to-use microscopy image stitching and processing tool for high-content imaging applications, currently optimized for ImageXpress microscopes with OperaPhenix support coming in future releases.
+An easy-to-use microscopy image stitching and processing tool for high-content imaging applications, optimized for ImageXpress and Opera Phenix microscopes.
 
 [![Documentation Status](https://readthedocs.org/projects/ezstitcher/badge/?version=latest)](https://ezstitcher.readthedocs.io/en/latest/?badge=latest)
 
@@ -26,7 +26,9 @@ Full documentation is available at [https://ezstitcher.readthedocs.io/](https://
 ## Supported Microscopes
 
 - **ImageXpress**: Full support for all features
-- **OperaPhenix**: Coming in future releases
+- **Opera Phenix**: Full support for all features
+
+See [Opera Phenix Support](docs/opera_phenix_support.md) for details on using EZStitcher with Opera Phenix data.
 
 ## Installation
 
@@ -95,7 +97,7 @@ ezstitcher /path/to/plate_folder --wells A01 B02 C03
 ```python
 from ezstitcher.core import process_plate_folder
 
-# Process a single plate folder with all features
+# Process a single plate folder with all features (auto-detects microscope type)
 process_plate_folder(
     'path/to/plate_folder',
     reference_channels=["1", "2"],
@@ -121,6 +123,28 @@ process_plate_folder(
     reference_channels=["1"],
     tile_overlap=10,
     max_shift=50
+)
+```
+
+### Opera Phenix Support
+
+```python
+from ezstitcher.core import process_plate_folder
+
+# Process Opera Phenix data (explicitly specify microscope type)
+process_plate_folder(
+    'path/to/opera_phenix_data',
+    reference_channels=['1'],
+    tile_overlap=10.0,
+    microscope_type='OperaPhenix'
+)
+
+# Auto-detect Opera Phenix data
+process_plate_folder(
+    'path/to/opera_phenix_data',
+    reference_channels=['1'],
+    tile_overlap=10.0
+    # microscope_type defaults to 'auto'
 )
 ```
 
@@ -267,6 +291,28 @@ plate_config = PlateProcessorConfig(
 # Create and run the plate processor
 processor = PlateProcessor(plate_config)
 processor.run("path/to/plate_folder")
+```
+
+### Opera Phenix Support
+
+```python
+from ezstitcher.core import process_plate_folder
+
+# Process Opera Phenix data with auto-detection
+process_plate_folder(
+    'path/to/opera_phenix_data',
+    reference_channels=["1"],
+    tile_overlap=10.0
+    # No need to specify microscope_type - it will be auto-detected
+)
+
+# Process Opera Phenix data with explicit format specification
+process_plate_folder(
+    'path/to/opera_phenix_data',
+    reference_channels=["1"],
+    tile_overlap=10.0,
+    microscope_type='OperaPhenix'  # Explicitly specify Opera Phenix format
+)
 ```
 
 ## Z-Stack Processing Features

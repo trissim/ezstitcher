@@ -542,6 +542,130 @@ class TestDocumentationExamples(unittest.TestCase):
         stitched_files = list(stitched_dir.glob("**/*.tif"))
         self.assertTrue(len(stitched_files) > 0, "At least one stitched image should exist")
 
+    def test_opera_phenix_support(self):
+        """Test the Opera Phenix support example."""
+        print("\nTesting Opera Phenix support example...")
+
+        # Create a test-specific directory
+        test_name = "opera_phenix_support"
+        test_dir = os.path.join(self.test_dir, test_name)
+        os.makedirs(test_dir, exist_ok=True)
+        print(f"Creating test data in {test_dir}")
+
+        # Create synthetic Opera Phenix data for this test
+        plate_dir = os.path.join(test_dir, "synthetic_opera_phenix")
+        os.makedirs(plate_dir, exist_ok=True)
+
+        # Create generator with Opera Phenix format
+        generator = SyntheticMicroscopyGenerator(
+            output_dir=plate_dir,
+            grid_size=(2, 2),          # 2x2 grid (4 tiles)
+            image_size=(512, 512),     # Smaller images for faster tests
+            tile_size=(256, 256),      # Smaller tiles for faster tests
+            overlap_percent=10,
+            stage_error_px=5,
+            wavelengths=2,             # 2 wavelengths for Opera Phenix tests
+            z_stack_levels=1,
+            num_cells=150,             # More cells for better visualization
+            cell_size_range=(2, 8),    # Smaller cells for faster tests
+            # Set different intensities for each wavelength
+            wavelength_intensities={1: 25000, 2: 10000},
+            # Use different cells for each wavelength
+            shared_cell_fraction=0.5,  # 50% shared cells between wavelengths
+            # Generate 4 wells from different rows and columns
+            wells=['A01', 'A03', 'C01', 'C03'],
+            format='OperaPhenix',      # Use Opera Phenix format
+            random_seed=42
+        )
+
+        # Generate dataset
+        generator.generate_dataset()
+        print(f"Synthetic Opera Phenix data generated in {plate_dir}")
+
+        # Process with explicit microscope type
+        result = process_plate_folder(
+            plate_dir,
+            reference_channels=['1'],
+            tile_overlap=10.0,
+            microscope_type='OperaPhenix'
+        )
+
+        self.assertTrue(result, "Opera Phenix processing with explicit type should succeed")
+
+        # Check that stitched images were created
+        stitched_dir = Path(plate_dir).parent / f"{Path(plate_dir).name}_stitched"
+        self.assertTrue(stitched_dir.exists(), "Stitched directory should exist")
+
+        # Check that at least one stitched image exists
+        stitched_files = list(stitched_dir.glob("**/*.tif"))
+        self.assertTrue(len(stitched_files) > 0, "At least one stitched image should exist")
+
+        # Create a second test directory for auto-detection
+        auto_detect_dir = os.path.join(test_dir, "synthetic_opera_phenix_auto")
+        os.makedirs(auto_detect_dir, exist_ok=True)
+
+        # Create generator with Opera Phenix format for auto-detection test
+        generator = SyntheticMicroscopyGenerator(
+            output_dir=auto_detect_dir,
+            grid_size=(2, 2),          # 2x2 grid (4 tiles)
+            image_size=(512, 512),     # Smaller images for faster tests
+            tile_size=(256, 256),      # Smaller tiles for faster tests
+            overlap_percent=10,
+            stage_error_px=5,
+            wavelengths=2,             # 2 wavelengths for Opera Phenix tests
+            z_stack_levels=1,
+            num_cells=150,             # More cells for better visualization
+            cell_size_range=(2, 8),    # Smaller cells for faster tests
+            wavelength_intensities={1: 25000, 2: 10000},
+            shared_cell_fraction=0.5,  # 50% shared cells between wavelengths
+            wells=['A01', 'A03', 'C01', 'C03'],
+            format='OperaPhenix',      # Use Opera Phenix format
+            random_seed=42
+        )
+
+        # Generate dataset
+        generator.generate_dataset()
+        print(f"Synthetic Opera Phenix data generated in {auto_detect_dir}")
+
+        # Process with auto-detection
+        result = process_plate_folder(
+            auto_detect_dir,
+            reference_channels=['1'],
+            tile_overlap=10.0
+            # microscope_type defaults to 'auto'
+        )
+
+        self.assertTrue(result, "Opera Phenix processing with auto-detection should succeed")
+
+        # Check that stitched images were created
+        stitched_dir = Path(auto_detect_dir).parent / f"{Path(auto_detect_dir).name}_stitched"
+        self.assertTrue(stitched_dir.exists(), "Stitched directory should exist")
+
+        # Check that at least one stitched image exists
+        stitched_files = list(stitched_dir.glob("**/*.tif"))
+        self.assertTrue(len(stitched_files) > 0, "At least one stitched image should exist")
+
+        # Process with multi-channel composite
+        result = process_plate_folder(
+            plate_dir,
+            reference_channels=["1", "2", "3"],
+            composite_weights={
+                "1": 0.6,  # Red channel
+                "2": 0.3,  # Green channel
+                "3": 0.1   # Blue channel
+            }
+        )
+
+        self.assertTrue(result, "Multi-channel composite should succeed")
+
+        # Check that stitched images were created
+        stitched_dir = Path(plate_dir).parent / f"{Path(plate_dir).name}_stitched"
+        self.assertTrue(stitched_dir.exists(), "Stitched directory should exist")
+
+        # Check that at least one stitched image exists
+        stitched_files = list(stitched_dir.glob("**/*.tif"))
+        self.assertTrue(len(stitched_files) > 0, "At least one stitched image should exist")
+
     def test_custom_focus_roi(self):
         """Test the custom focus ROI example."""
         print("\nTesting custom focus ROI example...")
