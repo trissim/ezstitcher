@@ -91,23 +91,70 @@ class ZStackProcessorConfig(BaseModel):
     Configuration for the ZStackProcessor class.
 
     Attributes:
-        focus_detect: Whether to enable focus detection for Z-stacks
-        focus_method: Focus detection method to use
-        create_projections: Whether to create projections from Z-stacks
-        stitch_z_reference: Z-plane to use for stitching ('best_focus', 'max', 'mean', or custom function)
-        save_projections: Whether to save projection images
-        stitch_all_z_planes: Whether to stitch all Z-planes using reference positions
-        projection_types: Types of projections to create
+        z_reference_function: Function that converts a 3D stack to a 2D image.
+            Can be a string name of a standard function or a callable.
+            Standard functions: "max_projection", "mean_projection", "best_focus".
+            Can also be a custom function that takes a Z-stack and returns a 2D image.
+        save_reference: Whether to save the reference image.
+        stitch_all_z_planes: Whether to stitch all Z-planes using reference positions.
+        additional_projections: Types of additional projections to create.
+        focus_method: Focus detection method to use when using best_focus.
+
+        # Deprecated parameters (kept for backward compatibility)
+        reference_method: Deprecated. Use z_reference_function instead.
+        focus_detect: Deprecated. Use z_reference_function="best_focus" instead.
+        stitch_z_reference: Deprecated. Use z_reference_function instead.
+        create_projections: Deprecated. Use save_reference instead.
+        save_projections: Deprecated. Use save_reference instead.
+        projection_types: Deprecated. Use additional_projections instead.
     """
-    focus_detect: bool = Field(False, description="Enable focus detection for Z-stacks")
-    focus_method: str = Field("combined", description="Focus detection method to use")
-    create_projections: bool = Field(False, description="Create projections from Z-stacks")
-    stitch_z_reference: Union[str, Callable[[List[Any]], Any]] = Field("max",
-                                                                      description="Z-plane to use for stitching")
-    save_projections: bool = Field(True, description="Save projection images")
-    stitch_all_z_planes: bool = Field(False, description="Stitch all Z-planes using reference positions")
-    projection_types: List[str] = Field(default_factory=lambda: ["max"],
-                                       description="Types of projections to create")
+    # New primary parameters
+    z_reference_function: Union[str, Callable[[List[Any]], Any]] = Field(
+        "max_projection",
+        description="Function that converts a 3D stack to a 2D image"
+    )
+    save_reference: bool = Field(
+        True,
+        description="Whether to save the reference image"
+    )
+    stitch_all_z_planes: bool = Field(
+        False,
+        description="Whether to stitch all Z-planes using reference positions"
+    )
+    additional_projections: List[str] = Field(
+        default_factory=lambda: ["max"],
+        description="Types of additional projections to create"
+    )
+    focus_method: str = Field(
+        "combined",
+        description="Focus detection method to use when using best_focus"
+    )
+
+    # Deprecated parameters (kept for backward compatibility)
+    reference_method: Optional[Union[str, Callable[[List[Any]], Any]]] = Field(
+        None,
+        description="Deprecated. Use z_reference_function instead"
+    )
+    focus_detect: Optional[bool] = Field(
+        None,
+        description="Deprecated. Use z_reference_function='best_focus' instead"
+    )
+    stitch_z_reference: Optional[Union[str, Callable[[List[Any]], Any]]] = Field(
+        None,
+        description="Deprecated. Use z_reference_function instead"
+    )
+    create_projections: Optional[bool] = Field(
+        None,
+        description="Deprecated. Use save_reference instead"
+    )
+    save_projections: Optional[bool] = Field(
+        None,
+        description="Deprecated. Use save_reference instead"
+    )
+    projection_types: Optional[List[str]] = Field(
+        None,
+        description="Deprecated. Use additional_projections instead"
+    )
 
     @validator('focus_method')
     def validate_focus_method(cls, v):
@@ -117,8 +164,8 @@ class ZStackProcessorConfig(BaseModel):
             raise ValueError(f"Focus method must be one of {valid_methods}, got {v}")
         return v
 
-    @validator('projection_types')
-    def validate_projection_types(cls, v):
+    @validator('additional_projections')
+    def validate_additional_projections(cls, v):
         """Validate that the projection types are supported."""
         valid_types = ["max", "mean", "std", "median", "min"]
         for proj_type in v:
@@ -126,14 +173,111 @@ class ZStackProcessorConfig(BaseModel):
                 raise ValueError(f"Projection type must be one of {valid_types}, got {proj_type}")
         return v
 
+    @validator('z_reference_function')
+    def validate_z_reference_function(cls, v):
+        """Validate that the z_reference_function is valid."""
+        if isinstance(v, str):
+            valid_refs = ["max_projection", "mean_projection", "best_focus"]
+            if v not in valid_refs:
+                raise ValueError(f"z_reference_function must be one of {valid_refs} or a callable, got {v}")
+        return v
+
+    @validator('projection_types')
+    def validate_projection_types(cls, v):
+        """Validate that the projection types are supported."""
+        if v is not None:
+            valid_types = ["max", "mean", "std", "median", "min"]
+            for proj_type in v:
+                if proj_type not in valid_types:
+                    raise ValueError(f"Projection type must be one of {valid_types}, got {proj_type}")
+        return v
+
+    @validator('reference_method')
+    def validate_reference_method(cls, v):
+        """Validate that the reference_method is valid."""
+        if v is not None and isinstance(v, str):
+            valid_refs = ["max_projection", "mean_projection", "best_focus"]
+            if v not in valid_refs:
+                raise ValueError(f"reference_method must be one of {valid_refs} or a callable, got {v}")
+        return v
+
     @validator('stitch_z_reference')
     def validate_stitch_z_reference(cls, v):
         """Validate that the stitch_z_reference is valid."""
-        if isinstance(v, str):
+        if v is not None and isinstance(v, str):
             valid_refs = ["max", "mean", "best_focus", "median", "min"]
             if v not in valid_refs:
                 raise ValueError(f"stitch_z_reference must be one of {valid_refs} or a callable, got {v}")
         return v
+
+    @model_validator(mode='after')
+    def handle_deprecated_params(self):
+        """Handle backward compatibility between old and new parameters."""
+        # First, handle reference_method if it's set (from previous version)
+        if self.reference_method is not None:
+            if isinstance(self.reference_method, str):
+                if self.reference_method == "best_focus":
+                    self.z_reference_function = "best_focus"
+                elif self.reference_method == "max_projection":
+                    self.z_reference_function = "max_projection"
+                elif self.reference_method == "mean_projection":
+                    self.z_reference_function = "mean_projection"
+                else:
+                    raise ValueError(f"Unknown reference_method: {self.reference_method}")
+            elif callable(self.reference_method):
+                self.z_reference_function = self.reference_method
+
+        # Then handle older stitch_z_reference and focus_detect parameters
+        if self.focus_detect is not None or self.stitch_z_reference is not None:
+            # Only override z_reference_function if at least one deprecated parameter is explicitly set
+            if self.stitch_z_reference is not None:
+                if self.stitch_z_reference == "best_focus":
+                    self.z_reference_function = "best_focus"
+                elif self.stitch_z_reference == "max":
+                    self.z_reference_function = "max_projection"
+                elif self.stitch_z_reference == "mean":
+                    self.z_reference_function = "mean_projection"
+                elif callable(self.stitch_z_reference):
+                    self.z_reference_function = self.stitch_z_reference
+
+            # If focus_detect is True and stitch_z_reference is not set, use best_focus
+            if self.focus_detect is True and self.stitch_z_reference is None:
+                self.z_reference_function = "best_focus"
+
+        # Handle deprecated create_projections and save_projections
+        if self.create_projections is not None:
+            self.save_reference = self.create_projections
+        if self.save_projections is not None:
+            self.save_reference = self.save_projections
+
+        # Handle deprecated projection_types
+        if self.projection_types is not None:
+            self.additional_projections = self.projection_types
+
+        # Set deprecated parameters for backward compatibility
+        if isinstance(self.z_reference_function, str):
+            if self.z_reference_function == "max_projection":
+                self.reference_method = "max_projection"
+                self.stitch_z_reference = "max"
+                self.focus_detect = False
+            elif self.z_reference_function == "mean_projection":
+                self.reference_method = "mean_projection"
+                self.stitch_z_reference = "mean"
+                self.focus_detect = False
+            elif self.z_reference_function == "best_focus":
+                self.reference_method = "best_focus"
+                self.stitch_z_reference = "best_focus"
+                self.focus_detect = True
+        elif callable(self.z_reference_function):
+            self.reference_method = self.z_reference_function
+            self.stitch_z_reference = self.z_reference_function
+            self.focus_detect = False
+
+        self.create_projections = self.save_reference
+        self.save_projections = self.save_reference
+        self.projection_types = self.additional_projections
+
+        return self
 
     class Config:
         """Pydantic configuration."""
@@ -168,6 +312,9 @@ class PlateProcessorConfig(BaseModel):
                                          description="Channels to use as reference")
     well_filter: Optional[List[str]] = Field(None, description="List of wells to process")
     use_reference_positions: bool = Field(False, description="Use existing reference positions")
+
+    # Microscope type - can be 'auto', 'ImageXpress', 'OperaPhenix', etc.
+    microscope_type: str = Field('auto', description="Type of microscope ('auto', 'ImageXpress', 'OperaPhenix')")
 
     # File system parameters
     output_dir_suffix: str = Field("_processed", description="Suffix for the output directory")
@@ -224,7 +371,7 @@ class PlateProcessorConfig(BaseModel):
             path: Path to save the JSON file
         """
         # Convert to dict, excluding callable objects
-        config_dict = self.model_dump(exclude={'preprocessing_funcs', 'stitch_z_reference'})
+        config_dict = self.model_dump(exclude={'preprocessing_funcs', 'stitch_z_reference', 'z_reference_function'})
 
         with open(path, 'w') as f:
             json.dump(config_dict, f, indent=2)
@@ -237,7 +384,7 @@ class PlateProcessorConfig(BaseModel):
             path: Path to save the YAML file
         """
         # Convert to dict, excluding callable objects
-        config_dict = self.model_dump(exclude={'preprocessing_funcs', 'stitch_z_reference'})
+        config_dict = self.model_dump(exclude={'preprocessing_funcs', 'stitch_z_reference', 'z_reference_function'})
 
         with open(path, 'w') as f:
             yaml.dump(config_dict, f, default_flow_style=False)
@@ -289,12 +436,10 @@ class ConfigPresets:
         """Configuration for Z-stack processing with best focus detection."""
         return PlateProcessorConfig(
             z_stack_processor=ZStackProcessorConfig(
-                focus_detect=True,
+                z_reference_function="best_focus",
                 focus_method="combined",
-                create_projections=True,
-                stitch_z_reference="best_focus",
-                save_projections=True,
-                projection_types=["max", "mean"]
+                save_reference=True,
+                additional_projections=["max", "mean"]
             )
         )
 
@@ -303,11 +448,10 @@ class ConfigPresets:
         """Configuration for Z-stack processing with per-plane stitching."""
         return PlateProcessorConfig(
             z_stack_processor=ZStackProcessorConfig(
-                create_projections=True,
-                stitch_z_reference="max",
-                save_projections=True,
+                z_reference_function="max_projection",
+                save_reference=True,
                 stitch_all_z_planes=True,
-                projection_types=["max"]
+                additional_projections=["max"]
             )
         )
 

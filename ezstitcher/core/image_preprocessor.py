@@ -145,6 +145,68 @@ class ImagePreprocessor:
 
         return normalized
 
+    def percentile_normalize(self, image, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):
+        """
+        Normalize image using percentile-based contrast stretching.
+
+        Args:
+            image (numpy.ndarray): Input image
+            low_percentile (float): Lower percentile (0-100)
+            high_percentile (float): Upper percentile (0-100)
+            target_min (int): Target minimum value
+            target_max (int): Target maximum value
+
+        Returns:
+            numpy.ndarray: Normalized image
+        """
+        # Get percentile values
+        p_low, p_high = np.percentile(image, (low_percentile, high_percentile))
+
+        # Avoid division by zero
+        if p_high == p_low:
+            return np.ones_like(image) * target_min
+
+        # Clip and normalize to target range
+        clipped = np.clip(image, p_low, p_high)
+        normalized = (clipped - p_low) * (target_max - target_min) / (p_high - p_low) + target_min
+        normalized = normalized.astype(np.uint16)
+
+        return normalized
+
+    def stack_percentile_normalize(self, stack, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):
+        """
+        Normalize a stack of images using global percentile-based contrast stretching.
+        This ensures consistent normalization across all images in the stack.
+
+        Args:
+            stack (list or numpy.ndarray): Stack of images
+            low_percentile (float): Lower percentile (0-100)
+            high_percentile (float): Upper percentile (0-100)
+            target_min (int): Target minimum value
+            target_max (int): Target maximum value
+
+        Returns:
+            numpy.ndarray: Normalized stack of images
+        """
+        # Convert to numpy array if it's a list
+        if isinstance(stack, list):
+            stack = np.array(stack)
+
+        # Calculate global percentiles across the entire stack
+        p_low = np.percentile(stack, low_percentile)
+        p_high = np.percentile(stack, high_percentile)
+
+        # Avoid division by zero
+        if p_high == p_low:
+            return np.ones_like(stack) * target_min
+
+        # Clip and normalize to target range
+        clipped = np.clip(stack, p_low, p_high)
+        normalized = (clipped - p_low) * (target_max - target_min) / (p_high - p_low) + target_min
+        normalized = normalized.astype(np.uint16)
+
+        return normalized
+
     def create_composite(self, images, weights=None):
         """
         Create a composite image from multiple channels.
@@ -232,3 +294,37 @@ class ImagePreprocessor:
             numpy.ndarray: Weight mask
         """
         return create_linear_weight_mask(shape, margin_ratio)
+
+    def max_projection(self, stack):
+        """
+        Create a maximum intensity projection from a Z-stack.
+
+        Args:
+            stack (list or numpy.ndarray): Stack of images
+
+        Returns:
+            numpy.ndarray: Maximum intensity projection
+        """
+        # Convert to numpy array if it's a list
+        if isinstance(stack, list):
+            stack = np.array(stack)
+
+        # Create max projection
+        return np.max(stack, axis=0)
+
+    def mean_projection(self, stack):
+        """
+        Create a mean intensity projection from a Z-stack.
+
+        Args:
+            stack (list or numpy.ndarray): Stack of images
+
+        Returns:
+            numpy.ndarray: Mean intensity projection
+        """
+        # Convert to numpy array if it's a list
+        if isinstance(stack, list):
+            stack = np.array(stack)
+
+        # Create mean projection
+        return np.mean(stack, axis=0).astype(stack[0].dtype)

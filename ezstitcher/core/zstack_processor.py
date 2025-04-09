@@ -1,12 +1,16 @@
 import re
+import os
 import csv
 import shutil
 import logging
 import numpy as np
+import inspect
 from pathlib import Path
 from collections import defaultdict
-from ezstitcher.core.config import ZStackProcessorConfig
+from typing import List, Callable, Union, Optional, Any
+from ezstitcher.core.config import ZStackProcessorConfig, FocusAnalyzerConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.core.focus_analyzer import FocusAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +22,126 @@ class ZStackProcessor:
     - Best focus selection
     - Per-plane stitching
     """
-    def __init__(self, config: ZStackProcessorConfig):
+    def __init__(self, config: ZStackProcessorConfig, filename_parser=None):
         self.config = config
         self.fs_manager = FileSystemManager()
         self._z_info = None
         self._z_indices = []
+
+        # Initialize the focus analyzer
+        from ezstitcher.core.focus_analyzer import FocusAnalyzer
+        self.focus_analyzer = FocusAnalyzer(config.focus_config)
+
+        # Initialize the filename parser
+        if filename_parser is None:
+            # Import here to avoid circular imports
+            from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+            self.filename_parser = ImageXpressFilenameParser()
+        else:
+            self.filename_parser = filename_parser
+
+        # Create a FocusAnalyzer with the same focus method as the ZStackProcessor
+        focus_config = FocusAnalyzerConfig(method=config.focus_method)
+        self.focus_analyzer = FocusAnalyzer(focus_config)
+
+        # Initialize the image preprocessor
+        from ezstitcher.core.image_preprocessor import ImagePreprocessor
+        self.image_preprocessor = ImagePreprocessor()
+
+        # Initialize the reference function
+        self._reference_function = self._create_reference_function(config.z_reference_function)
+
+    def _create_reference_function(self, func_or_name: Union[str, Callable]) -> Callable:
+        """
+        Create a reference function from a string name or callable.
+
+        This function adapts various types of functions to the reference function interface,
+        which takes a Z-stack (list of images) and returns a single 2D image.
+
+        Args:
+            func_or_name: String name of a standard function or a callable
+                Standard names: "max_projection", "mean_projection", "best_focus"
+                Can also be a custom function that takes a Z-stack and returns a 2D image
+
+        Returns:
+            A function that takes a stack and returns a single image
+        """
+        # Handle string names
+        if isinstance(func_or_name, str):
+            if func_or_name == "max_projection":
+                return self._adapt_function(self.image_preprocessor.max_projection)
+            elif func_or_name == "mean_projection":
+                return self._adapt_function(self.image_preprocessor.mean_projection)
+            elif func_or_name == "best_focus":
+                return lambda stack: self.focus_analyzer.select_best_focus(stack, method=self.config.focus_method)[0]
+            else:
+                raise ValueError(f"Unknown reference function name: {func_or_name}")
+
+        # Handle callables
+        if callable(func_or_name):
+            return self._adapt_function(func_or_name)
+
+        raise ValueError(f"Reference function must be a string or callable, got {type(func_or_name)}")
+
+    def _adapt_function(self, func: Callable) -> Callable:
+        """
+        Adapt a function to the reference function interface.
+
+        This allows both:
+        - Functions that take a single image and return a processed image
+        - Functions that take a stack and return a single image
+
+        to be used as reference functions.
+
+        Args:
+            func: The function to adapt
+
+        Returns:
+            A function that takes a stack and returns a single image
+        """
+        # Try to determine if the function works on stacks or single images
+        try:
+            # Create a small test stack (2 tiny images)
+            test_stack = [np.zeros((2, 2), dtype=np.uint8), np.ones((2, 2), dtype=np.uint8)]
+
+            # Try calling the function with the stack
+            result = func(test_stack)
+
+            # If it returns a single image, it's a stack function
+            if isinstance(result, np.ndarray) and result.ndim == 2:
+                logger.debug(f"Function {func.__name__} detected as stack function")
+                return func
+
+            # If it returns something else, we can't use it directly
+            raise ValueError(f"Function {func.__name__} doesn't return a 2D image when given a stack")
+
+        except Exception:
+            # If it fails, try with a single image
+            try:
+                # Try with a single image
+                result = func(test_stack[0])
+
+                # If it returns an image, it's an image function
+                if isinstance(result, np.ndarray) and result.ndim == 2:
+                    logger.debug(f"Function {func.__name__} detected as image function")
+
+                    def adapter(stack):
+                        # Apply the function to each image in the stack
+                        processed_stack = [func(img) for img in stack]
+                        # Return the max projection of the processed stack
+                        return np.max(np.array(processed_stack), axis=0)
+
+                    # Copy metadata from original function
+                    adapter.__name__ = f"{func.__name__}_adapted"
+                    adapter.__doc__ = f"Adapted version of {func.__name__} that works on stacks."
+                    return adapter
+
+                # If it returns something else, we can't use it
+                raise ValueError(f"Function {func.__name__} doesn't return a 2D image when given a single image")
+
+            except Exception as e:
+                # If both attempts fail, raise an error
+                raise ValueError(f"Cannot adapt function {func.__name__}: {str(e)}")
 
     def detect_z_stacks(self, plate_folder: str):
         has_zstack, self._z_info = self.preprocess_plate_folder(plate_folder)
@@ -97,6 +216,9 @@ class ZStackProcessor:
                 logger.info(f"Found {len(z_folders)} Z-stack folders in {plate_folder}")
                 for z_index, folder in z_folders[:3]:  # Log first 3 for brevity
                     logger.info(f"Z-stack folder: {folder.name}, Z-index: {z_index}")
+
+                # Store the Z-indices for later use
+                self._z_indices = [z[0] for z in z_folders]
             else:
                 logger.info(f"No Z-stack folders found in {plate_folder}")
 
@@ -151,17 +273,25 @@ class ZStackProcessor:
             image_files = self.fs_manager.list_image_files(z_folder)
 
             for img_file in image_files:
-                filename = self.pad_site_number(img_file.name)
+                # Use the instance's filename parser to parse the filename
+                if not hasattr(self, 'filename_parser') or self.filename_parser is None:
+                    # Import here to avoid circular imports
+                    from ezstitcher.core.filename_parser import detect_parser
+                    self.filename_parser = detect_parser([str(img_file)])
+                    logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
 
-                match = re.match(r'([A-Z]\d+)_s(\d+)_w(\d+)(\..*)', filename)
+                metadata = self.filename_parser.parse_filename(str(img_file))
 
-                if match:
-                    well = match.group(1)
-                    site = match.group(2).zfill(3)
-                    wavelength = match.group(3)
-                    extension = match.group(4)
+                if metadata:
+                    well = metadata['well']
+                    site = str(metadata['site']).zfill(3)
+                    wavelength = str(metadata['channel'])
+                    extension = os.path.splitext(img_file.name)[1]
 
-                    new_name = f"{well}_s{site}_w{wavelength}_z{z_index:03d}{extension}"
+                    # Use the filename parser's construct_filename method for all microscope types
+                    # This is the proper OOP approach - let the parser handle the format-specific details
+                    new_name = self.filename_parser.construct_filename(well, int(site), int(wavelength), z_index, extension=extension)
+
                     new_path = timepoint_path / new_name
 
                     shutil.copy2(img_file, new_path)
@@ -183,7 +313,67 @@ class ZStackProcessor:
         """
         return getattr(self, '_z_indices', [])
 
-        return has_zstack, z_folders
+    def get_zstack_info(self, folder_path):
+        """
+        Get detailed information about Z-stacks in a folder.
+
+        Args:
+            folder_path (str or Path): Path to the folder containing Z-stack images
+
+        Returns:
+            dict: Dictionary mapping stack IDs to information about each stack
+        """
+        folder_path = Path(folder_path)
+
+        # Detect Z-stack images
+        has_zstack, z_indices_map = self.detect_zstack_images(folder_path)
+
+        if not has_zstack:
+            return {}
+
+        # Get all image files
+        all_files = self.fs_manager.list_image_files(folder_path)
+
+        # Group files by stack ID, wavelength, and Z-index
+        z_info = {}
+
+        for img_file in all_files:
+            metadata = self.filename_parser.parse_filename(str(img_file))
+
+            if not metadata or 'z_index' not in metadata or metadata['z_index'] is None:
+                continue
+
+            well = metadata['well']
+            site = metadata['site']
+            channel = metadata['channel']
+            z_index = metadata['z_index']
+
+            # Create a consistent base name for grouping
+            stack_id = f"{well}_s{site:03d}"
+
+            # Initialize the stack info if it doesn't exist
+            if stack_id not in z_info:
+                z_info[stack_id] = {
+                    'z_indices': sorted(z_indices_map.get(f"{stack_id}_w{channel}", [])),
+                    'wavelengths': set(),
+                    'files': {}
+                }
+
+            # Add the wavelength
+            z_info[stack_id]['wavelengths'].add(channel)
+
+            # Initialize the wavelength dict if it doesn't exist
+            if channel not in z_info[stack_id]['files']:
+                z_info[stack_id]['files'][channel] = {}
+
+            # Add the file
+            z_info[stack_id]['files'][channel][z_index] = img_file
+
+        # Convert wavelengths sets to sorted lists
+        for stack_id in z_info:
+            z_info[stack_id]['wavelengths'] = sorted(z_info[stack_id]['wavelengths'])
+
+        return z_info
     def detect_zstack_images(self, folder_path):
         """
         Detect if a folder contains Z-stack images based on filename patterns.
@@ -199,22 +389,41 @@ class ZStackProcessor:
         # Use FileSystemManager to list image files
         all_files = self.fs_manager.list_image_files(folder_path)
 
-        z_pattern = re.compile(r'(.+)_z(\d+)(.+)')
+        # Check if we need to auto-detect the parser
+        if not hasattr(self, 'filename_parser') or self.filename_parser is None:
+            # Import here to avoid circular imports
+            from ezstitcher.core.filename_parser import detect_parser
+            file_paths = [str(f) for f in all_files]
+            if file_paths:
+                self.filename_parser = detect_parser(file_paths)
+                logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
+            else:
+                from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+                self.filename_parser = ImageXpressFilenameParser()
+                logger.info("No files found, defaulting to ImageXpress parser")
 
         from collections import defaultdict
         z_indices = defaultdict(list)
 
+        # Group files by their base components (well, site, channel)
         for img_file in all_files:
-            match = z_pattern.search(img_file.name)
-            if match:
-                base_name = match.group(1)
-                z_index = int(match.group(2))
-                suffix = match.group(3)
+            # Parse the filename using the appropriate parser
+            metadata = self.filename_parser.parse_filename(str(img_file))
 
-                z_indices[base_name].append(z_index)
-                logger.debug(f"Matched z-index: {img_file.name} -> base:{base_name}, z:{z_index}")
+            if metadata and 'z_index' in metadata and metadata['z_index'] is not None:
+                # Create a base name without the Z-index
+                well = metadata['well']
+                site = metadata['site']
+                channel = metadata['channel']
+
+                # Create a consistent base name for grouping
+                base_name = f"{well}_s{site:03d}_w{channel}"
+
+                # Add the Z-index to the list for this base name
+                z_indices[base_name].append(metadata['z_index'])
+                logger.debug(f"Matched z-index: {img_file.name} -> base:{base_name}, z:{metadata['z_index']}")
             else:
-                logger.debug(f"No z-index match for file: {img_file.name}")
+                logger.debug(f"No z-index found for file: {img_file.name}")
 
         has_zstack = len(z_indices) > 0
         if has_zstack:
@@ -268,16 +477,29 @@ class ZStackProcessor:
         # Group images by well, site, and wavelength
         images_by_coordinates = defaultdict(list)
 
-        # Pattern to extract well, site, wavelength from filename
-        filename_pattern = re.compile(r'([A-Z]\d+)_s(\d+)_w(\d+).*')
+        # Check if we need to auto-detect the parser
+        if not hasattr(self, 'filename_parser') or self.filename_parser is None:
+            # Import here to avoid circular imports
+            from ezstitcher.core.filename_parser import detect_parser
+            all_files = self.fs_manager.list_image_files(input_dir)
+            file_paths = [str(f) for f in all_files]
+            if file_paths:
+                self.filename_parser = detect_parser(file_paths)
+                logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
+            else:
+                from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+                self.filename_parser = ImageXpressFilenameParser()
+                logger.info("No files found, defaulting to ImageXpress parser")
 
         # Group Z-indices by coordinates
         for base_name, z_indices in z_indices_map.items():
-            match = filename_pattern.match(base_name)
-            if match:
-                well = match.group(1)
-                site = int(match.group(2))
-                wavelength = int(match.group(3))
+            # Parse the base_name to extract well, site, and channel
+            # The base_name is in the format "well_sXXX_wY"
+            parts = base_name.split('_')
+            if len(parts) >= 3 and parts[1].startswith('s') and parts[2].startswith('w'):
+                well = parts[0]
+                site = int(parts[1][1:])
+                wavelength = int(parts[2][1:])
 
                 # Create coordinates key
                 coordinates = (well, site, wavelength)
@@ -285,6 +507,7 @@ class ZStackProcessor:
                 # Add to dictionary
                 images_by_coordinates[coordinates] = (base_name, z_indices)
             else:
+                # If we get here, we couldn't parse the base_name
                 logger.warning(f"Could not parse coordinates from {base_name}")
 
         # Process each set of coordinates
@@ -305,7 +528,29 @@ class ZStackProcessor:
             # Load all Z-stack images for this coordinate
             image_stack = []
             for z_index in sorted(z_indices):
-                img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
+                # Parse the base_name to extract well, site, and channel
+                parts = base_name.split('_')
+                if len(parts) >= 3 and parts[1].startswith('s') and parts[2].startswith('w'):
+                    well = parts[0]
+                    site = int(parts[1][1:])
+                    channel = int(parts[2][1:])
+
+                    # Construct the filename using the filename parser
+                    filename = self.filename_parser.construct_filename(well, site, channel, z_index)
+                    img_path = input_dir / filename
+
+                    # If the file doesn't exist, try alternative extensions
+                    if not img_path.exists():
+                        for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                            alt_filename = self.filename_parser.construct_filename(well, site, channel, z_index, extension=ext)
+                            alt_path = input_dir / alt_filename
+                            if alt_path.exists():
+                                img_path = alt_path
+                                break
+                else:
+                    # Fallback if we can't parse the base_name
+                    img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
+
                 img = self.fs_manager.load_image(img_path)
                 if img is not None:
                     image_stack.append(img)
@@ -340,7 +585,29 @@ class ZStackProcessor:
                         base_name, z_indices = images_by_coordinates[coordinates]
 
                         # Load the image at the best Z-index
-                        img_path = input_dir / f"{base_name}_z{best_z:03d}.tif"
+                        # Parse the base_name to extract well, site, and channel
+                        parts = base_name.split('_')
+                        if len(parts) >= 3 and parts[1].startswith('s') and parts[2].startswith('w'):
+                            well = parts[0]
+                            site = int(parts[1][1:])
+                            channel = int(parts[2][1:])
+
+                            # Construct the filename using the filename parser
+                            filename = self.filename_parser.construct_filename(well, site, channel, best_z)
+                            img_path = input_dir / filename
+
+                            # If the file doesn't exist, try alternative extensions
+                            if not img_path.exists():
+                                for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                                    alt_filename = self.filename_parser.construct_filename(well, site, channel, best_z, extension=ext)
+                                    alt_path = input_dir / alt_filename
+                                    if alt_path.exists():
+                                        img_path = alt_path
+                                        break
+                        else:
+                            # Fallback if we can't parse the base_name
+                            img_path = input_dir / f"{base_name}_z{best_z:03d}.tif"
+
                         img = self.fs_manager.load_image(img_path)
                         if img is not None:
                             # Save the image
@@ -351,6 +618,73 @@ class ZStackProcessor:
                             best_focus_results[coordinates] = best_z
 
         return len(best_focus_results) > 0, output_dir
+
+    def find_best_focus(self, timepoint_dir, output_dir):
+        """
+        Find the best focus plane for each Z-stack and save it to the output directory.
+
+        Args:
+            timepoint_dir (Path): Path to the TimePoint_1 directory
+            output_dir (Path): Path to the output directory
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Ensure the output directory exists
+            self.fs_manager.ensure_directory(output_dir)
+
+            # Get all Z-stack info
+            z_info = self.get_zstack_info(timepoint_dir)
+            if not z_info:
+                logger.error(f"No Z-stack info found in {timepoint_dir}")
+                return False
+
+            # Process each unique image stack
+            for stack_id, stack_info in z_info.items():
+                # Skip stacks with only one Z-plane
+                if len(stack_info['z_indices']) <= 1:
+                    # Just copy the single image to the output directory
+                    for wavelength in stack_info['wavelengths']:
+                        src_path = stack_info['files'][wavelength][stack_info['z_indices'][0]]
+                        dst_path = output_dir / f"{stack_id}_w{wavelength}.tif"
+                        import shutil
+                        shutil.copy(src_path, dst_path)
+                        logger.info(f"Copied single Z-plane image to {dst_path}")
+                    continue
+
+                # Process each wavelength separately
+                for wavelength in stack_info['wavelengths']:
+                    # Load all images for this wavelength
+                    images = []
+                    for z_idx in stack_info['z_indices']:
+                        img_path = stack_info['files'][wavelength][z_idx]
+                        import cv2
+                        img = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+                        if img is None:
+                            logger.error(f"Failed to read image: {img_path}")
+                            continue
+                        images.append(img)
+
+                    if not images:
+                        logger.error(f"No images loaded for {stack_id}_w{wavelength}")
+                        continue
+
+                    # Find the best focus plane
+                    best_idx, _ = self.focus_analyzer.find_best_focus(images, method=self.config.focus_method)
+                    best_z = stack_info['z_indices'][best_idx]
+
+                    # Save the best focus image
+                    best_img = images[best_idx]
+                    output_path = output_dir / f"{stack_id}_w{wavelength}.tif"
+                    cv2.imwrite(str(output_path), best_img)
+                    logger.info(f"Saved best focus for {stack_id}_w{wavelength} to {output_path}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error in find_best_focus: {e}", exc_info=True)
+            return False
 
     def create_zstack_projections(self, input_dir, output_dir, projection_types=['max', 'mean']):
         """Create projections from Z-stack images.
@@ -371,6 +705,51 @@ class ZStackProcessor:
 
         # Check if folder contains Z-stack images
         has_zstack, z_indices_map = self.detect_zstack_images(input_dir)
+
+        # If no Z-stack images were detected directly, check for Z-stack folders
+        if not has_zstack:
+            timepoint_dir = self.config.timepoint_dir_name if hasattr(self.config, 'timepoint_dir_name') else "TimePoint_1"
+            timepoint_path = input_dir / timepoint_dir
+
+            if timepoint_path.exists():
+                has_zstack_folders, z_folders = self.detect_zstack_folders(input_dir)
+
+                if has_zstack_folders:
+                    # We have Z-stack folders, so we need to detect Z-stack images in each folder
+                    z_indices_map = {}
+
+                    # Process each Z-stack folder
+                    for z_index, folder in z_folders:
+                        # Get all image files in this Z-stack folder
+                        image_files = self.fs_manager.list_image_files(folder)
+
+                        # Group files by their base components (without Z-index)
+                        for img_file in image_files:
+                            # Parse the filename using the filename parser
+                            metadata = self.filename_parser.parse_filename(str(img_file))
+
+                            if metadata:
+                                # Create a base name without the Z-index
+                                well = metadata['well']
+                                site = metadata['site']
+                                channel = metadata['channel']
+
+                                # Create a consistent base name for grouping
+                                base_name = f"{well}_s{site:03d}_w{channel}"
+
+                                # Add this Z-index to the list for this base name
+                                if base_name not in z_indices_map:
+                                    z_indices_map[base_name] = []
+
+                                if z_index not in z_indices_map[base_name]:
+                                    z_indices_map[base_name].append(z_index)
+
+                    # Sort the Z-indices for each base name
+                    for base_name in z_indices_map:
+                        z_indices_map[base_name].sort()
+
+                    has_zstack = len(z_indices_map) > 0
+
         if not has_zstack:
             logger.warning(f"No Z-stack images found in {input_dir}")
             return False, None
@@ -390,7 +769,29 @@ class ZStackProcessor:
             # Load all Z-stack images for this base name
             image_stack = []
             for z_index in sorted(z_indices):
-                img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
+                # Parse the base_name to extract well, site, and channel
+                parts = base_name.split('_')
+                if len(parts) >= 3 and parts[1].startswith('s') and parts[2].startswith('w'):
+                    well = parts[0]
+                    site = int(parts[1][1:])
+                    channel = int(parts[2][1:])
+
+                    # Construct the filename using the filename parser
+                    filename = self.filename_parser.construct_filename(well, site, channel, z_index)
+                    img_path = input_dir / filename
+
+                    # If the file doesn't exist, try alternative extensions
+                    if not img_path.exists():
+                        for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                            alt_filename = self.filename_parser.construct_filename(well, site, channel, z_index, extension=ext)
+                            alt_path = input_dir / alt_filename
+                            if alt_path.exists():
+                                img_path = alt_path
+                                break
+                else:
+                    # Fallback if we can't parse the base_name
+                    img_path = input_dir / f"{base_name}_z{z_index:03d}.tif"
+
                 img = self.fs_manager.load_image(img_path)
                 if img is not None:
                     image_stack.append(img)
@@ -405,9 +806,9 @@ class ZStackProcessor:
             # Create and save projections
             for proj_type in projection_types:
                 if proj_type == 'max':
-                    projection = np.max(image_stack, axis=0)
+                    projection = self.image_preprocessor.max_projection(image_stack)
                 elif proj_type == 'mean':
-                    projection = np.mean(image_stack, axis=0).astype(image_stack.dtype)
+                    projection = self.image_preprocessor.mean_projection(image_stack)
                 else:
                     logger.warning(f"Unknown projection type: {proj_type}")
                     continue
@@ -420,15 +821,16 @@ class ZStackProcessor:
 
         return True, projection_dirs
 
-    def stitch_across_z(self, plate_folder, reference_z='max', stitch_all_z_planes=True, processor=None):
+    def stitch_across_z(self, plate_folder, reference_z=None, stitch_all_z_planes=True, processor=None):
         """
         Stitch all Z-planes in a plate using a reference Z-plane for positions.
 
         Args:
             plate_folder (str or Path): Path to the plate folder
-            reference_z (str or callable): Reference Z-plane to use for positions.
+            reference_z (str or callable, optional): Reference Z-plane to use for positions.
                 If str: 'max', 'mean', or 'best_focus'
                 If callable: A function that takes a Z-stack (list of images) and returns a 2D image
+                If None: Uses the z_reference_function from the config
             stitch_all_z_planes (bool): Whether to stitch all Z-planes
             processor (PlateProcessor): Processor to use for stitching
 
@@ -461,14 +863,52 @@ class ZStackProcessor:
             parent_dir = plate_path.parent
             plate_name = plate_path.name
 
-            # Determine reference directory based on reference_z
+            # If reference_z is not provided, use the z_reference_function from the config
+            if reference_z is None:
+                # Use the reference function from the config
+                reference_function = self._reference_function
+
+                # For backward compatibility, convert the function to a string name if possible
+                if reference_function == self._adapt_function(self.image_preprocessor.max_projection):
+                    reference_z = 'max'
+                elif reference_function == self._adapt_function(self.image_preprocessor.mean_projection):
+                    reference_z = 'mean'
+                elif callable(reference_function) and reference_function.__name__ == '<lambda>' and 'select_best_focus' in str(reference_function):
+                    reference_z = 'best_focus'
+                else:
+                    # Use the function directly
+                    reference_z = reference_function
+
+            # For string names, convert to the appropriate function
             if isinstance(reference_z, str):
+                logger.info(f"Using reference_z: {reference_z}")
+
+                # Determine reference directory based on reference_z
                 if reference_z == 'max':
                     reference_dir = parent_dir / f"{plate_name}_projections_max" / timepoint_dir
+                    # Ensure the directory exists
+                    self.fs_manager.ensure_directory(reference_dir)
+
+                    # Create max projections for each Z-stack
+                    logger.info(f"Creating max projections for reference")
+                    self.create_zstack_projections(plate_path / timepoint_dir, reference_dir)
                 elif reference_z == 'mean':
                     reference_dir = parent_dir / f"{plate_name}_projections_mean" / timepoint_dir
+                    # Ensure the directory exists
+                    self.fs_manager.ensure_directory(reference_dir)
+
+                    # Create mean projections for each Z-stack
+                    logger.info(f"Creating mean projections for reference")
+                    self.create_zstack_projections(plate_path / timepoint_dir, reference_dir, projection_types=['mean'])
                 elif reference_z == 'best_focus':
                     reference_dir = parent_dir / f"{plate_name}_best_focus" / timepoint_dir
+                    # Ensure the directory exists
+                    self.fs_manager.ensure_directory(reference_dir)
+
+                    # Create best focus projections for each Z-stack
+                    logger.info(f"Creating best focus projections for reference")
+                    # For best focus, we need to use the find_best_focus method
+                    self.find_best_focus(plate_path / timepoint_dir, reference_dir)
                 else:
                     logger.error(f"Invalid reference_z string: {reference_z}. Must be 'max', 'mean', or 'best_focus'.")
                     return False
@@ -492,9 +932,20 @@ class ZStackProcessor:
                             filename = f"{base_name}.tif"
                             file_path = zstep_folder / filename
                         else:
-                            # Images have _z in the filename
-                            filename = f"{base_name}_z{z_idx:03d}.tif"
-                            file_path = timepoint_path / filename
+                            # Check if this is an Opera Phenix file
+                            opera_match = re.match(r'(r\d{1,2}c\d{1,2}f\d+).*', base_name)
+                            if opera_match:
+                                # Opera Phenix format
+                                opera_base = opera_match.group(1)
+                                # Extract channel from the base_name
+                                channel_match = re.search(r'-ch(\d+)', base_name)
+                                channel = channel_match.group(1) if channel_match else '1'
+                                filename = f"{opera_base}p{z_idx:02d}-ch{channel}sk1fk1fl1.tiff"
+                                file_path = timepoint_path / filename
+                            else:
+                                # ImageXpress format
+                                filename = f"{base_name}_z{z_idx:03d}.tif"
+                                file_path = timepoint_path / filename
 
                         if file_path.exists():
                             img = self.fs_manager.load_image(file_path)
@@ -530,14 +981,90 @@ class ZStackProcessor:
 
             # Get positions from reference directory
             positions_dir = parent_dir / f"{plate_name}_positions"
-            if not positions_dir.exists():
-                logger.error(f"Positions directory does not exist: {positions_dir}")
-                return False
+
+            # If positions directory doesn't exist or is empty, we need to stitch the projections first
+            if not positions_dir.exists() or not list(positions_dir.glob("*.csv")):
+                logger.info(f"No position files found in {positions_dir}, stitching projections first")
+
+                # Create a new processor with the same config as the one passed in
+                if processor is None:
+                    logger.error(f"No processor provided for stitching projections")
+                    return False
+
+                # Stitch the projections to generate position files
+                success = processor.run(
+                    str(reference_dir.parent)
+                )
+
+                if not success:
+                    logger.error(f"Failed to stitch projections")
+                    return False
+
+                # Check if positions directory exists now
+                # The positions directory might be named differently depending on the plate name
+                # Try to find the positions directory by looking for directories with 'positions' in the name
+                proj_positions_dirs = [d for d in parent_dir.glob(f"*positions*") if d.is_dir()]
+                if not proj_positions_dirs:
+                    logger.error(f"No positions directory found after stitching projections")
+                    return False
+
+                # Use the first positions directory found
+                proj_positions_dir = proj_positions_dirs[0]
+                logger.info(f"Found positions directory: {proj_positions_dir}")
+
+                # Copy position files from projections positions directory to positions directory
+                import shutil
+                # Make sure the positions directory exists
+                self.fs_manager.ensure_directory(positions_dir)
+
+                # List all position files in the projections positions directory
+                position_files = list(proj_positions_dir.glob("*.csv"))
+                logger.info(f"Found {len(position_files)} position files in {proj_positions_dir}")
+
+                # Copy all position files from the projections positions directory to the positions directory
+                position_files_copied = 0
+                for position_file in position_files:
+                    # Get the well name from the position file name
+                    well_name = position_file.stem.split('_')[0]
+                    # Copy the position file to the positions directory
+                    dest_file = positions_dir / f"{well_name}_w1.csv"
+                    shutil.copy(position_file, dest_file)
+                    position_files_copied += 1
+                    logger.info(f"Copied position file from {position_file} to {dest_file}")
+
+                # Check if position files were copied
+                if position_files_copied == 0:
+                    # Try to find position files in other directories
+                    all_position_dirs = [d for d in parent_dir.glob(f"*positions*") if d.is_dir()]
+                    logger.info(f"Found {len(all_position_dirs)} position directories: {all_position_dirs}")
+
+                    # Try each directory
+                    for pos_dir in all_position_dirs:
+                        if pos_dir == positions_dir:
+                            continue
+
+                        position_files = list(pos_dir.glob("*.csv"))
+                        logger.info(f"Found {len(position_files)} position files in {pos_dir}")
+
+                        for position_file in position_files:
+                            # Get the well name from the position file name
+                            well_name = position_file.stem.split('_')[0]
+                            # Copy the position file to the positions directory
+                            dest_file = positions_dir / f"{well_name}_w1.csv"
+                            shutil.copy(position_file, dest_file)
+                            position_files_copied += 1
+                            logger.info(f"Copied position file from {position_file} to {dest_file}")
+
+                    if position_files_copied == 0:
+                        logger.error(f"No position files found in any positions directory")
+                        return False
+
+                logger.info(f"Copied {position_files_copied} position files to {positions_dir}")
 
             # Get all position files
             position_files = list(positions_dir.glob("*.csv"))
             if not position_files:
-                logger.error(f"No position files found in {positions_dir}")
+                logger.error(f"No position files found in {positions_dir} after stitching projections")
                 return False
 
             logger.info(f"Found {len(position_files)} position files in {positions_dir}")
@@ -598,10 +1125,42 @@ class ZStackProcessor:
                             file_path = zstep_folder / filename
                             logger.info(f"Looking for file in ZStep folder: {file_path}")
                         else:
-                            # Files have _z in the filename
-                            filename = f"{well_pattern}_s{site:03d}_w{wavelength}_z{z_index:03d}.tif"
-                            file_path = timepoint_path / filename
-                            logger.info(f"Looking for file with _z suffix: {file_path}")
+                            # Use the filename parser to construct the filename
+                            # Check if we need to auto-detect the parser
+                            if not hasattr(self, 'filename_parser') or self.filename_parser is None:
+                                # Import here to avoid circular imports
+                                from ezstitcher.core.filename_parser import detect_parser
+                                # Get a sample of filenames from the timepoint_path
+                                sample_files = []
+                                for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                                    sample_files.extend([str(f) for f in timepoint_path.glob(f"*{ext}")][:10])
+                                if sample_files:
+                                    self.filename_parser = detect_parser(sample_files)
+                                    logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
+                                else:
+                                    from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+                                    self.filename_parser = ImageXpressFilenameParser()
+                                    logger.info("No files found, defaulting to ImageXpress parser")
+
+                            # Construct the filename using the filename parser
+                            try:
+                                filename = self.filename_parser.construct_filename(well_pattern, site, int(wavelength), z_index)
+                                file_path = timepoint_path / filename
+                                logger.info(f"Looking for file: {file_path}")
+
+                                # If the file doesn't exist, try alternative extensions
+                                if not file_path.exists():
+                                    for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                                        alt_filename = self.filename_parser.construct_filename(well_pattern, site, int(wavelength), z_index, extension=ext)
+                                        alt_path = timepoint_path / alt_filename
+                                        if alt_path.exists():
+                                            file_path = alt_path
+                                            break
+                            except Exception as e:
+                                # Fallback to ImageXpress format if the parser fails
+                                logger.warning(f"Error constructing filename: {e}. Falling back to default format.")
+                                filename = f"{well_pattern}_s{site:03d}_w{wavelength}_z{z_index:03d}.tif"
+                                file_path = timepoint_path / filename
 
                         if file_path.exists():
                             # Load the image
