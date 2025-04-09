@@ -49,6 +49,7 @@ class SyntheticMicroscopyGenerator:
                  wavelength_intensities=None,  # Fixed intensities for each wavelength
                  wavelength_backgrounds=None,  # Background intensities for each wavelength
                  wells=['A01'],  # List of wells to generate
+                 format='ImageXpress',  # Format of the filenames ('ImageXpress' or 'OperaPhenix')
                  random_seed=None):
         """
         Initialize the synthetic microscopy generator.
@@ -135,6 +136,9 @@ class SyntheticMicroscopyGenerator:
         # Store the wells to generate
         self.wells = wells
 
+        # Store the format
+        self.format = format
+
         # Store the base random seed
         self.base_random_seed = random_seed
 
@@ -144,8 +148,16 @@ class SyntheticMicroscopyGenerator:
             random.seed(random_seed)
 
         # Create output directory structure
-        self.timepoint_dir = self.output_dir / "TimePoint_1"
-        self.timepoint_dir.mkdir(parents=True, exist_ok=True)
+        # For ImageXpress, create TimePoint_1 directory
+        # For Opera Phenix, create Images directory
+        if self.format == 'ImageXpress':
+            self.timepoint_dir = self.output_dir / "TimePoint_1"
+            self.timepoint_dir.mkdir(parents=True, exist_ok=True)
+        else:  # OperaPhenix
+            # Create the Images directory for Opera Phenix
+            self.images_dir = self.output_dir / "Images"
+            self.images_dir.mkdir(parents=True, exist_ok=True)
+            self.timepoint_dir = self.images_dir  # Store images in the Images directory
 
         # Calculate effective step size with overlap
         self.step_x = int(tile_size[0] * (1 - overlap_percent / 100))
@@ -363,13 +375,19 @@ class SyntheticMicroscopyGenerator:
         """Generate HTD file with metadata in the format expected by ezstitcher."""
         # Derive plate name from output directory name
         plate_name = self.output_dir.name
-        htd_filename = f"{plate_name}.HTD"
 
-        # Generate the main HTD file in the plate dir
-        htd_path = self.output_dir / htd_filename
+        if self.format == 'OperaPhenix':
+            # Generate Index.xml for Opera Phenix
+            return self.generate_opera_phenix_index_xml(plate_name)
+        else:
+            # Generate HTD file for ImageXpress
+            htd_filename = f"{plate_name}.HTD"
 
-        # Basic HTD file content matching the format of real HTD files
-        htd_content = f""""HTSInfoFile", Version 1.0
+            # Generate the main HTD file in the plate dir
+            htd_path = self.output_dir / htd_filename
+
+            # Basic HTD file content matching the format of real HTD files
+            htd_content = f""""HTSInfoFile", Version 1.0
 "Description", "Synthetic microscopy data for testing"
 "PlateType", 6
 "TimePoints", 1
@@ -379,49 +397,143 @@ class SyntheticMicroscopyGenerator:
 "XWells", 4
 "YWells", 3"""
 
-        # Add wells selection (only the wells we're using are TRUE)
-        for y in range(3):  # 3 rows (A, B, C)
-            row_wells = []
-            for x in range(4):  # 4 columns (1, 2, 3, 4)
-                well = f"{chr(65+y)}{x+1:02d}"  # A01, A02, etc.
-                row_wells.append("TRUE" if well in self.wells else "FALSE")
-            htd_content += f"\n\"WellsSelection{y+1}\", {', '.join(row_wells)}"
+            # Add wells selection (only the wells we're using are TRUE)
+            for y in range(3):  # 3 rows (A, B, C)
+                row_wells = []
+                for x in range(4):  # 4 columns (1, 2, 3, 4)
+                    well = f"{chr(65+y)}{x+1:02d}"  # A01, A02, etc.
+                    row_wells.append("TRUE" if well in self.wells else "FALSE")
+                htd_content += f"\n\"WellsSelection{y+1}\", {', '.join(row_wells)}"
 
-        # Add sites information
-        htd_content += f"\n\"Sites\", TRUE"
-        htd_content += f"\n\"XSites\", {self.grid_size[1]}"
-        htd_content += f"\n\"YSites\", {self.grid_size[0]}"
+            # Add sites information
+            htd_content += f"\n\"Sites\", TRUE"
+            htd_content += f"\n\"XSites\", {self.grid_size[1]}"
+            htd_content += f"\n\"YSites\", {self.grid_size[0]}"
 
-        # Add site selection rows (all set to FALSE except the ones we're using)
-        for y in range(self.grid_size[0]):
-            row = []
-            for x in range(self.grid_size[1]):
-                row.append("TRUE")  # All sites are used in our synthetic data
-            htd_content += f"\n\"SiteSelection{y+1}\", {', '.join(row)}"
+            # Add site selection rows (all set to FALSE except the ones we're using)
+            for y in range(self.grid_size[0]):
+                row = []
+                for x in range(self.grid_size[1]):
+                    row.append("TRUE")  # All sites are used in our synthetic data
+                htd_content += f"\n\"SiteSelection{y+1}\", {', '.join(row)}"
 
-        # Add wavelength information
-        htd_content += f"\n\"Waves\", TRUE"
-        htd_content += f"\n\"NWavelengths\", {self.wavelengths}"
+            # Add wavelength information
+            htd_content += f"\n\"Waves\", TRUE"
+            htd_content += f"\n\"NWavelengths\", {self.wavelengths}"
 
-        # Add wavelength names and collection flags
-        for w in range(self.wavelengths):
-            htd_content += f"\n\"WaveName{w+1}\", \"W{w+1}\""
-            htd_content += f"\n\"WaveCollect{w+1}\", 1"
+            # Add wavelength names and collection flags
+            for w in range(self.wavelengths):
+                htd_content += f"\n\"WaveName{w+1}\", \"W{w+1}\""
+                htd_content += f"\n\"WaveCollect{w+1}\", 1"
 
-        # Add unique identifier and end file marker
-        htd_content += f"\n\"UniquePlateIdentifier\", \"{plate_name}-{datetime.now().strftime('%Y%m%d-%H%M%S')}\""
-        htd_content += "\n\"EndFile\""
+            # Add unique identifier and end file marker
+            htd_content += f"\n\"UniquePlateIdentifier\", \"{plate_name}-{datetime.now().strftime('%Y%m%d-%H%M%S')}\""
+            htd_content += "\n\"EndFile\""
 
-        # Write HTD file in plate root directory
-        with open(htd_path, 'w') as f:
-            f.write(htd_content)
+            # Write HTD file in plate root directory
+            with open(htd_path, 'w') as f:
+                f.write(htd_content)
 
-        # Also create a copy in the TimePoint directory
-        timepoint_htd_path = self.timepoint_dir / htd_filename
-        with open(timepoint_htd_path, 'w') as f:
-            f.write(htd_content)
+            # For ImageXpress, also create a copy in the TimePoint directory
+            timepoint_htd_path = self.timepoint_dir / htd_filename
+            with open(timepoint_htd_path, 'w') as f:
+                f.write(htd_content)
 
-        return htd_path
+            return htd_path
+
+    def generate_opera_phenix_index_xml(self, plate_name):
+        """Generate Index.xml file for Opera Phenix format."""
+        # Create the Index.xml file in the Images directory
+        index_xml_path = self.images_dir / "Index.xml"
+
+        # Get current date and time for the measurement ID
+        current_time = datetime.now().strftime("%Y-%m-%dT%H_%M_%S")
+        measurement_id = f"{plate_name}__{current_time}-Measurement 1"
+
+        # Create a unique ID for the measurement
+        import uuid
+        unique_id = str(uuid.uuid4())
+
+        # Extract row and column numbers from wells
+        # Convert well names like 'A01' to row and column indices
+        well_indices = []
+        for well in self.wells:
+            row = ord(well[0]) - ord('A') + 1  # A -> 1, B -> 2, etc.
+            col = int(well[1:3])
+            well_indices.append((row, col))
+
+        # Start building the XML content
+        xml_content = f"""<?xml version="1.0" encoding="utf-8"?>
+<EvaluationInputData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="1" xmlns="http://www.perkinelmer.com/PEHH/HarmonyV6">
+  <User>Synthetic</User>
+  <InstrumentType>Phenix</InstrumentType>
+  <Plates>
+    <Plate>
+      <PlateID>{plate_name}</PlateID>
+      <MeasurementID>{unique_id}</MeasurementID>
+      <MeasurementStartTime>{datetime.now().isoformat()}-04:00</MeasurementStartTime>
+      <n>{plate_name}</n>
+      <PlateTypeName>96well</PlateTypeName>
+      <PlateRows>8</PlateRows>
+      <PlateColumns>12</PlateColumns>"""
+
+        # Add wells
+        for row, col in well_indices:
+            xml_content += f"\n      <Well id=\"{row:02d}{col:02d}\" />"
+
+        xml_content += "\n    </Plate>\n  </Plates>\n  <Wells>"
+
+        # Add well details
+        for row, col in well_indices:
+            xml_content += f"\n    <Well>\n      <id>{row:02d}{col:02d}</id>\n      <Row>{row}</Row>\n      <Col>{col}</Col>"
+
+            # Add images for each site and channel
+            for site in range(1, self.grid_size[0] * self.grid_size[1] + 1):
+                for channel in range(1, self.wavelengths + 1):
+                    for z in range(1, self.z_stack_levels + 1):
+                        xml_content += f"\n      <Image id=\"{row:02d}{col:02d}K1F{site}P{z}R{channel}\" />"
+
+            xml_content += "\n    </Well>"
+
+        # Add image details section
+        xml_content += """
+  </Wells>
+  <Images>
+    <Map>
+      <Entry ChannelID="1">
+        <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
+        <ObjectiveNA Unit="">0.3</ObjectiveNA>
+        <ExposureTime Unit="s">0.03</ExposureTime>
+        <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
+        <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
+      </Entry>"""
+
+        # Add entries for each channel
+        for channel in range(2, self.wavelengths + 1):
+            xml_content += f"""
+      <Entry ChannelID="{channel}">
+        <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
+        <ObjectiveNA Unit="">0.3</ObjectiveNA>
+        <ExposureTime Unit="s">0.05</ExposureTime>
+        <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
+        <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
+      </Entry>"""
+
+        # Close the XML
+        xml_content += """
+    </Map>
+    <PixelSizeCalibration>
+      <PixelSize Unit="µm">0.65</PixelSize>
+      <MagnificationRatio>1.0</MagnificationRatio>
+    </PixelSizeCalibration>
+  </Images>
+</EvaluationInputData>"""
+
+        # Write the XML file
+        with open(index_xml_path, 'w', encoding='utf-8') as f:
+            f.write(xml_content)
+
+        return index_xml_path
 
     def generate_dataset(self):
         """Generate the complete dataset."""
@@ -506,9 +618,18 @@ class SyntheticMicroscopyGenerator:
                                     x_pos:x_pos + self.tile_size[0]
                                 ]
 
-                                # Create filename without Z-index and without zero-padding site indices
-                                # This tests the padding functionality in the stitcher
-                                filename = f"{well}_s{site_index}_w{wavelength}.tif"
+                                # Create filename based on format
+                                if self.format == 'ImageXpress':
+                                    # ImageXpress format: WellID_sXXX_wY_zZZZ.tif
+                                    # Create filename without Z-index and without zero-padding site indices
+                                    # This tests the padding functionality in the stitcher
+                                    filename = f"{well}_s{site_index}_w{wavelength}_z{z_level}.tif"
+                                else:  # OperaPhenix
+                                    # Opera Phenix format: rXXcYYfZZZpWW-chVskNfkNflN.tiff
+                                    # Extract row and column from well ID (e.g., 'A01' -> row=1, col=1)
+                                    row = ord(well[0]) - ord('A') + 1
+                                    col = int(well[1:3])
+                                    filename = f"r{row:02d}c{col:02d}f{site_index}p{z_level:02d}-ch{wavelength}sk1fk1fl1.tiff"
                                 filepath = zstep_dir / filename
 
                                 # Save image without compression
@@ -540,8 +661,18 @@ class SyntheticMicroscopyGenerator:
                                 x_pos:x_pos + self.tile_size[0]
                             ]
 
-                            # Create filename without Z-index and without zero-padding site indices
-                            filename = f"{well}_s{site_index}_w{wavelength}.tif"
+                            # Create filename based on format
+                            if self.format == 'ImageXpress':
+                                # ImageXpress format: WellID_sXXX_wY.tif
+                                # Create filename without Z-index and without zero-padding site indices
+                                # This tests the padding functionality in the stitcher
+                                filename = f"{well}_s{site_index}_w{wavelength}.tif"
+                            else:  # OperaPhenix
+                                # Opera Phenix format: rXXcYYfZZZpWW-chVskNfkNflN.tiff
+                                # Extract row and column from well ID (e.g., 'A01' -> row=1, col=1)
+                                row = ord(well[0]) - ord('A') + 1
+                                col = int(well[1:3])
+                                filename = f"r{row:02d}c{col:02d}f{site_index}p01-ch{wavelength}sk1fk1fl1.tiff"
                             filepath = self.timepoint_dir / filename
 
                             # Save image without compression
@@ -575,6 +706,8 @@ def main():
     parser.add_argument("--background", type=int, default=500, help="Background intensity")
     parser.add_argument("--noise", type=int, default=100, help="Noise level")
     parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
+    parser.add_argument("--format", type=str, choices=['ImageXpress', 'OperaPhenix'], default='ImageXpress',
+                      help="Format of the filenames (ImageXpress or OperaPhenix)")
 
     # Add wavelength-specific parameter groups
     wavelength_group = parser.add_argument_group('wavelength-specific',
@@ -664,6 +797,7 @@ def main():
         background_intensity=args.background,
         noise_level=args.noise,
         wavelength_params=wavelength_params,
+        format=args.format,
         random_seed=args.seed
     )
 

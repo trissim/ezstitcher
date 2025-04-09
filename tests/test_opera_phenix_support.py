@@ -194,9 +194,15 @@ class TestOperaPhenixSupport(unittest.TestCase):
 
     def test_basic_stitching(self):
         """Test basic stitching with Opera Phenix data."""
+        # Check if Index.xml file was generated
+        index_xml_path = os.path.join(self.no_zstack_dir, "Images", "Index.xml")
+        self.assertTrue(os.path.exists(index_xml_path), "Index.xml file not created")
+
         # Process the Opera Phenix data with auto-detection
+        # Use the Images directory as the input directory
+        images_dir = os.path.join(self.no_zstack_dir, "Images")
         result = process_plate_folder(
-            self.no_zstack_dir,
+            images_dir,
             reference_channels=['1'],
             tile_overlap=10.0,
             microscope_type='auto'  # Should auto-detect Opera Phenix
@@ -205,7 +211,8 @@ class TestOperaPhenixSupport(unittest.TestCase):
         self.assertTrue(result, "Stitching failed")
 
         # Check if stitched directory was created
-        stitched_dir = os.path.join(self.test_dir, f"{os.path.basename(self.no_zstack_dir)}_stitched")
+        # The stitched directory is created in the same directory as the Images directory
+        stitched_dir = os.path.join(self.no_zstack_dir, f"{os.path.basename(images_dir)}_stitched")
         self.assertTrue(os.path.exists(stitched_dir), "Stitched directory not created")
 
         # Check if stitched images exist for both wavelengths and all wells
@@ -232,8 +239,10 @@ class TestOperaPhenixSupport(unittest.TestCase):
     def test_explicit_format(self):
         """Test stitching with explicitly specified Opera Phenix format."""
         # Process the Opera Phenix data with explicit format
+        # Use the Images directory as the input directory
+        images_dir = os.path.join(self.no_zstack_dir, "Images")
         result = process_plate_folder(
-            self.no_zstack_dir,
+            images_dir,
             reference_channels=['1'],
             tile_overlap=10.0,
             microscope_type='OperaPhenix'  # Explicitly specify Opera Phenix
@@ -242,7 +251,8 @@ class TestOperaPhenixSupport(unittest.TestCase):
         self.assertTrue(result, "Stitching failed")
 
         # Check if stitched directory was created
-        stitched_dir = os.path.join(self.test_dir, f"{os.path.basename(self.no_zstack_dir)}_stitched")
+        # The stitched directory is created in the same directory as the Images directory
+        stitched_dir = os.path.join(self.no_zstack_dir, f"{os.path.basename(images_dir)}_stitched")
         self.assertTrue(os.path.exists(stitched_dir), "Stitched directory not created")
 
     def test_non_zstack_workflow(self):

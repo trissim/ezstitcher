@@ -582,9 +582,21 @@ class TestDocumentationExamples(unittest.TestCase):
         generator.generate_dataset()
         print(f"Synthetic Opera Phenix data generated in {plate_dir}")
 
+        # Check if Index.xml file was generated
+        index_xml_path = os.path.join(plate_dir, "Images", "Index.xml")
+        self.assertTrue(os.path.exists(index_xml_path), "Index.xml file not created")
+
+        # Check if the Index.xml file contains pixel size information
+        with open(index_xml_path, 'r', encoding='utf-8') as f:
+            xml_content = f.read()
+            self.assertIn("<PixelSize", xml_content, "Pixel size information not found in Index.xml")
+            self.assertIn("µm", xml_content, "Pixel size unit not found in Index.xml")
+
         # Process with explicit microscope type
+        # Use the Images directory as the input directory
+        images_dir = os.path.join(plate_dir, "Images")
         result = process_plate_folder(
-            plate_dir,
+            images_dir,
             reference_channels=['1'],
             tile_overlap=10.0,
             microscope_type='OperaPhenix'
@@ -593,7 +605,8 @@ class TestDocumentationExamples(unittest.TestCase):
         self.assertTrue(result, "Opera Phenix processing with explicit type should succeed")
 
         # Check that stitched images were created
-        stitched_dir = Path(plate_dir).parent / f"{Path(plate_dir).name}_stitched"
+        # The stitched directory is created in the same directory as the Images directory
+        stitched_dir = Path(plate_dir) / f"{Path(images_dir).name}_stitched"
         self.assertTrue(stitched_dir.exists(), "Stitched directory should exist")
 
         # Check that at least one stitched image exists
@@ -628,8 +641,10 @@ class TestDocumentationExamples(unittest.TestCase):
         print(f"Synthetic Opera Phenix data generated in {auto_detect_dir}")
 
         # Process with auto-detection
+        # Use the Images directory as the input directory
+        auto_detect_images_dir = os.path.join(auto_detect_dir, "Images")
         result = process_plate_folder(
-            auto_detect_dir,
+            auto_detect_images_dir,
             reference_channels=['1'],
             tile_overlap=10.0
             # microscope_type defaults to 'auto'
@@ -638,7 +653,8 @@ class TestDocumentationExamples(unittest.TestCase):
         self.assertTrue(result, "Opera Phenix processing with auto-detection should succeed")
 
         # Check that stitched images were created
-        stitched_dir = Path(auto_detect_dir).parent / f"{Path(auto_detect_dir).name}_stitched"
+        # The stitched directory is created in the same directory as the Images directory
+        stitched_dir = Path(auto_detect_dir) / f"{Path(auto_detect_images_dir).name}_stitched"
         self.assertTrue(stitched_dir.exists(), "Stitched directory should exist")
 
         # Check that at least one stitched image exists
