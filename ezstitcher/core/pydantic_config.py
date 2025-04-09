@@ -121,8 +121,8 @@ class ZStackProcessorConfig(BaseModel):
         False,
         description="Whether to stitch all Z-planes using reference positions"
     )
-    additional_projections: List[str] = Field(
-        default_factory=lambda: ["max"],
+    additional_projections: Optional[List[str]] = Field(
+        None,
         description="Types of additional projections to create"
     )
     focus_method: str = Field(
@@ -253,6 +253,10 @@ class ZStackProcessorConfig(BaseModel):
         # Handle deprecated projection_types
         if self.projection_types is not None:
             self.additional_projections = self.projection_types
+
+        # If additional_projections is None, use default value for internal processing
+        if self.additional_projections is None:
+            self.additional_projections = ["max"]
 
         # Set deprecated parameters for backward compatibility
         if isinstance(self.z_reference_function, str):
@@ -439,7 +443,7 @@ class ConfigPresets:
                 z_reference_function="best_focus",
                 focus_method="combined",
                 save_reference=True,
-                additional_projections=["max", "mean"]
+                additional_projections=None
             )
         )
 
@@ -451,7 +455,7 @@ class ConfigPresets:
                 z_reference_function="max_projection",
                 save_reference=True,
                 stitch_all_z_planes=True,
-                additional_projections=["max"]
+                additional_projections=None
             )
         )
 

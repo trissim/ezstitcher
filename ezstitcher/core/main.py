@@ -117,7 +117,7 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
             z_reference_function=z_reference_function,
             focus_method=focus_method,
             save_reference=save_reference,
-            additional_projections=additional_projections or ["max"],
+            additional_projections=additional_projections,
             stitch_all_z_planes=stitch_all_z_planes
         )
 
@@ -204,7 +204,7 @@ def modified_process_plate_folder(plate_folder, **kwargs):
             z_reference_function=kwargs.get('z_reference_function', 'max_projection'),
             focus_method=kwargs.get('focus_method', 'combined'),
             save_reference=kwargs.get('save_reference', True),
-            additional_projections=kwargs.get('additional_projections', ['max']),
+            additional_projections=kwargs.get('additional_projections', None),
             stitch_all_z_planes=kwargs.get('stitch_all_z_planes', False)
         )
 

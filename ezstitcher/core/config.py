@@ -63,7 +63,7 @@ class ZStackProcessorConfig:
     z_reference_function: Union[str, Callable[[List[Any]], Any]] = "max_projection"
     save_reference: bool = True
     stitch_all_z_planes: bool = False
-    additional_projections: List[str] = field(default_factory=lambda: ["max"])
+    additional_projections: Optional[List[str]] = None
     focus_method: str = "combined"
     focus_config: FocusAnalyzerConfig = field(default_factory=lambda: FocusAnalyzerConfig())
 
@@ -119,6 +119,10 @@ class ZStackProcessorConfig:
         # Handle deprecated projection_types
         if self.projection_types is not None:
             self.additional_projections = self.projection_types
+
+        # If additional_projections is None, use default value for internal processing
+        if self.additional_projections is None:
+            self.additional_projections = ["max"]
 
         # Set deprecated parameters for backward compatibility
         if isinstance(self.z_reference_function, str):
