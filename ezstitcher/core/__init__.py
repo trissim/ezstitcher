@@ -4,13 +4,7 @@ This module provides the core functionality for the ezstitcher package.
 """
 
 # Import main functions for backward compatibility
-from ezstitcher.core.main import (
-    process_plate_folder,
-    modified_process_plate_folder,
-    process_bf,
-    find_best_focus,
-    process_plate_folder_with_config
-)
+# Removed obsolete imports of non-existent functions from main.py
 
 # Import classes for instance-based API
 from ezstitcher.core.image_preprocessor import ImagePreprocessor

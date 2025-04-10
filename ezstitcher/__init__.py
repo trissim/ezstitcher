@@ -7,13 +7,7 @@ Z-stacks, multi-channel fluorescence, and advanced focus detection.
 __version__ = "0.1.0"
 
 # Import main functions for backward compatibility
-from ezstitcher.core import (
-    process_plate_folder,
-    modified_process_plate_folder,
-    process_bf,
-    find_best_focus,
-    process_plate_folder_with_config
-)
+# Removed obsolete imports of non-existent functions from ezstitcher.core
 
 # Import classes for instance-based API
 from ezstitcher.core import (
