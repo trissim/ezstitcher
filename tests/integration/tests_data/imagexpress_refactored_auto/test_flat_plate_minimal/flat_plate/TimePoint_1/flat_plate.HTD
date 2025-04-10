@@ -1,0 +1,25 @@
+"HTSInfoFile", Version 1.0
+"Description", "Synthetic microscopy data for testing"
+"PlateType", 6
+"TimePoints", 1
+"ZSeries", FALSE
+"ZSteps", 1
+"ZProjection", FALSE
+"XWells", 4
+"YWells", 3
+"WellsSelection1", TRUE, FALSE, FALSE, FALSE
+"WellsSelection2", FALSE, FALSE, FALSE, FALSE
+"WellsSelection3", FALSE, FALSE, FALSE, FALSE
+"Sites", TRUE
+"XSites", 2
+"YSites", 2
+"SiteSelection1", TRUE, TRUE
+"SiteSelection2", TRUE, TRUE
+"Waves", TRUE
+"NWavelengths", 2
+"WaveName1", "W1"
+"WaveCollect1", 1
+"WaveName2", "W2"
+"WaveCollect2", 1
+"UniquePlateIdentifier", "flat_plate-20250410-152300"
+"EndFile"

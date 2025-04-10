@@ -20,8 +20,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
 # Import synthetic data generator
-sys.path.append(os.path.join(parent_dir, 'utils'))
-from generate_synthetic_data import SyntheticMicroscopyGenerator
+from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 
 # Import core functionality
 from ezstitcher.core.plate_processor import PlateProcessor
