@@ -41,13 +41,14 @@ def flat_plate_dir(test_dir):
     plate_dir = test_dir / "flat_plate"
     generator = SyntheticMicroscopyGenerator(
         output_dir=str(plate_dir),
-        grid_size=(2, 2),
-        image_size=(256, 256),
+        grid_size=(3, 3),
         tile_size=(128, 128),
         overlap_percent=10,
         wavelengths=2,
         z_stack_levels=1,
-        format="ImageXpress"
+        cell_size_range=(5, 10),
+        format="ImageXpress",
+        auto_image_size=True  # Use auto-calculated image size
     )
     generator.generate_dataset()
 
@@ -64,13 +65,14 @@ def zstack_plate_dir(test_dir):
     plate_dir = test_dir / "zstack_plate"
     generator = SyntheticMicroscopyGenerator(
         output_dir=str(plate_dir),
-        grid_size=(2, 2),
-        image_size=(256, 256),
+        grid_size=(3, 3),
         tile_size=(128, 128),
         overlap_percent=10,
         wavelengths=2,
         z_stack_levels=5,
-        format="ImageXpress"
+        cell_size_range=(5, 10),
+        format="ImageXpress",
+        auto_image_size=True  # Use auto-calculated image size
     )
     generator.generate_dataset()
 

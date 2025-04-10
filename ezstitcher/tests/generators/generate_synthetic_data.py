@@ -9,9 +9,10 @@ This script generates synthetic microscopy images with the following features:
 - Proper tiling with configurable overlap
 - Realistic stage positioning errors
 - HTD file generation for metadata
+- Automatic image size calculation based on grid and tile parameters
 
 Usage:
-    python generate_synthetic_data.py output_dir --grid-size 3 3 --wavelengths 2 --z-stack 3
+    python generate_synthetic_data.py output_dir --grid-size 3 3 --wavelengths 2 --z-stack 3 --auto-image-size
 """
 
 import os
@@ -34,11 +35,11 @@ class SyntheticMicroscopyGenerator:
                  image_size=(1024, 1024),
                  tile_size=(512, 512),
                  overlap_percent=10,
-                 stage_error_px=5,
+                 stage_error_px=2,
                  wavelengths=2,
                  z_stack_levels=1,
                  z_step_size=1.0,
-                 num_cells=100,
+                 num_cells=50,
                  cell_size_range=(10, 30),
                  cell_eccentricity_range=(0.1, 0.5),
                  cell_intensity_range=(5000, 20000),
@@ -50,6 +51,7 @@ class SyntheticMicroscopyGenerator:
                  wavelength_backgrounds=None,  # Background intensities for each wavelength
                  wells=['A01'],  # List of wells to generate
                  format='ImageXpress',  # Format of the filenames ('ImageXpress' or 'OperaPhenix')
+                 auto_image_size=False,  # Automatically calculate image size based on grid and tile size
                  random_seed=None):
         """
         Initialize the synthetic microscopy generator.
@@ -95,14 +97,23 @@ class SyntheticMicroscopyGenerator:
                 Example: {1: 20000, 2: 10000}
             wavelength_backgrounds: Dictionary mapping wavelength indices to background intensities
                 Example: {1: 800, 2: 400}
+            wells: List of well IDs to generate (e.g., ['A01', 'A02'])
+            format: Format of the filenames ('ImageXpress' or 'OperaPhenix')
+            auto_image_size: If True, automatically calculate image size based on grid and tile parameters
             random_seed: Random seed for reproducibility
         """
         self.output_dir = Path(output_dir)
         self.grid_size = grid_size
-        self.image_size = image_size
         self.tile_size = tile_size
         self.overlap_percent = overlap_percent
         self.stage_error_px = stage_error_px
+
+        # Calculate image size if auto_image_size is True
+        if auto_image_size:
+            self.image_size = self._calculate_image_size(grid_size, tile_size, overlap_percent, stage_error_px)
+            print(f"Auto-calculated image size: {self.image_size[0]}x{self.image_size[1]}")
+        else:
+            self.image_size = image_size
         self.wavelengths = wavelengths
         self.z_stack_levels = z_stack_levels
         self.z_step_size = z_step_size
@@ -623,6 +634,34 @@ class SyntheticMicroscopyGenerator:
 
         return index_xml_path
 
+    def _calculate_image_size(self, grid_size, tile_size, overlap_percent, stage_error_px):
+        """
+        Calculate the appropriate image size based on grid dimensions, tile size, and overlap.
+
+        Args:
+            grid_size: Tuple of (rows, cols) for the grid of tiles
+            tile_size: Size of each tile (width, height)
+            overlap_percent: Percentage of overlap between tiles
+            stage_error_px: Random error in stage positioning (pixels)
+
+        Returns:
+            tuple: (width, height) of the calculated image size
+        """
+        # Calculate effective step size with overlap
+        step_x = int(tile_size[0] * (1 - overlap_percent / 100))
+        step_y = int(tile_size[1] * (1 - overlap_percent / 100))
+
+        # Calculate minimum required size
+        min_width = step_x * (grid_size[1] - 1) + tile_size[0]
+        min_height = step_y * (grid_size[0] - 1) + tile_size[1]
+
+        # Add margin for stage positioning errors
+        margin = stage_error_px * 2
+        width = min_width + margin
+        height = min_height + margin
+
+        return (width, height)
+
     def generate_dataset(self):
         """Generate the complete dataset."""
         print(f"Generating synthetic microscopy dataset in {self.output_dir}")
@@ -796,6 +835,8 @@ def main():
     parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
     parser.add_argument("--format", type=str, choices=['ImageXpress', 'OperaPhenix'], default='ImageXpress',
                       help="Format of the filenames (ImageXpress or OperaPhenix)")
+    parser.add_argument("--auto-image-size", action="store_true",
+                      help="Automatically calculate image size based on grid and tile parameters")
 
     # Add wavelength-specific parameter groups
     wavelength_group = parser.add_argument_group('wavelength-specific',
@@ -886,6 +927,7 @@ def main():
         noise_level=args.noise,
         wavelength_params=wavelength_params,
         format=args.format,
+        auto_image_size=args.auto_image_size,
         random_seed=args.seed
     )
 
