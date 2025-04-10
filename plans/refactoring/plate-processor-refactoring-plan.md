@@ -2,56 +2,62 @@
 
 ```
 Status: In Progress
-Progress: 0%
-Last Updated: 2023-04-09
+Progress: 20%
+Last Updated: 2025-04-10
 Dependencies: []
 ```
 
 ## Problem Analysis
 
-Based on the codebase review, one of the issues identified is that the `run` method in the `PlateProcessor` class is quite large (over 100 lines) and handles multiple responsibilities. This makes the code harder to understand, test, and maintain.
+### Description
+The `run` method in the `PlateProcessor` class is overly large and handles multiple responsibilities, making it difficult to maintain, test, and extend.
 
 ### Current Implementation
+- Initializes filename parser based on microscope type
+- Handles Opera Phenix file conversion
+- Creates output directories
+- Detects and processes Z-stacks
+- Finds HTD files and parses grid dimensions
+- Auto-detects patterns
+- Processes each well
+- Cleans up temporary folders
 
-The `run` method in `PlateProcessor` currently:
-1. Initializes the filename parser based on microscope type
-2. Handles Opera Phenix file conversion if needed
-3. Creates output directories
-4. Detects and processes Z-stacks
-5. Finds HTD files and parses grid dimensions
-6. Auto-detects patterns
-7. Processes each well
-8. Cleans up temporary folders
+### Constraints and Requirements
+- Must support both Opera Phenix and ImageXpress data
+- Maintain backward compatibility with existing workflows
+- Avoid breaking existing API
+- Ensure all existing tests pass post-refactor
 
-This is too many responsibilities for a single method and violates the Single Responsibility Principle.
+### Potential Edge Cases
+- Missing or corrupt HTD files
+- Mixed microscope data in one plate
+- Unexpected file naming conventions
+- Empty or partially transferred folders
+- Z-stack detection failures
 
-### Requirements
-
-1. Break down the `run` method into smaller, more focused methods
-2. Maintain the same functionality
-3. Improve readability and maintainability
-4. Ensure all tests pass after the changes
+---
 
 ## High-Level Solution
 
-The solution involves:
+### Architectural Overview
+Refactor `PlateProcessor.run()` into a **modular pipeline** with clear, single-responsibility private methods. This will improve readability, maintainability, and testability.
 
-1. Identifying logical sections in the `run` method
-2. Extracting these sections into separate private methods
-3. Updating the `run` method to call these new methods
-4. Ensuring proper error handling throughout
+### Component Interactions
+- `PlateProcessor` orchestrates the workflow
+- Delegates filename parsing to `FilenameParser`
+- Uses `ZStackProcessor` for Z-stack detection
+- Calls conversion utilities for Opera Phenix data
+- Manages output directory creation and cleanup
 
-### Proposed Method Structure
+### Pseudo-code for Key Algorithm
 
 ```python
 def run(self, plate_folder):
-    """Main entry point for processing a plate folder."""
     try:
         plate_path = self._initialize_and_validate(plate_folder)
         self._initialize_filename_parser(plate_path)
         self._handle_opera_phenix_conversion(plate_path)
         dirs = self._create_output_directories(plate_path)
-        
         has_zstack = self.zstack_processor.detect_z_stacks(plate_folder)
         if has_zstack:
             return self._process_zstack_plate(plate_path, dirs)
@@ -61,112 +67,81 @@ def run(self, plate_folder):
         logger.error(f"Error in PlateProcessor.run: {e}", exc_info=True)
         return False
 ```
+
+### Data Flow Diagram (to be created)
+- Input: Plate folder path
+- Output: Processed stitched images and metadata
+- Intermediate: Converted files, temporary folders, logs
+
+---
 
 ## Implementation Details
 
 ### Files to Modify
-
-Based on the codebase review, the main file to modify is:
 - `ezstitcher/core/plate_processor.py`
 
 ### New Methods to Create
+- `_initialize_and_validate`
+- `_initialize_filename_parser`
+- `_handle_opera_phenix_conversion`
+- `_create_output_directories`
+- `_process_zstack_plate`
+- `_process_regular_plate`
+- `_process_well_wavelengths`
 
-1. `_initialize_and_validate(self, plate_folder)`: Validates the plate folder and returns the Path object
-2. `_initialize_filename_parser(self, plate_path)`: Initializes the filename parser based on microscope type
-3. `_handle_opera_phenix_conversion(self, plate_path)`: Handles Opera Phenix file conversion if needed
-4. `_create_output_directories(self, plate_path)`: Creates output directories and returns them
-5. `_process_zstack_plate(self, plate_path, dirs)`: Processes a plate with Z-stacks
-6. `_process_regular_plate(self, plate_path, dirs)`: Processes a regular plate without Z-stacks
-7. `_process_well_wavelengths(self, well, wavelength_patterns, dirs, grid_dims)`: Processes wavelengths for a well
+### API Specifications
+Each new private method will:
+- Accept clearly defined inputs (e.g., `Path`, config objects)
+- Return well-defined outputs (e.g., bool, dict, Path)
+- Raise exceptions on failure, handled in `run()`
 
-### Sample Implementation
+### Data Structures
+- `config`: PlateProcessorConfig object
+- `plate_path`: Path object
+- `dirs`: dict of output directories
+- `filename_parser`: instance of parser class
+- `zstack_processor`: instance of ZStackProcessor
 
-Here's a sample of how the refactored code might look:
+### Error Handling Strategies
+- Use try/except in `run()` to catch and log errors
+- Raise specific exceptions in private methods for invalid inputs
+- Log warnings for recoverable issues (e.g., missing files)
 
-```python
-def run(self, plate_folder):
-    """
-    Process a plate folder with microscopy images.
-
-    Args:
-        plate_folder (str or Path): Path to the plate folder
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    try:
-        plate_path = self._initialize_and_validate(plate_folder)
-        self._initialize_filename_parser(plate_path)
-        self._handle_opera_phenix_conversion(plate_path)
-        dirs = self._create_output_directories(plate_path)
-        
-        has_zstack = self.zstack_processor.detect_z_stacks(plate_folder)
-        if has_zstack:
-            return self._process_zstack_plate(plate_path, dirs)
-        else:
-            return self._process_regular_plate(plate_path, dirs)
-    except Exception as e:
-        logger.error(f"Error in PlateProcessor.run: {e}", exc_info=True)
-        return False
-
-def _initialize_and_validate(self, plate_folder):
-    """
-    Initialize and validate the plate folder.
-
-    Args:
-        plate_folder (str or Path): Path to the plate folder
-
-    Returns:
-        Path: Path object for the plate folder
-    """
-    plate_path = Path(plate_folder)
-    if not plate_path.exists():
-        raise ValueError(f"Plate folder does not exist: {plate_path}")
-    return plate_path
-
-def _initialize_filename_parser(self, plate_path):
-    """
-    Initialize the filename parser based on microscope type.
-
-    Args:
-        plate_path (Path): Path to the plate folder
-    """
-    config = self.config
-    if config.microscope_type.lower() == 'auto':
-        # Auto-detect the microscope type from the filenames
-        sample_files = self.fs_manager.list_image_files(plate_path, extensions=['.tif', '.tiff', '.TIF', '.TIFF'])[:10]
-        sample_files = [Path(f).name for f in sample_files]
-        
-        if not sample_files:
-            logger.warning(f"No image files found in {plate_path}, cannot auto-detect microscope type")
-            self.filename_parser = ImageXpressFilenameParser()
-        else:
-            self.filename_parser = detect_parser(sample_files)
-            logger.info(f"Auto-detected microscope type: {self.filename_parser.__class__.__name__}")
-    elif config.microscope_type.lower() == 'imagexpress':
-        self.filename_parser = ImageXpressFilenameParser()
-    elif config.microscope_type.lower() == 'operaphenix':
-        self.filename_parser = OperaPhenixFilenameParser()
-    else:
-        raise ValueError(f"Unsupported microscope type: {config.microscope_type}")
-```
-
-### Testing Strategy
-
-1. Run the existing tests to ensure they pass with the current implementation
-2. Refactor the code one method at a time
-3. Run the tests after each change to identify any issues
-4. Fix any issues that arise
-5. Continue until all methods are refactored
+---
 
 ## Validation
 
-The changes should not affect the behavior of the `PlateProcessor` class, as we're only reorganizing the code, not changing its logic. The tests should continue to pass after the changes.
+### Similarity Check
+- Compare refactored output with current implementation on test datasets
+
+### Potential Conflicts
+- Changes in internal method signatures should not affect public API
+- Ensure compatibility with both Opera Phenix and ImageXpress workflows
+
+### Performance Considerations
+- Refactoring should not introduce significant overhead
+- Profile before and after to confirm
+
+### Testing Approach
+- Run existing test suite after each incremental change
+- Add new unit tests for extracted private methods
+- Use sample datasets for both microscope types
+
+---
+
+## References
+
+- [[plans/refactoring/zstack-processor-refactoring-plan.md]]
+- [[plans/refactoring/code-smells-and-refactoring-plan.md]]
+- [[plans/features/opera-phenix-support-plan.md]]
+
+---
 
 ## Next Steps
 
-1. Examine the current implementation in detail
-2. Create a backup of the current code
-3. Implement the changes one method at a time
-4. Run tests after each change
-5. Document any issues encountered and their solutions
+1. Create a backup branch
+2. Incrementally extract private methods
+3. Add unit tests for new methods
+4. Run full test suite after each step
+5. Update documentation if needed
+6. Mark plan as complete when done
