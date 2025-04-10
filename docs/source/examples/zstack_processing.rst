@@ -8,14 +8,16 @@ Best Focus Detection
 
 .. code-block:: python
 
-    from ezstitcher.core import process_plate_folder
+    from ezstitcher.core.main import process_plate_auto
 
     # Process Z-stack data with best focus detection
-    process_plate_folder(
+    process_plate_auto(
         'path/to/plate_folder',
-        reference_channels=["1"],
-        focus_detect=True,
-        focus_method="combined"
+        **{
+            "reference_channels": ["1"],
+            "z_stack_processor.focus_detect": True,
+            "z_stack_processor.focus_method": "combined"
+        }
     )
 
 Z-Stack Projections
@@ -23,14 +25,16 @@ Z-Stack Projections
 
 .. code-block:: python
 
-    from ezstitcher.core import process_plate_folder
+    from ezstitcher.core.main import process_plate_auto
 
     # Process Z-stack data with projections
-    process_plate_folder(
+    process_plate_auto(
         'path/to/plate_folder',
-        reference_channels=["1"],
-        create_projections=True,
-        projection_types=["max", "mean", "std"]
+        **{
+            "reference_channels": ["1"],
+            "z_stack_processor.create_projections": True,
+            "z_stack_processor.projection_types": ["max", "mean", "std"]
+        }
     )
 
 Per-Plane Z-Stack Stitching
@@ -38,17 +42,19 @@ Per-Plane Z-Stack Stitching
 
 .. code-block:: python
 
-    from ezstitcher.core import process_plate_folder
+    from ezstitcher.core.main import process_plate_auto
 
     # Process Z-stack data with per-plane stitching
-    process_plate_folder(
+    process_plate_auto(
         'path/to/plate_folder',
-        reference_channels=["1"],
-        tile_overlap=10,
-        create_projections=True,          # Create projections for position detection
-        projection_types=["max"],         # Use max projection
-        stitch_z_reference="max",         # Use max projection for reference positions
-        stitch_all_z_planes=True          # Stitch each Z-plane using the same positions
+        **{
+            "reference_channels": ["1"],
+            "stitcher.tile_overlap": 10,
+            "z_stack_processor.create_projections": True,          # Create projections for position detection
+            "z_stack_processor.projection_types": ["max"],         # Use max projection
+            "z_stack_processor.stitch_z_reference": "max",         # Use max projection for reference positions
+            "z_stack_processor.stitch_all_z_planes": True          # Stitch each Z-plane using the same positions
+        }
     )
 
 Custom Projection Function
@@ -57,8 +63,7 @@ Custom Projection Function
 .. code-block:: python
 
     import numpy as np
-    from ezstitcher.core.config import ZStackProcessorConfig, PlateProcessorConfig
-    from ezstitcher.core.plate_processor import PlateProcessor
+    from ezstitcher.core.main import process_plate_auto
 
     # Define a custom projection function
     def weighted_projection(z_stack):
@@ -86,21 +91,17 @@ Custom Projection Function
         # Return the sum
         return np.sum(weighted_stack, axis=0) / np.sum(weights)
 
-    # Create configuration
-    zstack_config = ZStackProcessorConfig(
-        create_projections=True,
-        stitch_z_reference=weighted_projection,  # Use custom function
-        stitch_all_z_planes=True
+    # Process Z-stack data with custom projection function
+    process_plate_auto(
+        'path/to/plate_folder',
+        **{
+            "reference_channels": ["1"],
+            "stitcher.tile_overlap": 10,
+            "z_stack_processor.create_projections": True,
+            "z_stack_processor.stitch_z_reference": weighted_projection,  # Use custom function
+            "z_stack_processor.stitch_all_z_planes": True
+        }
     )
-
-    plate_config = PlateProcessorConfig(
-        reference_channels=["1"],
-        z_stack_processor=zstack_config
-    )
-
-    # Create and run the plate processor
-    processor = PlateProcessor(plate_config)
-    processor.run("path/to/plate_folder")
 
 Percentile Normalized Projection
 ------------------------------
@@ -108,8 +109,7 @@ Percentile Normalized Projection
 .. code-block:: python
 
     import numpy as np
-    from ezstitcher.core.config import ZStackProcessorConfig, PlateProcessorConfig
-    from ezstitcher.core.plate_processor import PlateProcessor
+    from ezstitcher.core.main import process_plate_auto
     from ezstitcher.core.image_preprocessor import ImagePreprocessor
 
     # Create an ImagePreprocessor instance
@@ -141,20 +141,14 @@ Percentile Normalized Projection
 
         return projection
 
-    # Create Z-stack processor configuration with the custom projection function
-    zstack_config = ZStackProcessorConfig(
-        create_projections=True,
-        projection_types=["max"],  # Standard projections to create
-        stitch_z_reference=percentile_normalized_projection,  # Use our custom function for stitching
-        stitch_all_z_planes=True  # Stitch each Z-plane using the same positions
+    # Process Z-stack data with custom projection function
+    process_plate_auto(
+        'path/to/plate_folder',
+        **{
+            "reference_channels": ["1"],  # Use channel 1 as reference
+            "z_stack_processor.create_projections": True,
+            "z_stack_processor.projection_types": ["max"],  # Standard projections to create
+            "z_stack_processor.stitch_z_reference": percentile_normalized_projection,  # Use our custom function for stitching
+            "z_stack_processor.stitch_all_z_planes": True  # Stitch each Z-plane using the same positions
+        }
     )
-
-    # Create plate processor configuration
-    plate_config = PlateProcessorConfig(
-        reference_channels=["1"],  # Use channel 1 as reference
-        z_stack_processor=zstack_config
-    )
-
-    # Create and run the plate processor
-    processor = PlateProcessor(plate_config)
-    processor.run("path/to/plate_folder")

@@ -16,14 +16,17 @@ Python API
 
 .. code-block:: python
 
-    from ezstitcher.core import process_plate_folder
+    from ezstitcher.core.main import process_plate_auto
 
-    # Process a plate folder with basic stitching
-    process_plate_folder(
+    # Process a plate folder with basic stitching (auto-detects microscope type)
+    process_plate_auto(
         'path/to/plate_folder',
-        reference_channels=["1"],
-        tile_overlap=10,
-        max_shift=50
+        microscope_type="auto",  # This is the default, so you can omit it
+        **{
+            "reference_channels": ["1"],
+            "stitcher.tile_overlap": 10,
+            "stitcher.max_shift": 50
+        }
     )
 
 Object-Oriented API

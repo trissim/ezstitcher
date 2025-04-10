@@ -82,6 +82,9 @@ ezstitcher /path/to/plate_folder
 # Specify microscope type
 ezstitcher /path/to/plate_folder --microscope-type ImageXpress
 
+# Process Opera Phenix data
+ezstitcher /path/to/plate_folder/Images --microscope-type OperaPhenix
+
 # Process a plate folder
 ezstitcher /path/to/plate_folder --reference-channels 1 2 --tile-overlap 10
 
@@ -461,6 +464,12 @@ The following features have been thoroughly tested and verified:
 - ashlar
 - opencv-python
 - pytest (for running tests)
+
+## Documentation
+
+- [Opera Phenix Support](docs/opera_phenix_support.md)
+- [Auto-Detection](docs/auto_detection.md)
+- [Workflow Diagrams](docs/workflow_diagram.md)
 
 ## License
 
