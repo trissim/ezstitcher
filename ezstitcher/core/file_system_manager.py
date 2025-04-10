@@ -7,6 +7,7 @@ This module provides a class for managing file system operations.
 import os
 import re
 import logging
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
@@ -15,7 +16,8 @@ import numpy as np
 from ezstitcher.core.filename_parser import FilenameParser, ImageXpressFilenameParser
 from ezstitcher.core.csv_handler import CSVHandler
 from ezstitcher.core.pattern_matcher import PatternMatcher
-from ezstitcher.core.directory_manager import DirectoryManager
+from ezstitcher.core.directory_structure_manager import DirectoryStructureManager
+from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
 
 logger = logging.getLogger(__name__)
@@ -42,7 +44,7 @@ class FileSystemManager:
         self.filename_parser = filename_parser or ImageXpressFilenameParser()
         self.csv_handler = CSVHandler()
         self.pattern_matcher = PatternMatcher(self.filename_parser)
-        self.directory_manager = DirectoryManager()
+        self.dir_structure_manager = None  # Will be initialized when needed
 
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
         """
@@ -54,7 +56,9 @@ class FileSystemManager:
         Returns:
             Path: Path object for the directory
         """
-        return self.directory_manager.ensure_directory(directory)
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
 
     def list_image_files(self, directory: Union[str, Path],
                          extensions: Optional[List[str]] = None) -> List[Path]:
@@ -503,13 +507,110 @@ class FileSystemManager:
         """
         Find all wells in the timepoint directory.
 
+        Deprecated: Use initialize_dir_structure(plate_folder).get_wells() instead.
+
         Args:
             timepoint_dir (str or Path): Path to the TimePoint_1 directory
 
         Returns:
             list: List of well names (e.g., ['A01', 'A02', ...])
         """
-        return self.directory_manager.find_wells(timepoint_dir)
+        warnings.warn(
+            "FileSystemManager.find_wells() is deprecated. Use initialize_dir_structure(plate_folder).get_wells() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        # Initialize directory structure manager for the parent directory
+        dir_structure = self.initialize_dir_structure(Path(timepoint_dir).parent)
+
+        # Return wells
+        return dir_structure.get_wells()
+
+    def initialize_dir_structure(self, plate_folder: Union[str, Path]) -> DirectoryStructureManager:
+        """
+        Initialize the directory structure manager for a plate folder.
+
+        Args:
+            plate_folder: Path to the plate folder
+
+        Returns:
+            DirectoryStructureManager instance
+        """
+        timepoint_dir_name = getattr(self.config, 'timepoint_dir_name', "TimePoint_1")
+        self.dir_structure_manager = DirectoryStructureManager(
+            plate_folder,
+            self.filename_parser,
+            timepoint_dir_name
+        )
+        return self.dir_structure_manager
+
+    def get_image_path(self, plate_folder: Union[str, Path], well: str, site: int,
+                      channel: int, z_index: Optional[int] = None) -> Optional[Path]:
+        """
+        Get the path to an image based on its metadata.
+
+        Args:
+            plate_folder: Path to the plate folder
+            well: Well ID (e.g., 'A01' or 'R01C01')
+            site: Site number
+            channel: Channel number
+            z_index: Z-index (optional)
+
+        Returns:
+            Path to the image if found, None otherwise
+        """
+        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
+            self.initialize_dir_structure(plate_folder)
+        return self.dir_structure_manager.get_image_path(well, site, channel, z_index)
+
+    def list_images_by_metadata(self, plate_folder: Union[str, Path], well: Optional[str] = None,
+                              site: Optional[int] = None, channel: Optional[int] = None,
+                              z_index: Optional[int] = None) -> List[Path]:
+        """
+        List images matching the specified metadata criteria.
+
+        Args:
+            plate_folder: Path to the plate folder
+            well: Well ID (optional)
+            site: Site number (optional)
+            channel: Channel number (optional)
+            z_index: Z-index (optional)
+
+        Returns:
+            List of Path objects for matching images
+        """
+        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
+            self.initialize_dir_structure(plate_folder)
+        return self.dir_structure_manager.list_images(well, site, channel, z_index)
+
+    def get_timepoint_dir(self, plate_folder: Union[str, Path]) -> Optional[Path]:
+        """
+        Get the path to the TimePoint directory if it exists.
+
+        Args:
+            plate_folder: Path to the plate folder
+
+        Returns:
+            Path to the TimePoint directory if found, None otherwise
+        """
+        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
+            self.initialize_dir_structure(plate_folder)
+        return self.dir_structure_manager.get_timepoint_dir()
+
+    def get_z_stack_dirs(self, plate_folder: Union[str, Path]) -> List[Tuple[int, Path]]:
+        """
+        Get the paths to Z-stack directories if they exist.
+
+        Args:
+            plate_folder: Path to the plate folder
+
+        Returns:
+            List of (z_index, directory) tuples
+        """
+        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
+            self.initialize_dir_structure(plate_folder)
+        return self.dir_structure_manager.get_z_stack_dirs()
 
     def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
         """
@@ -520,7 +621,19 @@ class FileSystemManager:
             base_name (str): Base name of the plate folder
             keep_suffixes (list, optional): List of suffixes to keep
         """
-        self.directory_manager.clean_temp_folders(parent_dir, base_name, keep_suffixes)
+        parent_dir = Path(parent_dir)
+        if keep_suffixes is None:
+            keep_suffixes = ['_stitched', '_positions']
+
+        # Find all folders with the base name and a suffix
+        for item in parent_dir.iterdir():
+            if item.is_dir() and item.name.startswith(base_name) and item.name != base_name:
+                # Check if the suffix should be kept
+                suffix = item.name[len(base_name):]
+                if suffix not in keep_suffixes:
+                    logger.info(f"Removing temporary folder: {item}")
+                    import shutil
+                    shutil.rmtree(item)
 
     def create_output_directories(self, parent_dir, plate_name, suffixes):
         """
@@ -534,7 +647,16 @@ class FileSystemManager:
         Returns:
             dict: Dictionary mapping directory types to Path objects
         """
-        return self.directory_manager.create_output_directories(parent_dir, plate_name, suffixes)
+        parent_dir = Path(parent_dir)
+        dirs = {}
+
+        # Create directories for each suffix
+        for dir_type, suffix in suffixes.items():
+            dir_path = parent_dir / f"{plate_name}{suffix}"
+            self.ensure_directory(dir_path)
+            dirs[dir_type] = dir_path
+
+        return dirs
 
     def parse_filename(self, filename):
         """

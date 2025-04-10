@@ -196,11 +196,7 @@ class StitchingConfig:
     margin_ratio: float = 0.1
 
 
-@dataclass
-class ZStackConfig:
-    focus_method: str = "combined"
-    projection_types: List[str] = field(default_factory=lambda: ["max"])
-    select_best_focus: bool = True
+# ZStackConfig has been removed as it's been replaced by ZStackProcessorConfig
 
 
 @dataclass
@@ -213,5 +209,5 @@ class FocusConfig:
 class PlateConfig:
     plate_folder: str = ""
     stitching: StitchingConfig = field(default_factory=StitchingConfig)
-    zstack: ZStackConfig = field(default_factory=ZStackConfig)
+    zstack: ZStackProcessorConfig = field(default_factory=ZStackProcessorConfig)
     focus: FocusConfig = field(default_factory=FocusConfig)

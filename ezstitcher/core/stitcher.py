@@ -16,7 +16,9 @@ from ashlar import fileseries, reg
 
 from ezstitcher.core.config import StitcherConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
-from ezstitcher.core.utils import create_linear_weight_mask
+from ezstitcher.core.image_preprocessor import create_linear_weight_mask
+from ezstitcher.core.pattern_matcher import PatternMatcher
+from ezstitcher.core.filename_parser import FilenameParser
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +31,17 @@ class Stitcher:
     Class for handling image stitching operations.
     """
 
-    def __init__(self, config: Optional[StitcherConfig] = None):
+    def __init__(self, config: Optional[StitcherConfig] = None, filename_parser: Optional[FilenameParser] = None):
         """
         Initialize the Stitcher.
 
         Args:
             config (StitcherConfig): Configuration for stitching
+            filename_parser (FilenameParser): Parser for microscopy filenames
         """
         self.config = config or StitcherConfig()
         self.fs_manager = FileSystemManager()
+        self.pattern_matcher = PatternMatcher(filename_parser)
 
     def generate_positions_df(self, image_dir, image_pattern, positions, grid_size_x, grid_size_y):
         """
@@ -94,8 +98,8 @@ class Stitcher:
         Returns:
             dict: Dictionary mapping wells to wavelength patterns
         """
-        # Use the PatternMatcher class through the FileSystemManager
-        patterns_by_well = self.fs_manager.auto_detect_patterns(folder_path, well_filter)
+        # Use the PatternMatcher directly with the filename parser
+        patterns_by_well = self.pattern_matcher.auto_detect_patterns(folder_path, well_filter)
 
         # Convert wavelength keys to strings for backward compatibility
         for well, wavelength_patterns in patterns_by_well.items():
@@ -150,6 +154,20 @@ class Stitcher:
 
                     # Use processed directory for reference
                     ref_dir = processed_dir
+
+                # Check if the pattern has .tif extension, but files have .tiff extension
+                if ref_pattern.endswith('.tif') and not self.fs_manager.path_list_from_pattern(ref_dir, ref_pattern):
+                    # Try with .tiff extension
+                    tiff_pattern = ref_pattern[:-4] + '.tiff'
+                    if self.fs_manager.path_list_from_pattern(ref_dir, tiff_pattern):
+                        ref_pattern = tiff_pattern
+                        # Update the pattern in the wavelength_patterns dictionary
+                        wavelength_patterns[ref_channel] = tiff_pattern
+                        # Update all patterns to use .tiff extension
+                        for channel, pattern in wavelength_patterns.items():
+                            if pattern.endswith('.tif'):
+                                wavelength_patterns[channel] = pattern[:-4] + '.tiff'
+                                updated_patterns[channel] = pattern[:-4] + '.tiff'
 
                 logger.info(f"Using single reference channel {ref_channel} with pattern {ref_pattern}")
                 return ref_channel, ref_pattern, ref_dir, updated_patterns
@@ -414,6 +432,26 @@ class Stitcher:
         Returns:
             bool: True if successful, False otherwise
         """
+        return self._generate_positions_ashlar(image_dir, image_pattern, positions_path, grid_size_x, grid_size_y)
+
+    def _generate_positions_ashlar(self, image_dir: Union[str, Path],
+                                 image_pattern: str,
+                                 positions_path: Union[str, Path],
+                                 grid_size_x: int,
+                                 grid_size_y: int) -> bool:
+        """
+        Generate positions for stitching using Ashlar.
+
+        Args:
+            image_dir (str or Path): Directory containing images
+            image_pattern (str): Pattern with '{iii}' placeholder
+            positions_path (str or Path): Path to save positions CSV
+            grid_size_x (int): Number of tiles horizontally
+            grid_size_y (int): Number of tiles vertically
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
         try:
             image_dir = Path(image_dir)
             positions_path = Path(positions_path)
@@ -433,6 +471,39 @@ class Stitcher:
             # Replace {iii} with {series} for Ashlar
             ashlar_pattern = image_pattern.replace("{iii}", "{series}")
             logger.info(f"Using pattern: {ashlar_pattern} for ashlar")
+
+            # Check if the pattern has .tif extension, but files have .tiff extension
+            if image_pattern.endswith('.tif') and not self.fs_manager.path_list_from_pattern(image_dir, image_pattern):
+                # Try with .tiff extension
+                tiff_pattern = image_pattern[:-4] + '.tiff'
+                if self.fs_manager.path_list_from_pattern(image_dir, tiff_pattern):
+                    image_pattern = tiff_pattern
+                    ashlar_pattern = image_pattern.replace("{iii}", "{series}")
+                    logger.info(f"Updated pattern to: {ashlar_pattern} for ashlar")
+
+            # Check if the pattern needs to include _z001 suffix
+            if '_z' not in image_pattern:
+                # Try with _z001 suffix
+                z_pattern = image_pattern.replace('.tif', '_z001.tif')
+                if self.fs_manager.path_list_from_pattern(image_dir, z_pattern):
+                    image_pattern = z_pattern
+                    ashlar_pattern = image_pattern.replace("{iii}", "{series}")
+                    logger.info(f"Updated pattern to include _z001 suffix: {ashlar_pattern} for ashlar")
+
+            # Check if there are enough files for the grid size
+            files = self.fs_manager.path_list_from_pattern(image_dir, image_pattern)
+
+            # If no files found, check for TimePoint_1 subdirectory
+            if len(files) < grid_size_x * grid_size_y and (image_dir / "TimePoint_1").exists():
+                timepoint_dir = image_dir / "TimePoint_1"
+                files = self.fs_manager.path_list_from_pattern(timepoint_dir, image_pattern)
+                if len(files) >= grid_size_x * grid_size_y:
+                    logger.info(f"Using TimePoint_1 directory for images: {timepoint_dir}")
+                    image_dir = timepoint_dir
+
+            if len(files) < grid_size_x * grid_size_y:
+                logger.error(f"Not enough files for grid size {grid_size_x}x{grid_size_y}. Found {len(files)} files.")
+                return False
 
             # Create a FileSeriesReader for the images
             fs_reader = fileseries.FileSeriesReader(
@@ -484,7 +555,7 @@ class Stitcher:
             return True
 
         except Exception as e:
-            logger.error(f"Error in generate_positions: {e}")
+            logger.error(f"Error in generate_positions_ashlar: {e}")
             return False
 
     def assemble_image(self, positions_path: Union[str, Path],
