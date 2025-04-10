@@ -77,3 +77,6 @@ docs/build/
 *.log
 *.tmp
 commit_message.txt
+cleanup*.sh
+cleanup*.py
+get-pip.py
