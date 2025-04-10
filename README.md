@@ -109,13 +109,11 @@ ezstitcher /path/to/plate_folder --wells A01 B02 C03
 from ezstitcher.core.main import process_plate_auto
 
 # Process a single plate folder with all features (auto-detects microscope type)
-process_plate_auto(
+success = process_plate_auto(
     'path/to/plate_folder',
     microscope_type="auto",  # This is the default, so you can omit it
     **{
         "reference_channels": ["1", "2"],
-        "stitcher.tile_overlap": 10,
-        "stitcher.max_shift": 50,
         "z_stack_processor.focus_detect": True,                # Enable best focus detection for Z-stacks
         "z_stack_processor.focus_method": "combined",          # Use combined focus metrics
         "z_stack_processor.create_projections": True,          # Create Z-stack projections
@@ -124,6 +122,7 @@ process_plate_auto(
         "z_stack_processor.stitch_all_z_planes": True          # Stitch all Z-planes using projection-derived positions
     }
 )
+assert success, "Comprehensive processing failed"
 ```
 
 ### Basic Stitching (No Z-stacks)
@@ -132,14 +131,12 @@ process_plate_auto(
 from ezstitcher.core.main import process_plate_auto
 
 # Process a plate folder without Z-stack handling
-process_plate_auto(
+success = process_plate_auto(
     'path/to/plate_folder',
-    **{
-        "reference_channels": ["1"],
-        "stitcher.tile_overlap": 10,
-        "stitcher.max_shift": 50
-    }
+    microscope_type="auto",  # This is the default, so you can omit it
+    **{"reference_channels": ["1"]}
 )
+assert success, "Flat plate processing failed"
 ```
 
 ### Opera Phenix Support
@@ -148,24 +145,20 @@ process_plate_auto(
 from ezstitcher.core.main import process_plate_auto
 
 # Process Opera Phenix data (explicitly specify microscope type)
-process_plate_auto(
+success = process_plate_auto(
     'path/to/opera_phenix_data',
     microscope_type='OperaPhenix',
-    **{
-        "reference_channels": ["1"],
-        "stitcher.tile_overlap": 10.0
-    }
+    **{"reference_channels": ["1"]}
 )
+assert success, "Opera Phenix processing failed"
 
 # Auto-detect Opera Phenix data
-process_plate_auto(
+success = process_plate_auto(
     'path/to/opera_phenix_data',
     # microscope_type defaults to 'auto'
-    **{
-        "reference_channels": ["1"],
-        "stitcher.tile_overlap": 10.0
-    }
+    **{"reference_channels": ["1"]}
 )
+assert success, "Opera Phenix auto-detection processing failed"
 ```
 
 ### Multi-Channel Reference Stitching
@@ -174,13 +167,26 @@ process_plate_auto(
 from ezstitcher.core.main import process_plate_auto
 
 # Process using multiple reference channels
-process_plate_auto(
+success = process_plate_auto(
     'path/to/plate_folder',
-    **{
-        "reference_channels": ["1", "2"],
-        "stitcher.tile_overlap": 10
-    }
+    microscope_type="auto",  # Use auto-detection instead of "ImageXpress"
+    **{"reference_channels": ["1", "2"]}
 )
+assert success, "Multi-channel reference processing failed"
+```
+
+### Z-Stack Projection
+
+```python
+from ezstitcher.core.main import process_plate_auto
+
+# Process Z-stack data with projection
+success = process_plate_auto(
+    'path/to/plate_folder',
+    microscope_type="auto",  # Use auto-detection instead of "ImageXpress"
+    **{"z_stack_processor.create_projections": True}
+)
+assert success, "Z-stack projection processing failed"
 ```
 
 ### Z-Stack Per-Plane Stitching
@@ -189,17 +195,12 @@ process_plate_auto(
 from ezstitcher.core.main import process_plate_auto
 
 # Process Z-stack data with per-plane stitching
-process_plate_auto(
+success = process_plate_auto(
     'path/to/plate_folder',
-    **{
-        "reference_channels": ["1"],
-        "stitcher.tile_overlap": 10,
-        "z_stack_processor.create_projections": True,          # Create projections for position detection
-        "z_stack_processor.projection_types": ["max"],         # Use max projection
-        "z_stack_processor.stitch_z_reference": "max",         # Use max projection for reference positions
-        "z_stack_processor.stitch_all_z_planes": True          # Stitch each Z-plane using the same positions
-    }
+    microscope_type="auto",  # Use auto-detection instead of "ImageXpress"
+    **{"z_stack_processor.stitch_all_z_planes": True}
 )
+assert success, "Z-stack per-plane processing failed"
 ```
 
 ### Custom Z-Stack Projection Function
