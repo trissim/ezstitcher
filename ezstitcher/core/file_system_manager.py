@@ -75,13 +75,9 @@ class FileSystemManager:
         if extensions is None:
             extensions = self.default_extensions
 
-        directory = Path(directory)
-        image_files = []
-
-        for ext in extensions:
-            image_files.extend(list(directory.glob(f"*{ext}")))
-
-        return sorted(image_files)
+        # Use ImageLocator to find images
+        from ezstitcher.core.image_locator import ImageLocator
+        return ImageLocator.find_images_in_directory(directory, extensions)
 
     def path_list_from_pattern(self, directory: Union[str, Path], pattern: str) -> List[str]:
         """

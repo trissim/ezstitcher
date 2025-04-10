@@ -5,7 +5,10 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
 
-from ezstitcher.core.config import PlateProcessorConfig
+from ezstitcher.core.config import (
+    PlateProcessorConfig, StitcherConfig, ZStackProcessorConfig,
+    FocusAnalyzerConfig, ImagePreprocessorConfig
+)
 from ezstitcher.core.zstack_processor import ZStackProcessor
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
@@ -20,16 +23,71 @@ class PlateProcessor:
     High-level orchestrator for processing a microscopy plate.
     Coordinates Z-stack handling, stitching, and output management.
     """
-    def __init__(self, config: PlateProcessorConfig):
-        self.config = config
+    def __init__(self, config: Optional[PlateProcessorConfig] = None):
+        # Create default config if none provided
+        if config is None:
+            logger.info("No config provided, using default configuration")
+            self.config = PlateProcessorConfig()
+        else:
+            self.config = config
+
         self.filename_parser = None  # Will be initialized in run() based on microscope_type
         self.fs_manager = FileSystemManager()
-        self.zstack_processor = ZStackProcessor(config.z_stack_processor)  # Will be updated in run()
-        self.focus_analyzer = FocusAnalyzer(config.focus_analyzer)
-        self.image_preprocessor = ImagePreprocessor(config.image_preprocessor)
-        self.stitcher = Stitcher(config.stitcher)  # Will be updated in run()
+
+        # Initialize components with auto-detection for missing configs
+        if not hasattr(self.config, 'z_stack_processor') or self.config.z_stack_processor is None:
+            logger.info("No z_stack_processor config provided, using default")
+            self.config.z_stack_processor = ZStackProcessorConfig()
+
+        if not hasattr(self.config, 'focus_analyzer') or self.config.focus_analyzer is None:
+            logger.info("No focus_analyzer config provided, using default")
+            self.config.focus_analyzer = FocusAnalyzerConfig()
+
+        if not hasattr(self.config, 'image_preprocessor') or self.config.image_preprocessor is None:
+            logger.info("No image_preprocessor config provided, using default")
+            self.config.image_preprocessor = ImagePreprocessorConfig()
+
+        if not hasattr(self.config, 'stitcher') or self.config.stitcher is None:
+            logger.info("No stitcher config provided, using default")
+            self.config.stitcher = StitcherConfig()
+
+        # Initialize component objects
+        self.zstack_processor = ZStackProcessor(self.config.z_stack_processor)
+        self.focus_analyzer = FocusAnalyzer(self.config.focus_analyzer)
+        self.image_preprocessor = ImagePreprocessor(self.config.image_preprocessor)
+        self.stitcher = Stitcher(self.config.stitcher)
 
     # Methods removed as they're now in FileSystemManager
+
+    def _initialize_and_validate(self, plate_folder):
+        plate_path = Path(plate_folder)
+        if not plate_path.exists():
+            raise ValueError(f"Plate folder does not exist: {plate_path}")
+        parent_dir = plate_path.parent
+        plate_name = plate_path.name
+        return plate_path, parent_dir, plate_name
+
+    def _initialize_filename_parser_and_convert(self, plate_path):
+        config = self.config
+        from ezstitcher.core.filename_parser import create_parser
+
+        # Use the enhanced create_parser with plate_folder for auto-detection
+        self.filename_parser = create_parser(config.microscope_type, plate_folder=plate_path)
+        logger.info(f"Using microscope type: {self.filename_parser.__class__.__name__}")
+
+        # Handle Opera Phenix conversion if needed
+        if self.filename_parser.__class__.__name__ == 'OperaPhenixFilenameParser':
+            logger.info(f"Converting Opera Phenix files to ImageXpress format...")
+            from ezstitcher.core.image_locator import ImageLocator
+
+            # Use ImageLocator to find the appropriate directory
+            image_locations = ImageLocator.find_image_locations(plate_path)
+            if 'images' in image_locations:
+                logger.info(f"Found Images directory, using it for Opera Phenix files")
+                self.filename_parser.rename_all_files_in_directory(plate_path / "Images")
+            else:
+                self.filename_parser.rename_all_files_in_directory(plate_path)
+        # Note: We don't need the elif branches anymore since create_parser handles all microscope types
 
     def run(self, plate_folder):
         """
@@ -42,80 +100,42 @@ class PlateProcessor:
             bool: True if successful, False otherwise
         """
         try:
-            plate_path = Path(plate_folder)
-            parent_dir = plate_path.parent
-            plate_name = plate_path.name
-
-            # Get configuration parameters
             config = self.config
             reference_channels = config.reference_channels
             well_filter = config.well_filter
+            preprocessing_funcs = config.preprocessing_funcs
+            composite_weights = config.composite_weights
+            use_reference_positions = config.use_reference_positions
+            plate_path, parent_dir, plate_name = self._initialize_and_validate(plate_folder)
+            self._initialize_filename_parser_and_convert(plate_path)
 
-            # Initialize the filename parser based on microscope_type
-            if config.microscope_type.lower() == 'auto':
-                # Auto-detect the microscope type from the filenames
-                # Get a sample of filenames from the plate folder
-                sample_files = self.fs_manager.list_image_files(plate_path, extensions=['.tif', '.tiff', '.TIF', '.TIFF'])[:10]
-                sample_files = [Path(f).name for f in sample_files]
 
-                if not sample_files:
-                    logger.warning(f"No image files found in {plate_path}. Using default ImageXpress parser.")
+            # Use the specified microscope type
+            from ezstitcher.core.filename_parser import create_parser
+            self.filename_parser = create_parser(config.microscope_type)
+            logger.info(f"Using specified microscope type: {config.microscope_type}")
+
+            # If Opera Phenix is specified, rename files to ImageXpress format
+            if config.microscope_type.lower() == 'operaphenix':
+                logger.info(f"Converting Opera Phenix files to ImageXpress format...")
+
+                # Check if this is a directory with an Images subdirectory (Opera Phenix format)
+                images_dir = plate_path / "Images"
+                if images_dir.exists() and images_dir.is_dir():
+                    logger.info(f"Found Images directory, using it for Opera Phenix files")
+                    # Rename files in the Images directory
+                    success = self.filename_parser.rename_all_files_in_directory(images_dir)
+                else:
+                    # Rename files in place
+                    success = self.filename_parser.rename_all_files_in_directory(plate_path)
+
+                if success:
+                    logger.info(f"Successfully converted Opera Phenix files to ImageXpress format")
+                    # Use ImageXpress parser for the converted files
                     from ezstitcher.core.filename_parser import ImageXpressFilenameParser
                     self.filename_parser = ImageXpressFilenameParser()
                 else:
-                    # Auto-detect the parser based on the filenames
-                    self.filename_parser = detect_parser(sample_files)
-                    logger.info(f"Auto-detected microscope type: {self.filename_parser.__class__.__name__}")
-
-                    # If Opera Phenix is detected, rename files to ImageXpress format
-                    if self.filename_parser.__class__.__name__ == 'OperaPhenixFilenameParser':
-                        logger.info(f"Converting Opera Phenix files to ImageXpress format...")
-
-                        # Check if this is a directory with an Images subdirectory (Opera Phenix format)
-                        images_dir = plate_path / "Images"
-                        if images_dir.exists() and images_dir.is_dir():
-                            logger.info(f"Found Images directory, using it for Opera Phenix files")
-                            # Rename files in the Images directory
-                            success = self.filename_parser.rename_all_files_in_directory(images_dir)
-                        else:
-                            # Rename files in place
-                            success = self.filename_parser.rename_all_files_in_directory(plate_path)
-
-                        if success:
-                            logger.info(f"Successfully converted Opera Phenix files to ImageXpress format")
-                            # Use ImageXpress parser for the converted files
-                            from ezstitcher.core.filename_parser import ImageXpressFilenameParser
-                            self.filename_parser = ImageXpressFilenameParser()
-                        else:
-                            logger.warning(f"Failed to convert Opera Phenix files to ImageXpress format. Using original files.")
-            else:
-                # Use the specified microscope type
-                from ezstitcher.core.filename_parser import create_parser
-                self.filename_parser = create_parser(config.microscope_type)
-                logger.info(f"Using specified microscope type: {config.microscope_type}")
-
-                # If Opera Phenix is specified, rename files to ImageXpress format
-                if config.microscope_type.lower() == 'operaphenix':
-                    logger.info(f"Converting Opera Phenix files to ImageXpress format...")
-
-                    # Check if this is a directory with an Images subdirectory (Opera Phenix format)
-                    images_dir = plate_path / "Images"
-                    if images_dir.exists() and images_dir.is_dir():
-                        logger.info(f"Found Images directory, using it for Opera Phenix files")
-                        # Rename files in the Images directory
-                        success = self.filename_parser.rename_all_files_in_directory(images_dir)
-                    else:
-                        # Rename files in place
-                        success = self.filename_parser.rename_all_files_in_directory(plate_path)
-
-                    if success:
-                        logger.info(f"Successfully converted Opera Phenix files to ImageXpress format")
-                        # Use ImageXpress parser for the converted files
-                        from ezstitcher.core.filename_parser import ImageXpressFilenameParser
-                        self.filename_parser = ImageXpressFilenameParser()
-                    else:
-                        logger.warning(f"Failed to convert Opera Phenix files to ImageXpress format. Using original files.")
-
+                    logger.warning(f"Failed to convert Opera Phenix files to ImageXpress format. Using original files.")
             # Update components with the filename parser
             self.fs_manager = FileSystemManager(filename_parser=self.filename_parser)
             self.stitcher = Stitcher(self.config.stitcher, self.filename_parser)

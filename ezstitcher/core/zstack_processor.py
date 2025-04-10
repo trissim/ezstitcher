@@ -32,28 +32,36 @@ class ZStackProcessor:
 
     This class acts as a coordinator for the various Z-stack processing components.
     """
-    def __init__(self, config: ZStackProcessorConfig, filename_parser=None, preprocessing_funcs=None):
+    def __init__(self, config: Optional[ZStackProcessorConfig] = None, filename_parser=None, preprocessing_funcs=None):
         """
         Initialize the ZStackProcessor.
 
         Args:
-            config: Configuration for Z-stack processing
+            config: Configuration for Z-stack processing. If None, a default config is created.
             filename_parser: Parser for microscopy filenames
             preprocessing_funcs: Dictionary mapping channels to preprocessing functions
         """
-        self.config = config
+        # Create default config if none provided
+        if config is None:
+            logger.info("No ZStackProcessorConfig provided, using default configuration")
+            self.config = ZStackProcessorConfig()
+        else:
+            self.config = config
+
         self.fs_manager = FileSystemManager()
         self._z_info = None
         self._z_indices = []
         self.preprocessing_funcs = preprocessing_funcs or {}
 
         # Initialize the focus analyzer
-        focus_config = config.focus_config or FocusConfig(method=config.focus_method)
+        focus_config = self.config.focus_config or FocusConfig(method=self.config.focus_method)
         self.focus_analyzer = FocusAnalyzer(focus_config)
 
         # Initialize the filename parser
         if filename_parser is None:
-            self.filename_parser = ImageXpressFilenameParser()
+            # Default to auto-detection if no parser is provided
+            from ezstitcher.core.filename_parser import create_parser
+            self.filename_parser = create_parser('auto')
         else:
             self.filename_parser = filename_parser
 

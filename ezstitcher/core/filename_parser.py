@@ -9,7 +9,8 @@ import re
 import os
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, Any, List, Tuple
+from pathlib import Path
+from typing import Dict, Optional, Any, List, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -695,23 +696,62 @@ class OperaPhenixFilenameParser(FilenameParser):
             return False
 
 
-def create_parser(microscope_type: str) -> FilenameParser:
+def create_parser(microscope_type: str, sample_files: Optional[List[str]] = None, plate_folder: Optional[Union[str, Path]] = None) -> FilenameParser:
     """
     Factory function to create the appropriate parser for a microscope type.
 
     Args:
-        microscope_type (str): Type of microscope ('ImageXpress', 'OperaPhenix', etc.)
+        microscope_type (str): Type of microscope ('ImageXpress', 'OperaPhenix', 'auto', etc.)
+        sample_files (list, optional): List of sample filenames for auto-detection
+        plate_folder (str or Path, optional): Path to plate folder for auto-detection
 
     Returns:
         FilenameParser: Instance of the appropriate parser
 
     Raises:
-        ValueError: If microscope_type is not supported
+        ValueError: If microscope_type is not supported or auto-detection fails
     """
-    if microscope_type.lower() == 'imagexpress':
+    microscope_type = microscope_type.lower()
+
+    if microscope_type == 'imagexpress':
         return ImageXpressFilenameParser()
-    elif microscope_type.lower() == 'operaphenix':
+    elif microscope_type == 'operaphenix':
         return OperaPhenixFilenameParser()
+    elif microscope_type == 'auto':
+        # Perform actual auto-detection
+        if sample_files:
+            # Detect based on sample filenames
+            detected_type = FilenameParser.detect_format(sample_files)
+            if detected_type:
+                logger.info(f"Auto-detected microscope type from filenames: {detected_type}")
+                return create_parser(detected_type)  # Recursive call with detected type
+
+        if plate_folder:
+            # Detect based on folder structure
+            from ezstitcher.core.image_locator import ImageLocator
+
+            # Find all image locations
+            image_locations = ImageLocator.find_image_locations(plate_folder)
+
+            # Collect sample files from all locations
+            all_samples = []
+            for location_type, images in image_locations.items():
+                if location_type == 'z_stack':
+                    # Handle z_stack specially since it's a nested dictionary
+                    for z_index, z_images in images.items():
+                        all_samples.extend([Path(f).name for f in z_images[:5]])
+                else:
+                    all_samples.extend([Path(f).name for f in images[:5]])
+
+            if all_samples:
+                detected_type = FilenameParser.detect_format(all_samples)
+                if detected_type:
+                    logger.info(f"Auto-detected microscope type from folder structure: {detected_type}")
+                    return create_parser(detected_type)  # Recursive call with detected type
+
+        # If we couldn't detect, default to ImageXpress but log a warning
+        logger.warning("Could not auto-detect microscope type, defaulting to ImageXpress")
+        return ImageXpressFilenameParser()
     else:
         raise ValueError(f"Unsupported microscope type: {microscope_type}")
 

@@ -27,12 +27,28 @@ from ezstitcher.core.zstack_processor import ZStackProcessor
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
-# Removed obsolete import of non-existent ZStackDetector
+def apply_nested_overrides(config_obj, overrides):
+    """
+    Recursively apply overrides to a nested config object.
 
-# ... existing functions (process_plate_folder, etc.) ...
+    Args:
+        config_obj: The root config object.
+        overrides: Dict of overrides, possibly with dot notation keys.
+    """
+    for key, value in overrides.items():
+        parts = key.split(".")
+        target = config_obj
+        for part in parts[:-1]:
+            if hasattr(target, part):
+                target = getattr(target, part)
+            else:
+                # Invalid path, skip
+                target = None
+                break
+        if target is not None and hasattr(target, parts[-1]):
+            setattr(target, parts[-1], value)
 
-# (existing content up to line 382)
-# (content omitted for brevity)
+
 
 def process_plate_auto(
     plate_folder: str | Path,
@@ -55,21 +71,33 @@ def process_plate_auto(
     """
     plate_folder = Path(plate_folder)
 
-    # Prepare config
+    # Create default config if none provided
     if config is None:
         config = PlateProcessorConfig()
+        # Ensure microscope_type is 'auto' for auto-detection
+        config.microscope_type = 'auto'
+        logging.info("No config provided, using default configuration with auto-detection")
 
-    # Override config with kwargs if provided
-    for key, value in kwargs.items():
-        if hasattr(config, key):
-            setattr(config, key, value)
+    # Apply any overrides
+    apply_nested_overrides(config, kwargs)
 
-    # Instantiate PlateProcessor
+    # Instantiate PlateProcessor with auto-detection capabilities
     processor = PlateProcessor(config)
 
-    # Detect if Z-stacks are present
+    # Apply nested overrides again to internal component configs
+    apply_nested_overrides(processor.stitcher.config, kwargs)
+    apply_nested_overrides(processor.focus_analyzer.config, kwargs)
+    apply_nested_overrides(processor.zstack_processor.config, kwargs)
+    apply_nested_overrides(processor.image_preprocessor.config, kwargs)
+
+    # Use ImageLocator to find the timepoint directory
+    from ezstitcher.core.image_locator import ImageLocator
+    timepoint_dir = ImageLocator.find_timepoint_dir(plate_folder, config.timepoint_dir_name)
+    if not timepoint_dir:
+        timepoint_dir = plate_folder  # Fall back to plate folder if TimePoint_1 doesn't exist
+
     detector = ZStackProcessor(config.z_stack_processor)
-    has_zstack, _ = detector.detect_zstack_images(plate_folder / "TimePoint_1")
+    has_zstack, _ = detector.detect_zstack_images(timepoint_dir)
 
     if has_zstack:
         logging.info("Z-stacks detected. Running full Z-stack processing pipeline.")
@@ -77,7 +105,7 @@ def process_plate_auto(
         success = processor.run(plate_folder)
     else:
         logging.info("No Z-stacks detected. Running standard 2D stitching pipeline.")
-        # Optionally adjust config to skip Z-stack steps
+        # Adjust config to skip Z-stack steps
         config.z_stack_processor.stitch_all_z_planes = False
         processor = PlateProcessor(config)
         success = processor.run(plate_folder)

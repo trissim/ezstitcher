@@ -103,13 +103,14 @@ class ZStackOrganizer:
         # Check if we need to auto-detect the parser
         if not hasattr(self, 'filename_parser') or self.filename_parser is None:
             # Import here to avoid circular imports
+            from ezstitcher.core.filename_parser import create_parser
             file_paths = [str(f) for f in all_files]
             if file_paths:
-                self.filename_parser = detect_parser(file_paths)
+                self.filename_parser = create_parser('auto', sample_files=file_paths)
                 logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
             else:
-                self.filename_parser = ImageXpressFilenameParser()
-                logger.info("No files found, defaulting to ImageXpress parser")
+                self.filename_parser = create_parser('auto', plate_folder=folder_path)
+                logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
 
         z_indices = defaultdict(list)
 
