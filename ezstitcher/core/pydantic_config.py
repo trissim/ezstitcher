@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Union, Callable, Any, Tuple, ClassVar
 from pathlib import Path
 import json
 import yaml
-from pydantic import BaseModel, Field, validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
 class StitcherConfig(BaseModel):
@@ -31,14 +31,16 @@ class StitcherConfig(BaseModel):
     margin_ratio: float = Field(0.1, description="Blending margin ratio for stitching (0.0-1.0)")
     pixel_size: float = Field(1.0, description="Pixel size in microns")
 
-    @validator('margin_ratio')
+    @field_validator('margin_ratio')
+    @classmethod
     def validate_margin_ratio(cls, v):
         """Validate that margin_ratio is between 0 and 1."""
         if not 0 <= v <= 1:
             raise ValueError(f"margin_ratio must be between 0 and 1, got {v}")
         return v
 
-    @validator('tile_overlap', 'tile_overlap_x', 'tile_overlap_y')
+    @field_validator('tile_overlap', 'tile_overlap_x', 'tile_overlap_y')
+    @classmethod
     def validate_overlap(cls, v):
         """Validate that overlap percentages are reasonable."""
         if v is not None and not 0 <= v <= 50:
@@ -59,7 +61,8 @@ class FocusAnalyzerConfig(BaseModel):
     roi: Optional[Tuple[int, int, int, int]] = Field(None, description="Region of interest (x, y, width, height)")
     weights: Optional[Dict[str, float]] = Field(None, description="Weights for different focus metrics")
 
-    @validator('method')
+    @field_validator('method')
+    @classmethod
     def validate_method(cls, v):
         """Validate that the focus method is supported."""
         valid_methods = ["combined", "laplacian", "normalized_variance", "tenengrad", "fft", "adaptive_fft"]
@@ -81,9 +84,7 @@ class ImagePreprocessorConfig(BaseModel):
     composite_weights: Optional[Dict[str, float]] = Field(None,
                                                          description="Weights for creating composite images")
 
-    class Config:
-        """Pydantic configuration."""
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class ZStackProcessorConfig(BaseModel):
@@ -156,7 +157,8 @@ class ZStackProcessorConfig(BaseModel):
         description="Deprecated. Use additional_projections instead"
     )
 
-    @validator('focus_method')
+    @field_validator('focus_method')
+    @classmethod
     def validate_focus_method(cls, v):
         """Validate that the focus method is supported."""
         valid_methods = ["combined", "laplacian", "normalized_variance", "tenengrad", "fft", "adaptive_fft"]
@@ -164,7 +166,8 @@ class ZStackProcessorConfig(BaseModel):
             raise ValueError(f"Focus method must be one of {valid_methods}, got {v}")
         return v
 
-    @validator('additional_projections')
+    @field_validator('additional_projections')
+    @classmethod
     def validate_additional_projections(cls, v):
         """Validate that the projection types are supported."""
         valid_types = ["max", "mean", "std", "median", "min"]
@@ -173,7 +176,8 @@ class ZStackProcessorConfig(BaseModel):
                 raise ValueError(f"Projection type must be one of {valid_types}, got {proj_type}")
         return v
 
-    @validator('z_reference_function')
+    @field_validator('z_reference_function')
+    @classmethod
     def validate_z_reference_function(cls, v):
         """Validate that the z_reference_function is valid."""
         if isinstance(v, str):
@@ -182,7 +186,8 @@ class ZStackProcessorConfig(BaseModel):
                 raise ValueError(f"z_reference_function must be one of {valid_refs} or a callable, got {v}")
         return v
 
-    @validator('projection_types')
+    @field_validator('projection_types')
+    @classmethod
     def validate_projection_types(cls, v):
         """Validate that the projection types are supported."""
         if v is not None:
@@ -192,7 +197,8 @@ class ZStackProcessorConfig(BaseModel):
                     raise ValueError(f"Projection type must be one of {valid_types}, got {proj_type}")
         return v
 
-    @validator('reference_method')
+    @field_validator('reference_method')
+    @classmethod
     def validate_reference_method(cls, v):
         """Validate that the reference_method is valid."""
         if v is not None and isinstance(v, str):
@@ -201,7 +207,8 @@ class ZStackProcessorConfig(BaseModel):
                 raise ValueError(f"reference_method must be one of {valid_refs} or a callable, got {v}")
         return v
 
-    @validator('stitch_z_reference')
+    @field_validator('stitch_z_reference')
+    @classmethod
     def validate_stitch_z_reference(cls, v):
         """Validate that the stitch_z_reference is valid."""
         if v is not None and isinstance(v, str):
@@ -283,9 +290,7 @@ class ZStackProcessorConfig(BaseModel):
 
         return self
 
-    class Config:
-        """Pydantic configuration."""
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class PlateProcessorConfig(BaseModel):
@@ -344,7 +349,8 @@ class PlateProcessorConfig(BaseModel):
     z_stack_processor: ZStackProcessorConfig = Field(default_factory=ZStackProcessorConfig,
                                                    description="Configuration for the ZStackProcessor")
 
-    @validator('reference_channels')
+    @field_validator('reference_channels')
+    @classmethod
     def validate_reference_channels(cls, v):
         """Validate that reference channels are not empty."""
         if not v:
@@ -363,9 +369,7 @@ class PlateProcessorConfig(BaseModel):
 
         return self
 
-    class Config:
-        """Pydantic configuration."""
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def to_json(self, path: Union[str, Path]) -> None:
         """
