@@ -61,7 +61,9 @@ node_modules/
 tests/**/test_data/
 tests/tests_data/
 tests/**/__pycache__/
-ezstitcher/tests/
+# Do NOT ignore test code files
+!ezstitcher/tests/**/*.py
+!ezstitcher/tests/__init__.py
 
 # Test output files
 *_test_output.txt
