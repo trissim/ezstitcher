@@ -1,0 +1,28 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Explicitly declare text files to be normalized
+*.py text
+*.md text
+*.txt text
+*.json text
+*.xml text
+*.yml text
+*.yaml text
+*.ini text
+*.cfg text
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# Declare binary files to be left alone
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.tif binary
+*.tiff binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.pdf binary

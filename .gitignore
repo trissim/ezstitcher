@@ -38,6 +38,9 @@ ENV/
 .idea/
 .vscode/
 
+# Node.js
+node_modules/
+
 # OS specific
 .DS_Store
 *.swp
@@ -56,7 +59,13 @@ ENV/
 # Test directories
 # Ignore test data but not test files
 tests/**/test_data/
+tests/tests_data/
 tests/**/__pycache__/
+
+# Test output files
+*_test_output.txt
+test_output.txt
+.coverage
 
 # Documentation build files
 docs/build/
