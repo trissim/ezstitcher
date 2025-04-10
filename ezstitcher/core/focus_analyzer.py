@@ -2,15 +2,21 @@ import numpy as np
 import cv2
 import logging
 from ezstitcher.core.config import FocusConfig
+from ezstitcher.core.file_system_manager import FileSystemManager
 
 logger = logging.getLogger(__name__)
 
 class FocusAnalyzer:
     """
     Provides focus metrics and best focus selection.
+
+    This class implements various focus measure algorithms and methods to find
+    the best focused image in a Z-stack. It uses the FileSystemManager for
+    image handling to avoid code duplication.
     """
     def __init__(self, config: FocusConfig):
         self.config = config
+        self.fs_manager = FileSystemManager()
 
     def normalized_variance(self, img):
         """
@@ -23,9 +29,8 @@ class FocusAnalyzer:
         Returns:
             float: Focus quality score
         """
-        # Ensure image is grayscale
-        if len(img.shape) > 2:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # FileSystemManager.load_image already ensures grayscale
+        # No need for additional conversion
 
         mean_val = np.mean(img)
         if mean_val == 0:  # Avoid division by zero
@@ -45,9 +50,8 @@ class FocusAnalyzer:
         Returns:
             float: Focus quality score
         """
-        # Ensure image is grayscale
-        if len(img.shape) > 2:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # FileSystemManager.load_image already ensures grayscale
+        # No need for additional conversion
 
         lap = cv2.Laplacian(img, cv2.CV_64F, ksize=ksize)
         return np.mean(np.square(lap))
@@ -65,9 +69,8 @@ class FocusAnalyzer:
         Returns:
             float: Focus quality score
         """
-        # Ensure image is grayscale
-        if len(img.shape) > 2:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # FileSystemManager.load_image already ensures grayscale
+        # No need for additional conversion
 
         gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=ksize)
         gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=ksize)
@@ -87,9 +90,8 @@ class FocusAnalyzer:
         Returns:
             float: Focus quality score
         """
-        # Ensure image is grayscale
-        if len(img.shape) > 2:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # FileSystemManager.load_image already ensures grayscale
+        # No need for additional conversion
 
         # Apply FFT
         fft = np.fft.fft2(img)
@@ -133,9 +135,8 @@ class FocusAnalyzer:
                 'fft': 0.2
             }
 
-        # Ensure image is grayscale
-        if len(img.shape) > 2:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # FileSystemManager.load_image already ensures grayscale
+        # No need for additional conversion
 
         # Calculate individual metrics
         nvar = self.normalized_variance(img)
@@ -153,6 +154,35 @@ class FocusAnalyzer:
 
         return score
 
+    def _get_focus_function(self, method):
+        """
+        Get the appropriate focus measure function based on method name.
+
+        This helper method centralizes the logic for selecting the focus measure function,
+        avoiding code duplication in find_best_focus and compute_focus_metrics methods.
+
+        Args:
+            method (str): Focus detection method name
+
+        Returns:
+            callable: The focus measure function
+
+        Raises:
+            ValueError: If the method is unknown
+        """
+        if method == 'combined':
+            return self.combined_focus_measure
+        elif method == 'nvar' or method == 'normalized_variance':
+            return self.normalized_variance
+        elif method == 'lap' or method == 'laplacian':
+            return self.laplacian_energy
+        elif method == 'ten' or method == 'tenengrad':
+            return self.tenengrad_variance
+        elif method == 'fft':
+            return self.adaptive_fft_focus
+        else:
+            raise ValueError(f"Unknown focus method: {method}")
+
     def find_best_focus(self, image_stack, method='combined', roi=None):
         """
         Find the best focused image in a stack using specified method.
@@ -167,19 +197,8 @@ class FocusAnalyzer:
         """
         focus_scores = []
 
-        # Select focus measure function
-        if method == 'combined':
-            focus_func = self.combined_focus_measure
-        elif method == 'nvar' or method == 'normalized_variance':
-            focus_func = self.normalized_variance
-        elif method == 'lap' or method == 'laplacian':
-            focus_func = self.laplacian_energy
-        elif method == 'ten' or method == 'tenengrad':
-            focus_func = self.tenengrad_variance
-        elif method == 'fft':
-            focus_func = self.adaptive_fft_focus
-        else:
-            raise ValueError(f"Unknown focus method: {method}")
+        # Get the appropriate focus measure function
+        focus_func = self._get_focus_function(method)
 
         # Process each image in stack
         for i, img in enumerate(image_stack):
@@ -228,19 +247,8 @@ class FocusAnalyzer:
         """
         focus_scores = []
 
-        # Select focus measure function
-        if method == 'combined':
-            focus_func = self.combined_focus_measure
-        elif method == 'nvar' or method == 'normalized_variance':
-            focus_func = self.normalized_variance
-        elif method == 'lap' or method == 'laplacian':
-            focus_func = self.laplacian_energy
-        elif method == 'ten' or method == 'tenengrad':
-            focus_func = self.tenengrad_variance
-        elif method == 'fft':
-            focus_func = self.adaptive_fft_focus
-        else:
-            raise ValueError(f"Unknown focus method: {method}")
+        # Get the appropriate focus measure function
+        focus_func = self._get_focus_function(method)
 
         # Process each image in stack
         for img in image_stack:

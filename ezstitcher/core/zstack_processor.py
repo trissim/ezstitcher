@@ -22,15 +22,18 @@ class ZStackProcessor:
     - Best focus selection
     - Per-plane stitching
     """
-    def __init__(self, config: ZStackProcessorConfig, filename_parser=None):
+    def __init__(self, config: ZStackProcessorConfig, filename_parser=None, preprocessing_funcs=None):
         self.config = config
         self.fs_manager = FileSystemManager()
         self._z_info = None
         self._z_indices = []
+        self.preprocessing_funcs = preprocessing_funcs or {}
 
         # Initialize the focus analyzer
         from ezstitcher.core.focus_analyzer import FocusAnalyzer
-        self.focus_analyzer = FocusAnalyzer(config.focus_config)
+        # Use focus_config from config if available, otherwise create one with the focus_method
+        focus_config = config.focus_config or FocusAnalyzerConfig(method=config.focus_method)
+        self.focus_analyzer = FocusAnalyzer(focus_config)
 
         # Initialize the filename parser
         if filename_parser is None:
@@ -39,10 +42,6 @@ class ZStackProcessor:
             self.filename_parser = ImageXpressFilenameParser()
         else:
             self.filename_parser = filename_parser
-
-        # Create a FocusAnalyzer with the same focus method as the ZStackProcessor
-        focus_config = FocusAnalyzerConfig(method=config.focus_method)
-        self.focus_analyzer = FocusAnalyzer(focus_config)
 
         # Initialize the image preprocessor
         from ezstitcher.core.image_preprocessor import ImagePreprocessor
@@ -82,6 +81,22 @@ class ZStackProcessor:
             return self._adapt_function(func_or_name)
 
         raise ValueError(f"Reference function must be a string or callable, got {type(func_or_name)}")
+
+    def _preprocess_stack(self, stack, channel):
+        """
+        Apply preprocessing to each image in a Z-stack.
+
+        Args:
+            stack: List of images in the Z-stack
+            channel: Channel identifier for selecting the preprocessing function
+
+        Returns:
+            List of preprocessed images
+        """
+        if channel in self.preprocessing_funcs:
+            func = self.preprocessing_funcs[channel]
+            return [func(img) for img in stack]
+        return stack
 
     def _adapt_function(self, func: Callable) -> Callable:
         """
@@ -294,17 +309,16 @@ class ZStackProcessor:
 
                     new_path = timepoint_path / new_name
 
-                    shutil.copy2(img_file, new_path)
+                    self.fs_manager.copy_file(img_file, new_path)
                     logger.info(f"Copied {img_file.name} to {new_path.name}")
                 else:
                     logger.warning(f"Could not parse filename: {img_file.name}")
 
         for z_index, z_folder in z_folders:
-            try:
-                shutil.rmtree(z_folder)
+            if self.fs_manager.remove_directory(z_folder):
                 logger.info(f"Removed Z-stack folder: {z_folder}")
-            except Exception as e:
-                logger.warning(f"Failed to remove Z-stack folder {z_folder}: {e}")
+            else:
+                logger.warning(f"Failed to remove Z-stack folder {z_folder}")
 
         return True
     def get_z_indices(self):
@@ -677,7 +691,7 @@ class ZStackProcessor:
                     # Save the best focus image
                     best_img = images[best_idx]
                     output_path = output_dir / f"{stack_id}_w{wavelength}.tif"
-                    cv2.imwrite(str(output_path), best_img)
+                    self.fs_manager.save_image(output_path, best_img)
                     logger.info(f"Saved best focus for {stack_id}_w{wavelength} to {output_path}")
 
             return True
@@ -686,17 +700,24 @@ class ZStackProcessor:
             logger.error(f"Error in find_best_focus: {e}", exc_info=True)
             return False
 
-    def create_zstack_projections(self, input_dir, output_dir, projection_types=['max', 'mean']):
+    def create_zstack_projections(self, input_dir, output_dir, projection_types=None, preprocessing_funcs=None):
         """Create projections from Z-stack images.
 
         Args:
             input_dir: Directory containing Z-stack images
             output_dir: Directory to save projections
-            projection_types: List of projection types to create
+            projection_types: List of projection types to create. If None, uses ["max"]
+            preprocessing_funcs: Dictionary mapping channels to preprocessing functions.
+                These functions are applied to individual images before projection creation.
 
         Returns:
             Tuple of (success, projections_info)
         """
+        # Use provided preprocessing functions or the ones from initialization
+        preprocessing_funcs = preprocessing_funcs or self.preprocessing_funcs
+        # Default to max projection if None is provided
+        if projection_types is None:
+            projection_types = ["max"]
         import numpy as np
         from pathlib import Path
 
@@ -821,7 +842,7 @@ class ZStackProcessor:
 
         return True, projection_dirs
 
-    def stitch_across_z(self, plate_folder, reference_z=None, stitch_all_z_planes=True, processor=None):
+    def stitch_across_z(self, plate_folder, reference_z=None, stitch_all_z_planes=True, processor=None, preprocessing_funcs=None):
         """
         Stitch all Z-planes in a plate using a reference Z-plane for positions.
 
@@ -833,10 +854,14 @@ class ZStackProcessor:
                 If None: Uses the z_reference_function from the config
             stitch_all_z_planes (bool): Whether to stitch all Z-planes
             processor (PlateProcessor): Processor to use for stitching
+            preprocessing_funcs (dict, optional): Dictionary mapping channels to preprocessing functions.
+                These functions are applied to individual images before Z-stack processing.
 
         Returns:
             bool: True if successful, False otherwise
         """
+        # Use provided preprocessing functions or the ones from initialization
+        preprocessing_funcs = preprocessing_funcs or self.preprocessing_funcs
         try:
             plate_path = Path(plate_folder)
             timepoint_dir = "TimePoint_1"
@@ -924,6 +949,8 @@ class ZStackProcessor:
                 for base_name, z_indices in z_indices_map.items():
                     # Load all images in the Z-stack
                     image_stack = []
+                    channel = '1'  # Default channel
+
                     for z_idx in sorted(z_indices):
                         # Check if images are in ZStep folders or have _z in the filename
                         zstep_folder = timepoint_path / f"ZStep_{z_idx}"
@@ -937,19 +964,25 @@ class ZStackProcessor:
                             if opera_match:
                                 # Opera Phenix format
                                 opera_base = opera_match.group(1)
-                                # Extract channel from the base_name
-                                channel_match = re.search(r'-ch(\d+)', base_name)
-                                channel = channel_match.group(1) if channel_match else '1'
+                                # Extract channel using the filename parser
+                                metadata = self.filename_parser.parse_filename(base_name)
+                                channel = str(metadata.get('channel', '1')) if metadata else '1'
                                 filename = f"{opera_base}p{z_idx:02d}-ch{channel}sk1fk1fl1.tiff"
                                 file_path = timepoint_path / filename
                             else:
                                 # ImageXpress format
                                 filename = f"{base_name}_z{z_idx:03d}.tif"
                                 file_path = timepoint_path / filename
+                                # Extract channel using the filename parser
+                                metadata = self.filename_parser.parse_filename(base_name)
+                                channel = str(metadata.get('channel', '1')) if metadata else '1'
 
                         if file_path.exists():
                             img = self.fs_manager.load_image(file_path)
                             if img is not None:
+                                # Apply preprocessing if available for this channel
+                                if channel in preprocessing_funcs:
+                                    img = preprocessing_funcs[channel](img)
                                 image_stack.append(img)
 
                     if not image_stack:
@@ -1205,3 +1238,4 @@ class ZStackProcessor:
         except Exception as e:
             logger.error(f"Error in stitch_across_z: {e}", exc_info=True)
             return False
+            k

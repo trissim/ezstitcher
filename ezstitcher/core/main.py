@@ -135,7 +135,7 @@ def process_plate_folder(plate_folder, reference_channels=['1'],
         well_filter=well_filter,
         use_reference_positions=use_reference_positions,
         microscope_type=microscope_type,
-        preprocessing_funcs=preprocessing_funcs,
+        # preprocessing_funcs is already in image_preprocessor_config
         composite_weights=composite_weights,
         stitcher=stitcher_config,
         focus_analyzer=focus_config,
@@ -154,6 +154,8 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     Process a plate folder with Z-stack handling.
 
     This function uses ZStackProcessor to handle Z-stack detection and processing.
+    It creates a ZStackProcessor with the appropriate configuration based on the
+    provided kwargs, avoiding redundant object creation and improving efficiency.
 
     Args:
         plate_folder (str or Path): Path to the plate folder
@@ -162,8 +164,34 @@ def modified_process_plate_folder(plate_folder, **kwargs):
     Returns:
         bool: Success status
     """
-    # Create a ZStackProcessor with default config
-    z_config = ZStackProcessorConfig()
+    # Create a ZStackProcessor with config based on kwargs
+    # This avoids creating a temporary ZStackProcessor just for detection
+    # and then creating another one later with the actual config
+
+    # First, determine which config to use based on kwargs
+    if any(param in kwargs for param in ['stitch_z_reference', 'focus_detect', 'create_projections', 'save_projections', 'reference_method']):
+        # Use deprecated parameters if provided
+        z_config = ZStackProcessorConfig(
+            # Deprecated parameters
+            focus_detect=kwargs.get('focus_detect', None),
+            focus_method=kwargs.get('focus_method', 'combined'),
+            create_projections=kwargs.get('create_projections', None),
+            stitch_z_reference=kwargs.get('stitch_z_reference', None),
+            save_projections=kwargs.get('save_projections', None),
+            reference_method=kwargs.get('reference_method', None),
+            stitch_all_z_planes=kwargs.get('stitch_all_z_planes', False)
+        )
+    else:
+        # Use new parameters
+        z_config = ZStackProcessorConfig(
+            z_reference_function=kwargs.get('z_reference_function', 'max_projection'),
+            focus_method=kwargs.get('focus_method', 'combined'),
+            save_reference=kwargs.get('save_reference', True),
+            additional_projections=kwargs.get('additional_projections', None),
+            stitch_all_z_planes=kwargs.get('stitch_all_z_planes', False)
+        )
+
+    # Create ZStackProcessor with the config
     z_processor = ZStackProcessor(z_config)
 
     # Detect Z-stacks
@@ -185,28 +213,8 @@ def modified_process_plate_folder(plate_folder, **kwargs):
         margin_ratio=kwargs.get('margin_ratio', 0.1)
     )
 
-    # Handle backward compatibility
-    if any(param in kwargs for param in ['stitch_z_reference', 'focus_detect', 'create_projections', 'save_projections', 'reference_method']):
-        # Use deprecated parameters if provided
-        zstack_config = ZStackProcessorConfig(
-            # Deprecated parameters
-            focus_detect=kwargs.get('focus_detect', None),
-            focus_method=kwargs.get('focus_method', 'combined'),
-            create_projections=kwargs.get('create_projections', None),
-            stitch_z_reference=kwargs.get('stitch_z_reference', None),
-            save_projections=kwargs.get('save_projections', None),
-            reference_method=kwargs.get('reference_method', None),
-            stitch_all_z_planes=kwargs.get('stitch_all_z_planes', False)
-        )
-    else:
-        # Use new parameters
-        zstack_config = ZStackProcessorConfig(
-            z_reference_function=kwargs.get('z_reference_function', 'max_projection'),
-            focus_method=kwargs.get('focus_method', 'combined'),
-            save_reference=kwargs.get('save_reference', True),
-            additional_projections=kwargs.get('additional_projections', None),
-            stitch_all_z_planes=kwargs.get('stitch_all_z_planes', False)
-        )
+    # Use the same ZStackProcessorConfig that we created earlier
+    zstack_config = z_config
 
     focus_config = FocusAnalyzerConfig(
         method=kwargs.get('focus_method', 'combined')
@@ -252,24 +260,28 @@ def process_bf(imgs):
     preprocessor = ImagePreprocessor()
     return preprocessor.process_bf(imgs)
 
-def find_best_focus(image_stack, method='combined', roi=None):
+def find_best_focus(image_stack, method='combined', roi=None, analyzer=None):
     """
     Find the best focused image in a stack.
 
-    This function uses FocusAnalyzer to find the best focused image.
+    This function uses FocusAnalyzer to find the best focused image. It can reuse an
+    existing FocusAnalyzer instance if provided, which is useful when processing
+    multiple Z-stacks with the same focus detection settings.
 
     Args:
         image_stack (list): List of images
         method (str): Focus detection method
         roi (tuple): Optional region of interest
+        analyzer (FocusAnalyzer, optional): Existing FocusAnalyzer instance to use
 
     Returns:
         tuple: (best_focus_index, focus_scores)
     """
-    # Create a FocusAnalyzer with the specified method
-    config = FocusAnalyzerConfig(method=method, roi=roi)
-    analyzer = FocusAnalyzer(config)
-    return analyzer.find_best_focus(image_stack)
+    # Use provided analyzer or create a new one
+    if analyzer is None:
+        config = FocusAnalyzerConfig(method=method, roi=roi)
+        analyzer = FocusAnalyzer(config)
+    return analyzer.find_best_focus(image_stack, method=method, roi=roi)
 
 
 def process_plate_folder_with_config(plate_folder, config_file=None, config_preset=None, **kwargs):

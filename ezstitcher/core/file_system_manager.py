@@ -150,6 +150,63 @@ class FileSystemManager:
             logger.error(f"Error saving image {file_path}: {e}")
             return False
 
+    def copy_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
+        """
+        Copy a file from source to destination, preserving metadata.
+
+        This method abstracts the file copying operation, ensuring that the destination
+        directory exists and handling any errors that might occur. It preserves file
+        metadata such as timestamps and permissions.
+
+        Args:
+            source_path (str or Path): Source file path
+            dest_path (str or Path): Destination file path
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            import shutil
+            # Ensure destination directory exists
+            directory = Path(dest_path).parent
+            directory.mkdir(parents=True, exist_ok=True)
+
+            # Copy file with metadata
+            shutil.copy2(source_path, dest_path)
+            return True
+        except Exception as e:
+            logger.error(f"Error copying file from {source_path} to {dest_path}: {e}")
+            return False
+
+    def remove_directory(self, directory_path: Union[str, Path], recursive: bool = True) -> bool:
+        """
+        Remove a directory and optionally all its contents.
+
+        This method abstracts directory removal operations, handling both recursive
+        and non-recursive removal. It provides error handling and logging for
+        directory removal operations.
+
+        Args:
+            directory_path (str or Path): Path to the directory to remove
+            recursive (bool): Whether to remove the directory recursively
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            import shutil
+            directory_path = Path(directory_path)
+
+            if recursive:
+                shutil.rmtree(directory_path)
+            else:
+                directory_path.rmdir()
+
+            return True
+        except Exception as e:
+            logger.error(f"Error removing directory {directory_path}: {e}")
+            return False
+
     def find_files_by_pattern(self, directory: Union[str, Path],
                              pattern: Union[str, Pattern]) -> List[Path]:
         """
