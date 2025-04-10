@@ -27,11 +27,12 @@ Example: `r03c04f144p05-ch3sk1fk1fl1.tiff`
 By default, EZStitcher will automatically detect the microscope type based on the filename patterns. You don't need to specify anything special:
 
 ```python
-from ezstitcher.core.main import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # EZStitcher will automatically detect Opera Phenix data
-result = process_plate_folder(
+result = process_plate_auto(
     "path/to/opera_phenix_data",
+    microscope_type="auto",  # This is the default, so you can omit it
     reference_channels=['1'],
     tile_overlap=10.0
 )
@@ -42,14 +43,14 @@ result = process_plate_folder(
 You can also explicitly specify the microscope type:
 
 ```python
-from ezstitcher.core.main import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Explicitly specify Opera Phenix format
-result = process_plate_folder(
+result = process_plate_auto(
     "path/to/opera_phenix_data",
+    microscope_type='OperaPhenix',
     reference_channels=['1'],
-    tile_overlap=10.0,
-    microscope_type='OperaPhenix'
+    tile_overlap=10.0
 )
 ```
 
@@ -67,12 +68,27 @@ ExperimentName_Date-Measurement/
     └── ...
 ```
 
-EZStitcher automatically handles Opera Phenix directory structures, both with and without a `TimePoint_1` directory. When processing Opera Phenix data, EZStitcher will:
+For Z-stack data, Opera Phenix typically uses a structure like this:
+
+```
+ExperimentName_Date-Measurement/
+└── Images/
+    ├── ZStep_1/
+    │   ├── r01c01f01p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f01p01-ch2sk1fk1fl1.tiff
+    │   └── ...
+    ├── ZStep_2/
+    │   ├── r01c01f01p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f01p01-ch2sk1fk1fl1.tiff
+    │   └── ...
+    └── ...
+```
+
+EZStitcher automatically handles Opera Phenix directory structures. When processing Opera Phenix data, EZStitcher will:
 
 1. Detect the Opera Phenix format based on filename patterns
-2. Create a `TimePoint_1` directory if it doesn't exist
-3. Convert Opera Phenix filenames to ImageXpress format (e.g., `r01c03f144p05-ch3sk1fk1fl1.tiff` → `A03_s144_w3_z5.tif`)
-4. Process Z-stack folders (ZStep_1, ZStep_2, etc.) if present
+2. Convert Opera Phenix filenames to ImageXpress format internally (e.g., `r01c03f144p01-ch3sk1fk1fl1.tiff` → `A03_s144_w3.tif`)
+3. Process Z-stack folders (ZStep_1, ZStep_2, etc.) if present
 
 This conversion ensures compatibility with the core stitching algorithms while preserving all the original metadata.
 

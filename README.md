@@ -27,8 +27,10 @@ Full documentation is available at [https://ezstitcher.readthedocs.io/](https://
 
 - **ImageXpress**: Full support for all features
 - **Opera Phenix**: Full support for all features
+- **Auto-detection**: Automatic detection of microscope type based on file patterns
 
 See [Opera Phenix Support](docs/opera_phenix_support.md) for details on using EZStitcher with Opera Phenix data.
+See [Auto-Detection](docs/auto_detection.md) for details on the microscope auto-detection feature.
 
 ## Installation
 
@@ -74,6 +76,12 @@ Python 3.11.9 is recommended because it provides the best compatibility with all
 ## Command Line Usage
 
 ```bash
+# Basic usage (auto-detects microscope type)
+ezstitcher /path/to/plate_folder
+
+# Specify microscope type
+ezstitcher /path/to/plate_folder --microscope-type ImageXpress
+
 # Process a plate folder
 ezstitcher /path/to/plate_folder --reference-channels 1 2 --tile-overlap 10
 
@@ -95,93 +103,106 @@ ezstitcher /path/to/plate_folder --wells A01 B02 C03
 ### Comprehensive Plate Processing
 
 ```python
-from ezstitcher.core import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Process a single plate folder with all features (auto-detects microscope type)
-process_plate_folder(
+process_plate_auto(
     'path/to/plate_folder',
-    reference_channels=["1", "2"],
-    tile_overlap=10,
-    max_shift=50,
-    focus_detect=True,                # Enable best focus detection for Z-stacks
-    focus_method="combined",          # Use combined focus metrics
-    create_projections=True,          # Create Z-stack projections
-    projection_types=["max", "mean"], # Types of projections to create
-    stitch_z_reference="max",         # Use max projection images for stitching
-    stitch_all_z_planes=True          # Stitch all Z-planes using projection-derived positions
+    microscope_type="auto",  # This is the default, so you can omit it
+    **{
+        "reference_channels": ["1", "2"],
+        "stitcher.tile_overlap": 10,
+        "stitcher.max_shift": 50,
+        "z_stack_processor.focus_detect": True,                # Enable best focus detection for Z-stacks
+        "z_stack_processor.focus_method": "combined",          # Use combined focus metrics
+        "z_stack_processor.create_projections": True,          # Create Z-stack projections
+        "z_stack_processor.projection_types": ["max", "mean"], # Types of projections to create
+        "z_stack_processor.stitch_z_reference": "max",         # Use max projection images for stitching
+        "z_stack_processor.stitch_all_z_planes": True          # Stitch all Z-planes using projection-derived positions
+    }
 )
 ```
 
 ### Basic Stitching (No Z-stacks)
 
 ```python
-from ezstitcher.core import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Process a plate folder without Z-stack handling
-process_plate_folder(
+process_plate_auto(
     'path/to/plate_folder',
-    reference_channels=["1"],
-    tile_overlap=10,
-    max_shift=50
+    **{
+        "reference_channels": ["1"],
+        "stitcher.tile_overlap": 10,
+        "stitcher.max_shift": 50
+    }
 )
 ```
 
 ### Opera Phenix Support
 
 ```python
-from ezstitcher.core import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Process Opera Phenix data (explicitly specify microscope type)
-process_plate_folder(
+process_plate_auto(
     'path/to/opera_phenix_data',
-    reference_channels=['1'],
-    tile_overlap=10.0,
-    microscope_type='OperaPhenix'
+    microscope_type='OperaPhenix',
+    **{
+        "reference_channels": ["1"],
+        "stitcher.tile_overlap": 10.0
+    }
 )
 
 # Auto-detect Opera Phenix data
-process_plate_folder(
+process_plate_auto(
     'path/to/opera_phenix_data',
-    reference_channels=['1'],
-    tile_overlap=10.0
     # microscope_type defaults to 'auto'
+    **{
+        "reference_channels": ["1"],
+        "stitcher.tile_overlap": 10.0
+    }
 )
 ```
 
 ### Multi-Channel Reference Stitching
 
 ```python
-from ezstitcher.core import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Process using multiple reference channels
-process_plate_folder(
+process_plate_auto(
     'path/to/plate_folder',
-    reference_channels=["1", "2"],
-    tile_overlap=10
+    **{
+        "reference_channels": ["1", "2"],
+        "stitcher.tile_overlap": 10
+    }
 )
 ```
 
 ### Z-Stack Per-Plane Stitching
 
 ```python
-from ezstitcher.core import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Process Z-stack data with per-plane stitching
-process_plate_folder(
+process_plate_auto(
     'path/to/plate_folder',
-    reference_channels=["1"],
-    tile_overlap=10,
-    create_projections=True,          # Create projections for position detection
-    projection_types=["max"],         # Use max projection
-    stitch_z_reference="max",         # Use max projection for reference positions
-    stitch_all_z_planes=True          # Stitch each Z-plane using the same positions
+    **{
+        "reference_channels": ["1"],
+        "stitcher.tile_overlap": 10,
+        "z_stack_processor.create_projections": True,          # Create projections for position detection
+        "z_stack_processor.projection_types": ["max"],         # Use max projection
+        "z_stack_processor.stitch_z_reference": "max",         # Use max projection for reference positions
+        "z_stack_processor.stitch_all_z_planes": True          # Stitch each Z-plane using the same positions
+    }
 )
 ```
 
 ### Custom Z-Stack Projection Function
 
 ```python
-from ezstitcher.core import process_plate_folder
+from ezstitcher.core.main import process_plate_auto
 
 # Define a custom function that takes a Z-stack and returns a 2D image
 def middle_plane_projection(z_stack):
@@ -195,13 +216,15 @@ def middle_plane_projection(z_stack):
     return z_stack[middle_idx]
 
 # Process Z-stack data with custom projection function
-process_plate_folder(
+process_plate_auto(
     'path/to/plate_folder',
-    reference_channels=["1"],
-    tile_overlap=10,
-    create_projections=True,
-    stitch_z_reference=middle_plane_projection,  # Use custom function
-    stitch_all_z_planes=True
+    **{
+        "reference_channels": ["1"],
+        "stitcher.tile_overlap": 10,
+        "z_stack_processor.create_projections": True,
+        "z_stack_processor.stitch_z_reference": middle_plane_projection,  # Use custom function
+        "z_stack_processor.stitch_all_z_planes": True
+    }
 )
 ```
 
