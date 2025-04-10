@@ -11,6 +11,7 @@ from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.core.filename_parser import FilenameParser, detect_parser
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +22,12 @@ class PlateProcessor:
     """
     def __init__(self, config: PlateProcessorConfig):
         self.config = config
+        self.filename_parser = None  # Will be initialized in run() based on microscope_type
         self.fs_manager = FileSystemManager()
-        self.zstack_processor = ZStackProcessor(config.z_stack_processor)
+        self.zstack_processor = ZStackProcessor(config.z_stack_processor)  # Will be updated in run()
         self.focus_analyzer = FocusAnalyzer(config.focus_analyzer)
         self.image_preprocessor = ImagePreprocessor(config.image_preprocessor)
-        self.stitcher = Stitcher(config.stitcher)
+        self.stitcher = Stitcher(config.stitcher)  # Will be updated in run()
 
     # Methods removed as they're now in FileSystemManager
 
@@ -48,6 +50,76 @@ class PlateProcessor:
             config = self.config
             reference_channels = config.reference_channels
             well_filter = config.well_filter
+
+            # Initialize the filename parser based on microscope_type
+            if config.microscope_type.lower() == 'auto':
+                # Auto-detect the microscope type from the filenames
+                # Get a sample of filenames from the plate folder
+                sample_files = self.fs_manager.list_image_files(plate_path, extensions=['.tif', '.tiff', '.TIF', '.TIFF'])[:10]
+                sample_files = [Path(f).name for f in sample_files]
+
+                if not sample_files:
+                    logger.warning(f"No image files found in {plate_path}. Using default ImageXpress parser.")
+                    from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+                    self.filename_parser = ImageXpressFilenameParser()
+                else:
+                    # Auto-detect the parser based on the filenames
+                    self.filename_parser = detect_parser(sample_files)
+                    logger.info(f"Auto-detected microscope type: {self.filename_parser.__class__.__name__}")
+
+                    # If Opera Phenix is detected, rename files to ImageXpress format
+                    if self.filename_parser.__class__.__name__ == 'OperaPhenixFilenameParser':
+                        logger.info(f"Converting Opera Phenix files to ImageXpress format...")
+
+                        # Check if this is a directory with an Images subdirectory (Opera Phenix format)
+                        images_dir = plate_path / "Images"
+                        if images_dir.exists() and images_dir.is_dir():
+                            logger.info(f"Found Images directory, using it for Opera Phenix files")
+                            # Rename files in the Images directory
+                            success = self.filename_parser.rename_all_files_in_directory(images_dir)
+                        else:
+                            # Rename files in place
+                            success = self.filename_parser.rename_all_files_in_directory(plate_path)
+
+                        if success:
+                            logger.info(f"Successfully converted Opera Phenix files to ImageXpress format")
+                            # Use ImageXpress parser for the converted files
+                            from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+                            self.filename_parser = ImageXpressFilenameParser()
+                        else:
+                            logger.warning(f"Failed to convert Opera Phenix files to ImageXpress format. Using original files.")
+            else:
+                # Use the specified microscope type
+                from ezstitcher.core.filename_parser import create_parser
+                self.filename_parser = create_parser(config.microscope_type)
+                logger.info(f"Using specified microscope type: {config.microscope_type}")
+
+                # If Opera Phenix is specified, rename files to ImageXpress format
+                if config.microscope_type.lower() == 'operaphenix':
+                    logger.info(f"Converting Opera Phenix files to ImageXpress format...")
+
+                    # Check if this is a directory with an Images subdirectory (Opera Phenix format)
+                    images_dir = plate_path / "Images"
+                    if images_dir.exists() and images_dir.is_dir():
+                        logger.info(f"Found Images directory, using it for Opera Phenix files")
+                        # Rename files in the Images directory
+                        success = self.filename_parser.rename_all_files_in_directory(images_dir)
+                    else:
+                        # Rename files in place
+                        success = self.filename_parser.rename_all_files_in_directory(plate_path)
+
+                    if success:
+                        logger.info(f"Successfully converted Opera Phenix files to ImageXpress format")
+                        # Use ImageXpress parser for the converted files
+                        from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+                        self.filename_parser = ImageXpressFilenameParser()
+                    else:
+                        logger.warning(f"Failed to convert Opera Phenix files to ImageXpress format. Using original files.")
+
+            # Update components with the filename parser
+            self.fs_manager = FileSystemManager(filename_parser=self.filename_parser)
+            self.stitcher = Stitcher(self.config.stitcher, self.filename_parser)
+            self.zstack_processor = ZStackProcessor(self.config.z_stack_processor, self.filename_parser)
             use_reference_positions = config.use_reference_positions
             preprocessing_funcs = config.preprocessing_funcs
             composite_weights = config.composite_weights
@@ -88,8 +160,31 @@ class PlateProcessor:
             logger.info(f"Created positions directory: {positions_dir}")
             logger.info(f"Created stitched directory: {stitched_dir}")
 
+            # Initialize directory structure manager
+            dir_structure = self.fs_manager.initialize_dir_structure(plate_path)
+            logger.info(f"Detected directory structure: {dir_structure.structure_type}")
+
+            # Get input directory based on the detected structure
+            timepoint_dir_path = dir_structure.get_timepoint_dir()
+
+            if timepoint_dir_path:
+                logger.info(f"Using timepoint directory: {timepoint_dir_path}")
+                input_dir = timepoint_dir_path
+            elif "images" in dir_structure.image_locations:
+                # Images are in the Images directory
+                images_dir = plate_path / "Images"
+                logger.info(f"Using Images directory: {images_dir}")
+                input_dir = images_dir
+            elif "plate" in dir_structure.image_locations:
+                # Images are directly in the plate folder
+                logger.info(f"Using plate directory directly: {plate_path}")
+                input_dir = plate_path
+            else:
+                # No images found
+                raise FileNotFoundError(f"No image files found in {plate_path} or its subdirectories")
+
             dirs = {
-                'input': plate_path / timepoint_dir,
+                'input': input_dir,
                 'processed': processed_timepoint_dir,
                 'positions': positions_dir,
                 'stitched': stitched_timepoint_dir
@@ -256,7 +351,7 @@ class PlateProcessor:
                     logger.error(f"Failed to process well {well}")
 
             # Clean up temporary folders if needed
-            self.fs_manager.clean_temp_folders(parent_dir, plate_name, keep_suffixes=['_stitched'])
+            self.fs_manager.clean_temp_folders(parent_dir, plate_name, keep_suffixes=['_stitched', '_positions'])
 
             return True
 
@@ -291,14 +386,31 @@ class PlateProcessor:
             self.fs_manager.ensure_directory(positions_dir)
             self.fs_manager.ensure_directory(stitched_dir)
 
-            # 2. Process each well
-            timepoint_path = plate_folder / timepoint_dir
-            if not timepoint_path.exists():
-                logger.error(f"{timepoint_dir} directory not found in {plate_folder}")
+            # 2. Initialize directory structure manager
+            dir_structure = self.fs_manager.initialize_dir_structure(plate_folder)
+            logger.info(f"Detected directory structure: {dir_structure.structure_type}")
+
+            # Get input directory based on the detected structure
+            timepoint_path = dir_structure.get_timepoint_dir()
+
+            if timepoint_path:
+                logger.info(f"Using timepoint directory: {timepoint_path}")
+            elif "images" in dir_structure.image_locations:
+                # Images are in the Images directory
+                images_dir = plate_folder / "Images"
+                logger.info(f"Using Images directory: {images_dir}")
+                timepoint_path = images_dir
+            elif "plate" in dir_structure.image_locations:
+                # Images are directly in the plate folder
+                logger.info(f"Using plate directory directly: {plate_folder}")
+                timepoint_path = plate_folder
+            else:
+                # No images found
+                logger.error(f"No image files found in {plate_folder} or its subdirectories")
                 return False
 
             # 3. Find all wells and filter if needed
-            wells = self.fs_manager.find_wells(timepoint_path)
+            wells = dir_structure.get_wells()
             if self.config.well_filter:
                 wells = [w for w in wells if w in self.config.well_filter]
 
@@ -347,9 +459,32 @@ class PlateProcessor:
                 projections_dir = parent_dir / f"{plate_name}{config.projections_dir_suffix}"
                 projections_timepoint_dir = self.fs_manager.ensure_directory(projections_dir / timepoint_dir)
 
+                # Initialize directory structure manager
+                dir_structure = self.fs_manager.initialize_dir_structure(plate_folder)
+                logger.info(f"Detected directory structure: {dir_structure.structure_type}")
+
+                # Get input directory based on the detected structure
+                timepoint_path = dir_structure.get_timepoint_dir()
+
+                if timepoint_path:
+                    logger.info(f"Using timepoint directory: {timepoint_path}")
+                elif "images" in dir_structure.image_locations:
+                    # Images are in the Images directory
+                    images_dir = plate_folder / "Images"
+                    logger.info(f"Using Images directory: {images_dir}")
+                    timepoint_path = images_dir
+                elif "plate" in dir_structure.image_locations:
+                    # Images are directly in the plate folder
+                    logger.info(f"Using plate directory directly: {plate_folder}")
+                    timepoint_path = plate_folder
+                else:
+                    # No images found
+                    logger.error(f"No image files found in {plate_folder} or its subdirectories")
+                    return False
+
                 # Create projections using ZStackProcessor
                 success, _ = self.zstack_processor.create_zstack_projections(
-                    plate_folder / timepoint_dir,
+                    timepoint_path,
                     projections_timepoint_dir,
                     projection_types=z_config.projection_types
                 )
@@ -357,19 +492,48 @@ class PlateProcessor:
                 if not success:
                     logger.warning("Failed to create projections")
 
-            # 2. Select reference Z-plane for stitching
-            reference_z = z_config.stitch_z_reference
-            logger.info(f"Using reference Z-plane: {reference_z}")
+            # 2. Select reference method for stitching
+            # Convert from new reference_method format to old reference_z format for backward compatibility
+            if isinstance(z_config.reference_method, str):
+                if z_config.reference_method == 'max_projection':
+                    reference_z = 'max'
+                elif z_config.reference_method == 'mean_projection':
+                    reference_z = 'mean'
+                elif z_config.reference_method == 'best_focus':
+                    reference_z = 'best_focus'
+                else:
+                    logger.error(f"Invalid reference_method: {z_config.reference_method}")
+                    return False
+            else:
+                # If it's a callable, use it directly
+                reference_z = z_config.reference_method
+
+            logger.info(f"Using reference method: {z_config.reference_method} (reference_z: {reference_z})")
 
             # 3. Process the reference Z-plane
-            if reference_z == "best_focus" and z_config.focus_detect:
+            if reference_z == "best_focus":
                 # Create best focus directory
                 best_focus_dir = parent_dir / f"{plate_name}{config.best_focus_dir_suffix}"
                 self.fs_manager.ensure_directory(best_focus_dir)
 
+                # Check if TimePoint_1 directory exists
+                timepoint_path = plate_folder / timepoint_dir
+                if not timepoint_path.exists():
+                    # Check if there are image files directly in the plate folder
+                    image_files = []
+                    for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                        image_files.extend(list(plate_folder.glob(f"*{ext}")))
+
+                    if image_files:
+                        logger.info(f"No {timepoint_dir} directory found, but found {len(image_files)} image files directly in the plate folder.")
+                        timepoint_path = plate_folder
+                    else:
+                        logger.error(f"{timepoint_dir} directory not found in {plate_folder} and no image files found directly in the plate folder")
+                        return False
+
                 # Create best focus images
                 success, _ = self.zstack_processor.create_best_focus_images(
-                    plate_folder / timepoint_dir,
+                    timepoint_path,
                     best_focus_dir,
                     focus_method=z_config.focus_method,
                     focus_wavelength=config.reference_channels[0]
@@ -404,9 +568,10 @@ class PlateProcessor:
                 z_processor = PlateProcessor(self.config)
 
                 # Stitch across Z using ZStackProcessor
+                # Pass None for reference_z to use the reference_method from the config
                 success = self.zstack_processor.stitch_across_z(
                     plate_folder,
-                    reference_z=reference_z,
+                    reference_z=None,  # Use reference_method from config
                     stitch_all_z_planes=True,
                     processor=z_processor
                 )

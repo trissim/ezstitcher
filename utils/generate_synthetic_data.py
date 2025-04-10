@@ -462,6 +462,13 @@ class SyntheticMicroscopyGenerator:
             col = int(well[1:3])
             well_indices.append((row, col))
 
+        # Calculate pixel size in meters (for ImageResolutionX/Y)
+        # Default is 0.65 µm, but we'll use a more realistic value for Opera Phenix
+        pixel_size_meters = 1.1867525298988041E-06  # ~1.19 µm
+
+        # Calculate Z-step size in meters
+        z_step_size_meters = self.z_step_size * 1e-6  # Convert from µm to m
+
         # Start building the XML content
         xml_content = f"""<?xml version="1.0" encoding="utf-8"?>
 <EvaluationInputData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="1" xmlns="http://www.perkinelmer.com/PEHH/HarmonyV6">
@@ -501,31 +508,112 @@ class SyntheticMicroscopyGenerator:
   <Images>
     <Map>
       <Entry ChannelID="1">
+        <ChannelName>HOECHST 33342</ChannelName>
+        <ImageType>Signal</ImageType>
+        <AcquisitionType>NonConfocal</AcquisitionType>
+        <IlluminationType>Epifluorescence</IlluminationType>
+        <ChannelType>Fluorescence</ChannelType>
+        <ImageResolutionX Unit="m">{}</ImageResolutionX>
+        <ImageResolutionY Unit="m">{}</ImageResolutionY>
+        <ImageSizeX>{}</ImageSizeX>
+        <ImageSizeY>{}</ImageSizeY>
+        <BinningX>2</BinningX>
+        <BinningY>2</BinningY>
+        <MaxIntensity>65536</MaxIntensity>
+        <CameraType>AndorZylaCam</CameraType>
+        <MainExcitationWavelength Unit="nm">375</MainExcitationWavelength>
+        <MainEmissionWavelength Unit="nm">456</MainEmissionWavelength>
         <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
         <ObjectiveNA Unit="">0.3</ObjectiveNA>
         <ExposureTime Unit="s">0.03</ExposureTime>
         <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
         <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
-      </Entry>"""
+      </Entry>""".format(pixel_size_meters, pixel_size_meters, self.image_size[0], self.image_size[1])
 
         # Add entries for each channel
+        channel_names = ["Calcein", "Alexa 647", "FITC", "TRITC", "Cy5"]
+        excitation_wavelengths = [488, 647, 488, 561, 647]
+        emission_wavelengths = [525, 665, 525, 590, 665]
+        exposure_times = [0.05, 0.1, 0.05, 0.08, 0.1]
+
         for channel in range(2, self.wavelengths + 1):
+            channel_idx = min(channel - 2, len(channel_names) - 1)  # Ensure we don't go out of bounds
             xml_content += f"""
       <Entry ChannelID="{channel}">
+        <ChannelName>{channel_names[channel_idx]}</ChannelName>
+        <ImageType>Signal</ImageType>
+        <AcquisitionType>NonConfocal</AcquisitionType>
+        <IlluminationType>Epifluorescence</IlluminationType>
+        <ChannelType>Fluorescence</ChannelType>
+        <ImageResolutionX Unit="m">{pixel_size_meters}</ImageResolutionX>
+        <ImageResolutionY Unit="m">{pixel_size_meters}</ImageResolutionY>
+        <ImageSizeX>{self.image_size[0]}</ImageSizeX>
+        <ImageSizeY>{self.image_size[1]}</ImageSizeY>
+        <BinningX>2</BinningX>
+        <BinningY>2</BinningY>
+        <MaxIntensity>65536</MaxIntensity>
+        <CameraType>AndorZylaCam</CameraType>
+        <MainExcitationWavelength Unit="nm">{excitation_wavelengths[channel_idx]}</MainExcitationWavelength>
+        <MainEmissionWavelength Unit="nm">{emission_wavelengths[channel_idx]}</MainEmissionWavelength>
         <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
         <ObjectiveNA Unit="">0.3</ObjectiveNA>
-        <ExposureTime Unit="s">0.05</ExposureTime>
+        <ExposureTime Unit="s">{exposure_times[channel_idx]}</ExposureTime>
         <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
         <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
       </Entry>"""
 
+        # Add image information section
+        xml_content += "\n    </Map>\n    <Images>"
+
+        # Add detailed image information for each image
+        for row, col in well_indices:
+            for site in range(1, self.grid_size[0] * self.grid_size[1] + 1):
+                # Calculate position for this site
+                site_row = (site - 1) // self.grid_size[1]
+                site_col = (site - 1) % self.grid_size[1]
+
+                # Calculate position in meters (typical Opera Phenix values)
+                # These are arbitrary values for demonstration
+                pos_x = 0.000576762 + site_col * 0.001  # Arbitrary X position
+                pos_y = 0.000576762 + site_row * 0.001  # Arbitrary Y position
+
+                for z in range(1, self.z_stack_levels + 1):
+                    # Calculate Z position based on Z level
+                    pos_z = 0.0001 + (z - 1) * z_step_size_meters
+                    abs_pos_z = 0.135809004 + (z - 1) * z_step_size_meters  # Arbitrary base Z position
+
+                    for channel in range(1, self.wavelengths + 1):
+                        # Create image ID
+                        image_id = f"{row:02d}{col:02d}K1F{site}P{z}R{channel}"
+
+                        # Create URL (filename)
+                        url = f"r{row:02d}c{col:02d}f{site}p{z:02d}-ch{channel}sk1fk1fl1.tiff"
+
+                        # Add image element
+                        xml_content += f"""
+    <Image Version="1">
+      <id>{image_id}</id>
+      <State>Ok</State>
+      <URL>{url}</URL>
+      <Row>{row}</Row>
+      <Col>{col}</Col>
+      <FieldID>{site}</FieldID>
+      <PlaneID>{z}</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>{channel}</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">{pos_x}</PositionX>
+      <PositionY Unit="m">{pos_y}</PositionY>
+      <PositionZ Unit="m">{pos_z}</PositionZ>
+      <AbsPositionZ Unit="m">{abs_pos_z}</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>{datetime.now().isoformat()}-04:00</AbsTime>
+    </Image>"""
+
         # Close the XML
         xml_content += """
-    </Map>
-    <PixelSizeCalibration>
-      <PixelSize Unit="µm">0.65</PixelSize>
-      <MagnificationRatio>1.0</MagnificationRatio>
-    </PixelSizeCalibration>
   </Images>
 </EvaluationInputData>"""
 

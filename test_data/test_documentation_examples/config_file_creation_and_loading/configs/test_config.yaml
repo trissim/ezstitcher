@@ -1,0 +1,39 @@
+best_focus_dir_suffix: _best_focus
+composite_weights: null
+focus_analyzer:
+  method: combined
+  roi: null
+  weights: null
+image_preprocessor:
+  composite_weights: null
+  preprocessing_funcs: {}
+microscope_type: auto
+output_dir_suffix: _processed
+positions_dir_suffix: _positions
+projections_dir_suffix: _projections
+reference_channels:
+- '1'
+- '2'
+stitched_dir_suffix: _stitched
+stitcher:
+  margin_ratio: 0.15
+  max_shift: 75
+  pixel_size: 1.0
+  tile_overlap: 15.0
+  tile_overlap_x: null
+  tile_overlap_y: null
+timepoint_dir_name: TimePoint_1
+use_reference_positions: false
+well_filter:
+- A01
+- A03
+z_stack_processor:
+  create_projections: true
+  focus_detect: true
+  focus_method: combined
+  projection_types:
+  - max
+  - mean
+  save_projections: true
+  stitch_all_z_planes: false
+  stitch_z_reference: max

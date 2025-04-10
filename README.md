@@ -364,10 +364,19 @@ EZStitcher uses a class-based architecture with instance methods for better orga
 
 1. **PlateProcessor**: Main entry point for processing a plate folder. Coordinates the overall workflow.
 2. **Stitcher**: Handles image stitching operations, including position detection and image assembly.
-3. **ZStackProcessor**: Manages Z-stack specific operations like focus detection, projection creation, and per-plane stitching.
-4. **FocusAnalyzer**: Analyzes focus quality in Z-stack images to find the best focus plane.
-5. **ImagePreprocessor**: Handles image preprocessing operations like contrast enhancement and composite creation.
-6. **FileSystemManager**: Manages file system operations like finding files, creating directories, and cleaning up.
+3. **ZStackDetector**: Detects Z-stack folders and images.
+4. **ZStackOrganizer**: Organizes Z-stack folder structures and filenames.
+5. **ZStackMetadata**: Aggregates metadata about wells, sites, channels, and Z-indices.
+6. **ZStackFocusSelector**: Performs best focus detection on Z-stacks.
+7. **ZStackProjector**: Generates projections (max, mean, custom) from Z-stacks.
+8. **ReferenceProjectionGenerator**: Creates reference projections for stitching.
+9. **PositionFileManager**: Manages CSV position files for stitching.
+10. **ZPlaneStitcher**: Stitches images across Z-planes using position files.
+11. **FileResolver**: Handles filename parsing, fallback logic, and image loading.
+12. **ZStackProcessingPipeline**: Orchestrates the full Z-stack processing workflow.
+13. **FocusAnalyzer**: Analyzes focus quality in Z-stack images.
+14. **ImagePreprocessor**: Handles image preprocessing operations like contrast enhancement and composite creation.
+15. **FileSystemManager**: Manages file system operations like finding files, creating directories, and cleaning up.
 
 ### Configuration Objects
 

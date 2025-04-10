@@ -1,0 +1,47 @@
+{
+  "reference_channels": [
+    "1",
+    "2"
+  ],
+  "well_filter": [
+    "A01",
+    "A03"
+  ],
+  "use_reference_positions": false,
+  "output_dir_suffix": "_processed",
+  "positions_dir_suffix": "_positions",
+  "stitched_dir_suffix": "_stitched",
+  "best_focus_dir_suffix": "_best_focus",
+  "projections_dir_suffix": "_projections",
+  "timepoint_dir_name": "TimePoint_1",
+  "composite_weights": null,
+  "stitcher": {
+    "tile_overlap": 15.0,
+    "tile_overlap_x": null,
+    "tile_overlap_y": null,
+    "max_shift": 75,
+    "margin_ratio": 0.15,
+    "pixel_size": 1.0
+  },
+  "focus_analyzer": {
+    "method": "combined",
+    "roi": null,
+    "weights": null
+  },
+  "image_preprocessor": {
+    "preprocessing_funcs": {},
+    "composite_weights": null
+  },
+  "z_stack_processor": {
+    "focus_detect": true,
+    "focus_method": "combined",
+    "create_projections": true,
+    "stitch_z_reference": "max",
+    "save_projections": true,
+    "stitch_all_z_planes": false,
+    "projection_types": [
+      "max",
+      "mean"
+    ]
+  }
+}
