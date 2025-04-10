@@ -61,6 +61,7 @@ node_modules/
 tests/**/test_data/
 tests/tests_data/
 tests/**/__pycache__/
+ezstitcher/tests/
 
 # Test output files
 *_test_output.txt
@@ -73,3 +74,4 @@ docs/build/
 # Temporary files
 *.log
 *.tmp
+commit_message.txt
