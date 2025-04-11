@@ -92,6 +92,17 @@ EZStitcher automatically handles Opera Phenix directory structures. When process
 
 This conversion ensures compatibility with the core stitching algorithms while preserving all the original metadata.
 
+## Site Number Padding
+
+EZStitcher handles inconsistent site number padding in filenames for both ImageXpress and Opera Phenix formats. For Opera Phenix, the site number is the field number (f) in the filename.
+
+For example, the following Opera Phenix filenames will be sorted correctly:
+- `r01c01f1p01-ch1sk1fk1fl1.tiff`
+- `r01c01f2p01-ch1sk1fk1fl1.tiff`
+- `r01c01f10p01-ch1sk1fk1fl1.tiff`
+
+If you want to rename files to have consistent padding, see the [File Renaming](file_renaming.md) documentation.
+
 ## Adding Support for Other Microscopes
 
 EZStitcher is designed to be easily extensible to support other microscope formats. To add support for a new microscope:

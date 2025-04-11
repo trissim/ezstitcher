@@ -20,6 +20,9 @@ Full documentation is available at [https://ezstitcher.readthedocs.io/](https://
 - Support for multi-channel fluorescence microscopy
 - Well and pattern detection for plate-based experiments
 - Automatic metadata extraction from TIFF files
+- Natural sorting of filenames with mixed site number padding
+- Consistent display of site numbers in logs
+- File renaming for consistent site number padding
 - No dependency on imagecodecs (uses uncompressed TIFF)
 - Class-based architecture with instance methods for improved code organization and modularity
 
@@ -99,6 +102,15 @@ ezstitcher /path/to/plate_folder --focus-detect --create-projections --stitch-me
 
 # Process specific wells
 ezstitcher /path/to/plate_folder --wells A01 B02 C03
+
+# Rename files with inconsistent site number padding
+ezstitcher /path/to/plate_folder --rename-files
+
+# Rename files with custom padding width
+ezstitcher /path/to/plate_folder --rename-files --padding-width 4
+
+# Preview renaming without actually renaming files
+ezstitcher /path/to/plate_folder --rename-files --dry-run
 ```
 
 ## Python API Usage
@@ -201,6 +213,43 @@ success = process_plate_auto(
     **{"z_stack_processor.stitch_all_z_planes": True}
 )
 assert success, "Z-stack per-plane processing failed"
+```
+
+### File Renaming for Consistent Site Number Padding
+
+```python
+from ezstitcher.core.main import process_plate_auto
+
+# Rename files with inconsistent site number padding
+success = process_plate_auto(
+    'path/to/plate_folder',
+    rename_files=True
+)
+assert success, "File renaming failed"
+
+# Rename files with custom padding width
+success = process_plate_auto(
+    'path/to/plate_folder',
+    rename_files=True,
+    padding_width=4
+)
+assert success, "File renaming with custom padding width failed"
+
+# Preview renaming without actually renaming files
+success = process_plate_auto(
+    'path/to/plate_folder',
+    rename_files=True,
+    dry_run=True
+)
+assert success, "File renaming preview failed"
+
+# Rename files only (skip processing)
+success = process_plate_auto(
+    'path/to/plate_folder',
+    rename_files=True,
+    rename_only=True
+)
+assert success, "File renaming only failed"
 ```
 
 ### Custom Z-Stack Projection Function
@@ -312,7 +361,10 @@ plate_config = PlateProcessorConfig(
     stitcher=stitcher_config,
     focus_analyzer=focus_config,
     image_preprocessor=image_config,
-    z_stack_processor=zstack_config
+    z_stack_processor=zstack_config,
+    rename_files=True,              # Rename files with inconsistent site number padding
+    padding_width=3,                # Width to pad site numbers to
+    dry_run=False                   # Actually rename files (not just preview)
 )
 
 # Create and run the plate processor
@@ -453,6 +505,8 @@ The following features have been thoroughly tested and verified:
 - Z-stack per-plane stitching using projection-derived positions
 - Multi-channel reference stitching
 - File system operations and directory management
+- Natural sorting of filenames with mixed site number padding
+- File renaming for consistent site number padding
 
 ## Requirements
 
@@ -471,6 +525,7 @@ The following features have been thoroughly tested and verified:
 - [Opera Phenix Support](docs/opera_phenix_support.md)
 - [Auto-Detection](docs/auto_detection.md)
 - [Workflow Diagrams](docs/workflow_diagram.md)
+- [File Renaming](docs/file_renaming.md)
 
 ## License
 

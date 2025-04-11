@@ -80,6 +80,23 @@ process_plate_auto(
 )
 ```
 
+## Site Number Padding
+
+EZStitcher handles inconsistent site number padding in filenames by:
+
+1. Using natural sorting to correctly sort filenames with mixed padding
+2. Treating site numbers as integers for sorting
+3. Displaying site numbers with consistent padding in logs
+
+This ensures that files are processed in the correct order regardless of how the site numbers are padded in the filenames.
+
+For example, the following filenames will be sorted correctly:
+- `A01_s1_w1.tif`
+- `A01_s2_w1.tif`
+- `A01_s10_w1.tif`
+
+If you want to rename files to have consistent padding, see the [File Renaming](file_renaming.md) documentation.
+
 ## Troubleshooting
 
 If auto-detection is not working as expected, you can try the following:
