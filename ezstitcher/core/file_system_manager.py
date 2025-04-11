@@ -295,11 +295,12 @@ class FileSystemManager:
             if meta is None:
                 return ('', 0, 0, 0)  # Default values for sorting
 
+            # Ensure site, channel, and z_plane are treated as integers for sorting
             return (
                 meta.get('well', ''),
-                meta.get('site', 0),
-                meta.get('channel', 0),
-                meta.get('z_plane', 0)
+                int(meta.get('site', 0)),  # Convert to int to ensure proper numerical sorting
+                int(meta.get('channel', 0)),  # Convert to int to ensure proper numerical sorting
+                int(meta.get('z_plane', 0))  # Convert to int to ensure proper numerical sorting
             )
 
         sorted_files = sorted(matching_files, key=sort_key)

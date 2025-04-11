@@ -69,14 +69,32 @@ class PatternMatcher:
             # If files found in TimePoint_1, use that directory
             if matching_files:
                 print(f"Found {len(matching_files)} files in TimePoint_1 directory")
-                return sorted(matching_files)
+                # Use natural sorting instead of lexicographical sorting
+                return self._natural_sort(matching_files)
 
         # Print debug information
         print(f"Pattern: {pattern}, Directory: {directory}, Files found: {len(matching_files)}")
         if matching_files:
             print(f"First file: {matching_files[0]}")
 
-        return sorted(matching_files)
+        # Use natural sorting instead of lexicographical sorting
+        return self._natural_sort(matching_files)
+
+    def _natural_sort(self, file_list):
+        """
+        Sort filenames naturally, so that site numbers are sorted numerically.
+        E.g., ["s1", "s10", "s2"] -> ["s1", "s2", "s10"]
+
+        Args:
+            file_list (list): List of filenames to sort
+
+        Returns:
+            list: Naturally sorted list of filenames
+        """
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
+
+        return sorted(file_list, key=natural_sort_key)
 
     def auto_detect_patterns(self, folder_path, well_filter=None, extensions=None):
         """

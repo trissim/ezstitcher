@@ -530,7 +530,7 @@ class Stitcher:
             # Build a Mosaic from the alignment
             mosaic_args = {
                 'verbose': True,
-                'flip_mosaic_y': False  # if your final mosaic needs flipping
+                'flip_mosaic_y': True  # if your final mosaic needs flipping
             }
             mosaic = reg.Mosaic(
                 aligner,
@@ -635,7 +635,16 @@ class Stitcher:
 
             # Process each tile
             for i, (fname, x_f, y_f) in enumerate(pos_entries):
-                logger.info(f"Placing tile {i+1}/{len(pos_entries)}: {fname} at ({x_f}, {y_f})")
+                # Ensure consistent display of site numbers in logs
+                display_fname = fname
+                site_match = re.search(r'_s(\d+)_', fname)
+                if site_match:
+                    site_num = site_match.group(1)
+                    # Ensure consistent display by padding to 3 digits
+                    padded_site = site_num.zfill(3)
+                    display_fname = fname.replace(f"_s{site_num}_", f"_s{padded_site}_")
+
+                logger.info(f"Placing tile {i+1}/{len(pos_entries)}: {display_fname} at ({x_f}, {y_f})")
 
                 # Load tile
                 tile_img = self.fs_manager.load_image(images_dir / fname)

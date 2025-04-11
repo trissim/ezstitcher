@@ -130,6 +130,44 @@ class FilenameParser(ABC):
         """
         pass
 
+    def pad_site_number(self, filename: str, width: int = 3) -> str:
+        """
+        Ensure site number is padded to a consistent width.
+
+        Args:
+            filename (str): Filename to pad
+            width (int): Width to pad to
+
+        Returns:
+            str: Filename with padded site number
+        """
+        # Extract just the filename without the path
+        basename = os.path.basename(filename)
+
+        # Get site number
+        site = self.parse_site(basename)
+        if site is None:
+            return filename  # Return original if site can't be parsed
+
+        # Pad site number and replace in filename
+        site_str = str(site)
+        padded_site = site_str.zfill(width)
+
+        # Use a generic approach that works for all formats
+        # For ImageXpress format: A01_s1_w1.tif -> A01_s001_w1.tif
+        result = re.sub(r'_s' + site_str + r'_', f'_s{padded_site}_', basename)
+
+        # If the filename didn't change, it might be in a different format
+        # Try Opera Phenix format: r01c01f1p01-ch1.tiff -> r01c01f001p01-ch1.tiff
+        if result == basename:
+            result = re.sub(r'f' + site_str + r'p', f'f{padded_site}p', basename)
+
+        # If the path was provided, maintain it
+        if filename != basename:
+            return os.path.join(os.path.dirname(filename), result)
+
+        return result
+
     @classmethod
     def detect_format(cls, filenames: List[str]) -> Optional[str]:
         """
