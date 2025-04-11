@@ -100,6 +100,9 @@ class PlateProcessor:
             bool: True if successful, False otherwise
         """
         try:
+            # Store the plate folder for use by other methods
+            self._current_plate_folder = plate_folder
+
             config = self.config
             reference_channels = config.reference_channels
             well_filter = config.well_filter
@@ -688,3 +691,32 @@ class PlateProcessor:
         except Exception as e:
             logger.error(f"Error in _process_well: {e}", exc_info=True)
             return False
+
+    def rename_files_with_consistent_padding(self, width=3, dry_run=False):
+        """
+        Rename files in the plate directory to have consistent site number padding.
+
+        Args:
+            width (int, optional): Width to pad site numbers to. Defaults to 3.
+            dry_run (bool, optional): If True, only print what would be done without actually renaming
+
+        Returns:
+            dict: Dictionary mapping original filenames to new filenames
+        """
+        # Get the appropriate directory
+        # Use the input directory if it's been set, otherwise use the first argument from run()
+        if hasattr(self, 'input_dir') and self.input_dir is not None:
+            directory = self.input_dir
+        else:
+            directory = Path(self._current_plate_folder)
+
+        # Get the appropriate parser
+        parser = self.filename_parser
+
+        # Rename files
+        return self.fs_manager.rename_files_with_consistent_padding(
+            directory,
+            parser=parser,
+            width=width,
+            dry_run=dry_run
+        )

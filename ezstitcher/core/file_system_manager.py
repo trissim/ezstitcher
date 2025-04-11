@@ -667,17 +667,106 @@ class FileSystemManager:
         """
         return self.filename_parser.parse_filename(filename)
 
-    def pad_site_number(self, filename):
+    def pad_site_number(self, filename, width=3):
         """
-        Ensure site number is padded to 3 digits.
+        Ensure site number is padded to the specified width.
 
         Args:
             filename (str): Filename to pad
+            width (int, optional): Width to pad site numbers to. Defaults to 3.
 
         Returns:
             str: Filename with padded site number
         """
-        return self.filename_parser.pad_site_number(filename)
+        return self.filename_parser.pad_site_number(filename, width=width)
+
+    def rename_files_with_consistent_padding(self, directory, parser=None, width=3, dry_run=False):
+        """
+        Rename files in a directory to have consistent site number padding.
+
+        Args:
+            directory (str or Path): Directory containing files to rename
+            parser (FilenameParser, optional): Parser to use for filename parsing and padding
+            width (int, optional): Width to pad site numbers to
+            dry_run (bool, optional): If True, only print what would be done without actually renaming
+
+        Returns:
+            dict: Dictionary mapping original filenames to new filenames
+        """
+        from ezstitcher.core.filename_parser import FilenameParser, create_parser
+
+        directory = Path(directory)
+
+        # Use default parser if none provided
+        if parser is None:
+            parser = self.filename_parser
+
+            # If the default parser is not set, try to detect format from files in directory
+            if parser is None:
+                files = list(directory.glob('*.tif')) + list(directory.glob('*.tiff'))
+                if not files:
+                    logger.warning(f"No image files found in {directory}")
+                    return {}
+
+                # Get filenames only
+                filenames = [f.name for f in files]
+
+                # Detect format
+                format_type = FilenameParser.detect_format(filenames)
+                if format_type is None:
+                    logger.warning(f"Could not detect format for files in {directory}")
+                    return {}
+
+                # Create parser
+                parser = create_parser(format_type)
+
+        # Find all image files
+        files = list(directory.glob('*.tif')) + list(directory.glob('*.tiff'))
+
+        # Map original filenames to padded filenames
+        rename_map = {}
+        for file_path in files:
+            original_name = file_path.name
+            padded_name = parser.pad_site_number(original_name, width=width)
+
+            # Only include files that need renaming
+            if original_name != padded_name:
+                rename_map[original_name] = padded_name
+
+        # Check for conflicts (e.g., both s1_w1.tif and s001_w1.tif exist)
+        # In this case, we'll skip renaming to avoid overwriting files
+        new_names = set(rename_map.values())
+        existing_names = set(f.name for f in files)
+        conflicts = new_names.intersection(existing_names)
+
+        if conflicts:
+            logger.warning(f"Found {len(conflicts)} filename conflicts. These files will not be renamed.")
+            for conflict in conflicts:
+                # Find all original names that would map to this conflict
+                conflicting_originals = [orig for orig, new in rename_map.items() if new == conflict]
+                logger.warning(f"Conflict: {conflicting_originals} -> {conflict}")
+
+                # Remove these entries from the rename map
+                for orig in conflicting_originals:
+                    if orig in rename_map:
+                        del rename_map[orig]
+
+        # Perform the renaming
+        if not dry_run:
+            for original_name, padded_name in rename_map.items():
+                original_path = directory / original_name
+                padded_path = directory / padded_name
+
+                try:
+                    original_path.rename(padded_path)
+                    logger.info(f"Renamed {original_name} -> {padded_name}")
+                except Exception as e:
+                    logger.error(f"Failed to rename {original_name} -> {padded_name}: {e}")
+        else:
+            for original_name, padded_name in rename_map.items():
+                logger.info(f"Would rename {original_name} -> {padded_name}")
+
+        return rename_map
 
     def construct_filename(self, well, site, wavelength, z_index=None, extension='.tif'):
         """

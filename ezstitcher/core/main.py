@@ -84,6 +84,9 @@ def process_plate_auto(
     # Instantiate PlateProcessor with auto-detection capabilities
     processor = PlateProcessor(config)
 
+    # Store the plate folder for use by other methods
+    processor._current_plate_folder = plate_folder
+
     # Apply nested overrides again to internal component configs
     apply_nested_overrides(processor.stitcher.config, kwargs)
     apply_nested_overrides(processor.focus_analyzer.config, kwargs)
@@ -98,6 +101,25 @@ def process_plate_auto(
 
     detector = ZStackProcessor(config.z_stack_processor)
     has_zstack, _ = detector.detect_zstack_images(timepoint_dir)
+
+    # Handle file renaming if requested
+    if config.rename_files:
+        logging.info(f"Renaming files to have consistent site number padding (width={config.padding_width})...")
+        rename_map = processor.rename_files_with_consistent_padding(
+            width=config.padding_width,
+            dry_run=config.dry_run
+        )
+        if rename_map:
+            if config.dry_run:
+                logging.info(f"Would rename {len(rename_map)} files (dry run)")
+            else:
+                logging.info(f"Renamed {len(rename_map)} files")
+        else:
+            logging.info("No files needed renaming")
+
+    # Skip processing if only renaming was requested
+    if kwargs.get('rename_only', False):
+        return True
 
     if has_zstack:
         logging.info("Z-stacks detected. Running full Z-stack processing pipeline.")

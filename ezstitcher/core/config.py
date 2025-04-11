@@ -167,6 +167,11 @@ class PlateProcessorConfig:
     projections_dir_suffix: str = "_Projections"
     timepoint_dir_name: str = "TimePoint_1"
 
+    # File renaming parameters
+    rename_files: bool = False
+    padding_width: int = 3
+    dry_run: bool = False
+
     # Preprocessing parameters
     preprocessing_funcs: Optional[Dict[str, Callable]] = None
     composite_weights: Optional[Dict[str, float]] = None
