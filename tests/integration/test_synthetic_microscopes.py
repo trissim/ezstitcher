@@ -21,7 +21,7 @@ MICROSCOPE_CONFIGS = {
     }
 }
 syn_data_params = {
-                      "grid_size": (3, 3),
+                      "grid_size": (4, 4),
                       "tile_size": (128, 128),
                       "overlap_percent": 10,
                       "wavelengths": 2,
@@ -182,13 +182,36 @@ def test_zstack_projection_minimal(zstack_plate_dir, microscope_config):
     assert success, "Z-stack projection processing failed"
 
 def test_zstack_per_plane_minimal(zstack_plate_dir, microscope_config):
+    from pathlib import Path
     """Test processing a Z-stack plate with per-plane stitching."""
-    success = process_plate_auto(
-        zstack_plate_dir,
-        microscope_type=microscope_config["microscope_type"],
-        **{"z_stack_processor.stitch_all_z_planes": True}
-    )
+    # For Opera Phenix, we need to specify the input_subdir parameter
+    if microscope_config["format"] == "OperaPhenix":
+        success = process_plate_auto(
+            zstack_plate_dir,
+            microscope_type="OperaPhenix",
+            input_subdir="Images",
+            **{"z_stack_processor.stitch_all_z_planes": True}
+        )
+    else:
+        success = process_plate_auto(
+            zstack_plate_dir,
+            microscope_type="auto",
+            **{"z_stack_processor.stitch_all_z_planes": True}
+        )
     assert success, "Z-stack per-plane processing failed"
+
+    # Check if stitched directory was created
+    stitched_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_stitched" / "TimePoint_1"
+    assert stitched_dir.exists(), "Stitched directory not created"
+
+    # Check what files are in the stitched directory
+    all_files = list(stitched_dir.glob("*.tif"))
+    print(f"All files in stitched directory: {[f.name for f in all_files]}")
+
+    # Check if stitched files have Z-plane suffixes
+    stitched_files = list(stitched_dir.glob("*_z*.tif"))
+    print(f"Files with z suffixes: {[f.name for f in stitched_files]}")
+    assert len(stitched_files) > 0, "No Z-plane files found"
 
 def test_multi_channel_minimal(flat_plate_dir, microscope_config):
     """Test processing a flat plate with multiple reference channels."""

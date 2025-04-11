@@ -48,6 +48,9 @@ class ZStackProcessor:
         else:
             self.config = config
 
+        # Debug print for z_stack_processor config
+        print(f"\n\n*** ZStackProcessor.__init__: stitch_all_z_planes={self.config.stitch_all_z_planes} ***")
+
         self.fs_manager = FileSystemManager()
         self._z_info = None
         self._z_indices = []
@@ -262,6 +265,12 @@ class ZStackProcessor:
         Returns:
             bool: True if successful, False otherwise
         """
+        print("\n\n*** ZStackProcessor.stitch_across_z called with: ***")
+        print(f"plate_folder: {plate_folder}")
+        print(f"reference_z: {reference_z}")
+        print(f"stitch_all_z_planes: {stitch_all_z_planes}")
+        print(f"processor: {processor}")
+        print(f"preprocessing_funcs: {preprocessing_funcs}")
         return self.stitcher.stitch_across_z(plate_folder, reference_z, stitch_all_z_planes, processor, preprocessing_funcs)
 
     # Delegate to ZStackReferenceAdapter

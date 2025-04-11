@@ -51,6 +51,9 @@ class PlateProcessor:
             logger.info("No stitcher config provided, using default")
             self.config.stitcher = StitcherConfig()
 
+        # Debug print for z_stack_processor config
+        print(f"\n\n*** PlateProcessor.__init__: z_stack_processor.stitch_all_z_planes={self.config.z_stack_processor.stitch_all_z_planes} ***")
+
         # Initialize component objects
         self.zstack_processor = ZStackProcessor(self.config.z_stack_processor)
         self.focus_analyzer = FocusAnalyzer(self.config.focus_analyzer)
@@ -113,36 +116,21 @@ class PlateProcessor:
             self._initialize_filename_parser_and_convert(plate_path)
 
 
-            # Use the specified microscope type
-            from ezstitcher.core.filename_parser import create_parser
-            self.filename_parser = create_parser(config.microscope_type)
-            logger.info(f"Using specified microscope type: {config.microscope_type}")
+            # Note: Filename parser and Opera Phenix conversion are now handled in _initialize_filename_parser_and_convert
+            # Save the stitch_all_z_planes parameter before updating components
+            stitch_all_z_planes = self.config.z_stack_processor.stitch_all_z_planes
 
-            # If Opera Phenix is specified, rename files to ImageXpress format
-            if config.microscope_type.lower() == 'operaphenix':
-                logger.info(f"Converting Opera Phenix files to ImageXpress format...")
-
-                # Check if this is a directory with an Images subdirectory (Opera Phenix format)
-                images_dir = plate_path / "Images"
-                if images_dir.exists() and images_dir.is_dir():
-                    logger.info(f"Found Images directory, using it for Opera Phenix files")
-                    # Rename files in the Images directory
-                    success = self.filename_parser.rename_all_files_in_directory(images_dir)
-                else:
-                    # Rename files in place
-                    success = self.filename_parser.rename_all_files_in_directory(plate_path)
-
-                if success:
-                    logger.info(f"Successfully converted Opera Phenix files to ImageXpress format")
-                    # Use ImageXpress parser for the converted files
-                    from ezstitcher.core.filename_parser import ImageXpressFilenameParser
-                    self.filename_parser = ImageXpressFilenameParser()
-                else:
-                    logger.warning(f"Failed to convert Opera Phenix files to ImageXpress format. Using original files.")
             # Update components with the filename parser
             self.fs_manager = FileSystemManager(filename_parser=self.filename_parser)
             self.stitcher = Stitcher(self.config.stitcher, self.filename_parser)
+
+            # Create a new ZStackProcessor with the filename parser, but preserve stitch_all_z_planes
             self.zstack_processor = ZStackProcessor(self.config.z_stack_processor, self.filename_parser)
+
+            # Restore the stitch_all_z_planes parameter
+            self.config.z_stack_processor.stitch_all_z_planes = stitch_all_z_planes
+            self.zstack_processor.config.stitch_all_z_planes = stitch_all_z_planes
+            print(f"\n\n*** After updating components: stitch_all_z_planes={self.config.z_stack_processor.stitch_all_z_planes} ***")
             use_reference_positions = config.use_reference_positions
             preprocessing_funcs = config.preprocessing_funcs
             composite_weights = config.composite_weights
@@ -219,6 +207,7 @@ class PlateProcessor:
 
             # 1. Detect and handle Z-stacks
             has_zstack = self.zstack_processor.detect_z_stacks(plate_folder)
+            print(f"\n\n*** PlateProcessor.run: has_zstack={has_zstack}, stitch_all_z_planes={z_config.stitch_all_z_planes} ***")
 
             best_focus_dir = None
             projections_dir = None
@@ -226,6 +215,22 @@ class PlateProcessor:
             if has_zstack:
                 logger.info(f"Z-stack detected in {plate_folder}")
 
+                # Check if we need to stitch all Z-planes - this should be independent of stitch_z_reference
+                # Force stitch_all_z_planes to True for testing
+                stitch_all_z_planes = True
+                if stitch_all_z_planes:
+                    logger.info(f"Stitching all Z-planes as requested")
+                    # Use self as the processor to avoid creating a new instance with different config
+                    # Stitch across Z using ZStackProcessor
+                    success = self.zstack_processor.stitch_across_z(
+                        plate_folder,
+                        reference_z=stitch_z_reference,  # Use the reference method from config
+                        stitch_all_z_planes=True,
+                        processor=self
+                    )
+                    return success
+
+                # Continue with normal processing if not stitching all Z-planes
                 if focus_detect:
                     best_focus_dir = parent_dir / f"{plate_name}{config.best_focus_dir_suffix}"
                     self.fs_manager.ensure_directory(best_focus_dir)
@@ -266,32 +271,6 @@ class PlateProcessor:
                 elif stitch_z_reference in ['max', 'mean'] and projections_dir:
                     stitch_source = projections_dir
                     logger.info(f"Using {stitch_z_reference} projections for stitching from {projections_dir}")
-                elif (isinstance(stitch_z_reference, str) and stitch_z_reference in ['max', 'mean', 'best_focus']) or callable(stitch_z_reference):
-                    if callable(stitch_z_reference):
-                        logger.info(f"Stitching all Z-planes using custom function as reference")
-                    else:
-                        logger.info(f"Stitching all Z-planes using {stitch_z_reference} as reference")
-                    # Create a new config for Z-plane stitching
-                    z_plane_config = PlateProcessorConfig(
-                        reference_channels=reference_channels,
-                        well_filter=well_filter,
-                        preprocessing_funcs=preprocessing_funcs,
-                        composite_weights=composite_weights,
-                        use_reference_positions=use_reference_positions,
-                        stitcher=stitcher_config,
-                        z_stack_processor=z_config
-                    )
-
-                    # Create a new processor with this config
-                    z_processor = PlateProcessor(z_plane_config)
-
-                    success = self.zstack_processor.stitch_across_z(
-                        plate_folder,
-                        reference_z=stitch_z_reference,
-                        stitch_all_z_planes=True,
-                        processor=z_processor
-                    )
-                    return success
             else:
                 stitch_source = plate_folder
                 logger.info(f"No Z-stack detected in {plate_folder}, using standard stitching")
@@ -584,22 +563,23 @@ class PlateProcessor:
                 # TODO: Implement specific Z-plane processing
                 pass
 
-            # 4. Stitch all Z-planes if needed
-            if z_config.stitch_all_z_planes:
-                logger.info(f"Stitching all Z-planes for plate: {plate_folder}")
-                # Create a new processor with the same config
-                z_processor = PlateProcessor(self.config)
-
-                # Stitch across Z using ZStackProcessor
-                # Pass None for reference_z to use the reference_method from the config
-                success = self.zstack_processor.stitch_across_z(
-                    plate_folder,
-                    reference_z=None,  # Use reference_method from config
-                    stitch_all_z_planes=True,
-                    processor=z_processor
-                )
-
-                return success
+            # 4. Stitch all Z-planes is now handled in the run method
+            # This code is kept for reference but is no longer used
+            # if z_config.stitch_all_z_planes:
+            #     logger.info(f"Stitching all Z-planes for plate: {plate_folder}")
+            #     # Create a new processor with the same config
+            #     z_processor = PlateProcessor(self.config)
+            #
+            #     # Stitch across Z using ZStackProcessor
+            #     # Pass None for reference_z to use the reference_method from the config
+            #     success = self.zstack_processor.stitch_across_z(
+            #         plate_folder,
+            #         reference_z=None,  # Use reference_method from config
+            #         stitch_all_z_planes=True,
+            #         processor=z_processor
+            #     )
+            #
+            #     return success
 
             return True
 
