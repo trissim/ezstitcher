@@ -10,39 +10,31 @@ MICROSCOPE_CONFIGS = {
     "ImageXpress": {
         "format": "ImageXpress",
         "test_dir_name": "imagexpress_refactored",
-        "input_subdir": None,  # No subdirectory needed
         "microscope_type": "auto",  # Use auto-detection
         "auto_image_size": True,
     },
     "OperaPhenix": {
         "format": "OperaPhenix",
         "test_dir_name": "opera_phenix_refactored",
-        "input_subdir": "Images",  # Opera Phenix uses Images subdirectory
         "microscope_type": "OperaPhenix",  # Explicitly specify type
-        "auto_image_size": True,  # Update to use auto_image_size
+        "auto_image_size": True,
     }
 }
-
+syn_data_params = {
+                      "grid_size": (3, 3),
+                      "tile_size": (128, 128),
+                      "overlap_percent": 10,
+                      "wavelengths": 2,
+                      "cell_size_range": (5, 10),
+                  }
 # Test-specific parameters that can be customized per microscope
 TEST_PARAMS = {
     "ImageXpress": {
-        "default": {
-            "grid_size": (3, 3),
-            "tile_size": (128, 128),
-            "overlap_percent": 10,
-            "wavelengths": 2,
-            "cell_size_range": (5, 10),
-        },
+        "default": syn_data_params
         # Add test-specific overrides here if needed
     },
     "OperaPhenix": {
-        "default": {
-            "grid_size": (3, 3),
-            "tile_size": (128, 128),
-            "overlap_percent": 10,
-            "wavelengths": 2,
-            "cell_size_range": (5, 10),
-        },
+        "default": syn_data_params
         # Add test-specific overrides here if needed
     }
 }
@@ -56,17 +48,17 @@ def microscope_config(request):
 def base_test_dir(microscope_config):
     """Create base test directory for the specific microscope type."""
     base_dir = Path(__file__).parent / "tests_data" / microscope_config["test_dir_name"]
-    
+
     # Delete the directory if it exists
     if base_dir.exists():
         print(f"Cleaning up existing test data directory: {base_dir}")
         shutil.rmtree(base_dir)
-    
+
     # Create the directory
     base_dir.mkdir(parents=True, exist_ok=True)
-    
+
     yield base_dir
-    
+
     # Uncomment to clean up after tests
     # shutil.rmtree(base_dir)
 
@@ -75,12 +67,12 @@ def test_dir(base_test_dir, request):
     """Create test-specific directory."""
     test_name = request.node.name
     test_dir = base_test_dir / test_name
-    
+
     # Create the directory if it doesn't exist
     test_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print(f"\nSetting up test directory for {test_name}: {test_dir}")
-    
+
     return test_dir
 
 @pytest.fixture
@@ -88,23 +80,23 @@ def test_params(request, microscope_config):
     """Get test-specific parameters for the current microscope type."""
     test_name = request.node.name
     microscope_type = microscope_config["format"]
-    
+
     # Get default parameters for this microscope type
     default_params = TEST_PARAMS.get(microscope_type, {}).get("default", {})
-    
+
     # Get test-specific parameters (if any)
     test_specific_params = TEST_PARAMS.get(microscope_type, {}).get(test_name, {})
-    
+
     # Merge default and test-specific parameters, with test-specific taking precedence
     params = {**default_params, **test_specific_params}
-    
+
     return params
 
 @pytest.fixture
 def flat_plate_dir(test_dir, microscope_config, test_params):
     """Create synthetic flat plate data for the specified microscope type."""
     plate_dir = test_dir / "flat_plate"
-    
+
     # Get parameters from test_params with defaults if not specified
     grid_size = test_params.get("grid_size", (3, 3))
     tile_size = test_params.get("tile_size", (128, 128))
@@ -112,7 +104,7 @@ def flat_plate_dir(test_dir, microscope_config, test_params):
     wavelengths = test_params.get("wavelengths", 2)
     z_stack_levels = test_params.get("z_stack_levels", 1)
     cell_size_range = test_params.get("cell_size_range", (5, 10))
-    
+
     generator = SyntheticMicroscopyGenerator(
         output_dir=str(plate_dir),
         grid_size=grid_size,
@@ -125,29 +117,27 @@ def flat_plate_dir(test_dir, microscope_config, test_params):
         auto_image_size=microscope_config["auto_image_size"]
     )
     generator.generate_dataset()
-    
+
     # Create a copy of the original data for inspection
     original_dir = test_dir / "flat_plate_original"
     if not original_dir.exists():
         shutil.copytree(plate_dir, original_dir)
-    
-    # Return the appropriate directory based on microscope type
-    if microscope_config["input_subdir"]:
-        return plate_dir / microscope_config["input_subdir"]
+
+    # Always return the plate directory - let the core library handle the directory structure
     return plate_dir
 
 @pytest.fixture
 def zstack_plate_dir(test_dir, microscope_config, test_params):
     """Create synthetic Z-stack plate data for the specified microscope type."""
     plate_dir = test_dir / "zstack_plate"
-    
+
     # Get parameters from test_params with defaults if not specified
     grid_size = test_params.get("grid_size", (3, 3))
     tile_size = test_params.get("tile_size", (128, 128))
     overlap_percent = test_params.get("overlap_percent", 10)
     wavelengths = test_params.get("wavelengths", 2)
     cell_size_range = test_params.get("cell_size_range", (5, 10))
-    
+
     generator = SyntheticMicroscopyGenerator(
         output_dir=str(plate_dir),
         grid_size=grid_size,
@@ -160,15 +150,13 @@ def zstack_plate_dir(test_dir, microscope_config, test_params):
         auto_image_size=microscope_config["auto_image_size"]
     )
     generator.generate_dataset()
-    
+
     # Create a copy of the original data for inspection
     original_dir = test_dir / "zstack_plate_original"
     if not original_dir.exists():
         shutil.copytree(plate_dir, original_dir)
-    
-    # Return the appropriate directory based on microscope type
-    if microscope_config["input_subdir"]:
-        return plate_dir / microscope_config["input_subdir"]
+
+    # Always return the plate directory - let the core library handle the directory structure
     return plate_dir
 
 def test_flat_plate_minimal(flat_plate_dir, microscope_config):
