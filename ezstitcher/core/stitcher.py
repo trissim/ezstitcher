@@ -391,11 +391,14 @@ class Stitcher:
     def compute_stitched_name(self, pattern: str) -> str:
         """
         Remove the 's{iii}_' or 's{iii}' portion from the pattern,
+        and also remove any Z-plane suffix (_z{zzz} or _z\d+),
         returning the rest as the final stitched filename.
 
         Examples:
           pattern = "mfd-ctb_A05_s{iii}_w1.tif" -> "mfd-ctb_A05_w1.tif"
           pattern = "mfd-ctb_B06_s{iii}w1.tif"  -> "mfd-ctb_B06_w1.tif"
+          pattern = "mfd-ctb_A05_s{iii}_w1_z{zzz}.tif" -> "mfd-ctb_A05_w1.tif"
+          pattern = "mfd-ctb_A05_s{iii}_w1_z001.tif" -> "mfd-ctb_A05_w1.tif"
 
         Args:
             pattern (str): Pattern with {iii} placeholder
@@ -408,10 +411,20 @@ class Stitcher:
             pattern = pattern.get('pattern', '')
 
         pattern = re.sub(r"\{.*?\}", f"{{{'iii'}}}", pattern)
+
+        # Remove site index
         if "s{iii}_" in pattern:
             stitched_name = pattern.replace("s{iii}_", "")
         else:
             stitched_name = pattern.replace("s{iii}", "")
+
+        # Remove Z-plane suffix if present
+        # This handles both _z{zzz} and _z\d+ patterns
+        stitched_name = re.sub(r"_z\d+(\.\w+)$", r"\1", stitched_name)
+
+        # Handle placeholders like _z{zzz} or _z{iii}
+        stitched_name = re.sub(r"_z\{[^}]+\}(\.\w+)$", r"\1", stitched_name)
+
         return stitched_name
 
     def generate_positions(self, image_dir: Union[str, Path],
@@ -501,6 +514,15 @@ class Stitcher:
                     logger.info(f"Using TimePoint_1 directory for images: {timepoint_dir}")
                     image_dir = timepoint_dir
 
+            # Check if there are more files than expected and adjust grid size if needed
+            expected_files = grid_size_x * grid_size_y
+            if len(files) > expected_files:
+                # Calculate new grid size based on number of files
+                new_size = int(np.ceil(np.sqrt(len(files))))
+                logger.warning(f"Found {len(files)} files, which is more than expected for grid size {grid_size_x}x{grid_size_y} ({expected_files} files).")
+                logger.warning(f"Adjusting grid size to {new_size}x{new_size} to accommodate all files.")
+                grid_size_x = grid_size_y = new_size
+
             if len(files) < grid_size_x * grid_size_y:
                 logger.error(f"Not enough files for grid size {grid_size_x}x{grid_size_y}. Found {len(files)} files.")
                 return False
@@ -545,6 +567,7 @@ class Stitcher:
             original_pattern = image_pattern.replace("{series}", "{iii}")
 
             # Generate positions DataFrame
+            # Use the potentially adjusted grid_size_x and grid_size_y
             positions_df = self.generate_positions_df(str(image_dir), original_pattern, positions, grid_size_x, grid_size_y)
 
             # Save to CSV

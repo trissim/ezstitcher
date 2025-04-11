@@ -36,8 +36,15 @@ class ZStackStitcher:
         self.config = config
         self.fs_manager = fs_manager or FileSystemManager()
         self.filename_parser = filename_parser
-        
+
     def stitch_across_z(self, plate_folder, reference_z=None, stitch_all_z_planes=True, processor=None, preprocessing_funcs=None):
+        logger.info(f"Starting stitch_across_z with plate_folder={plate_folder}, reference_z={reference_z}, stitch_all_z_planes={stitch_all_z_planes}")
+        print("\n\n*** ZStackStitcher.stitch_across_z called with: ***")
+        print(f"plate_folder: {plate_folder}")
+        print(f"reference_z: {reference_z}")
+        print(f"stitch_all_z_planes: {stitch_all_z_planes}")
+        print(f"processor: {processor}")
+        print(f"preprocessing_funcs: {preprocessing_funcs}")
         """
         Stitch all Z-planes in a plate using a reference Z-plane for positions.
 
@@ -289,24 +296,40 @@ class ZStackStitcher:
             stitched_dir = parent_dir / f"{plate_name}_stitched" / timepoint_dir
             self.fs_manager.ensure_directory(stitched_dir)
 
+            # For Opera Phenix, check if the timepoint_path is in the Images folder
+            if "Images" in str(timepoint_path):
+                # Opera Phenix data is in the Images folder
+                timepoint_path = timepoint_path.parent / "TimePoint_1"
+                # Ensure the directory exists
+                self.fs_manager.ensure_directory(timepoint_path)
+
+            # Import the PatternMatcher class if not already imported
+            from ezstitcher.core.pattern_matcher import PatternMatcher
+
+            # Create a PatternMatcher instance with the same filename parser
+            pattern_matcher = PatternMatcher(self.filename_parser)
+
+            # Detect all patterns for each well in the timepoint directory
+            patterns_by_well = pattern_matcher.auto_detect_patterns(timepoint_path)
+            logger.info(f"Detected patterns by well: {patterns_by_well}")
+
             # For each Z-plane, stitch all wells and wavelengths
             for z_index in z_indices:
                 logger.info(f"Stitching Z-plane {z_index}")
 
-                # For each position file (which corresponds to a well and wavelength)
-                for pos_file in position_files:
-                    # Extract well and wavelength from position file name
-                    match = re.match(r'(.+)_w(\d+)\.csv', pos_file.name)
-                    if not match:
-                        logger.warning(f"Could not parse position file name: {pos_file.name}")
+                # For each well, get the position file
+                for well, wavelength_patterns in patterns_by_well.items():
+                    logger.info(f"Processing well {well} for Z-plane {z_index}")
+
+                    # Find the position file for this well
+                    position_file = next((p for p in position_files if p.name.startswith(f"{well}_w")), None)
+                    if not position_file:
+                        logger.warning(f"No position file found for well {well}")
                         continue
 
-                    well_pattern = match.group(1)
-                    wavelength = match.group(2)
-
-                    # Read positions from CSV
+                    # Read positions from the position file
                     positions = []
-                    with open(pos_file, 'r') as f:
+                    with open(position_file, 'r') as f:
                         for line in f:
                             # Parse the line format: "file: C01_s001_w1.tif; grid: (0, 0); position: (0.0, 0.0)"
                             if 'file:' in line and 'position:' in line:
@@ -326,113 +349,123 @@ class ZStackStitcher:
                                         positions.append((site, x, y))
 
                     if not positions:
-                        logger.warning(f"No positions found in {pos_file}")
+                        logger.warning(f"No positions found in {position_file}")
                         continue
 
-                    # Get all tiles for this well, wavelength, and Z-plane
-                    tiles = []
-                    for site, x, y in positions:
-                        # Construct the filename and path
-                        # First, check if files are in ZStep folders
-                        zstep_folder = timepoint_path / f"ZStep_{z_index}"
-                        if zstep_folder.exists():
-                            # Files are in ZStep folders
-                            filename = f"{well_pattern}_s{site:03d}_w{wavelength}.tif"
-                            file_path = zstep_folder / filename
-                            logger.info(f"Looking for file in ZStep folder: {file_path}")
-                        else:
-                            # Use the filename parser to construct the filename
-                            # Check if we need to auto-detect the parser
-                            if not hasattr(self, 'filename_parser') or self.filename_parser is None:
-                                # Import here to avoid circular imports
-                                # Get a sample of filenames from the timepoint_path
-                                sample_files = []
-                                for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
-                                    sample_files.extend([str(f) for f in timepoint_path.glob(f"*{ext}")][:10])
-                                if sample_files:
-                                    self.filename_parser = detect_parser(sample_files)
-                                    logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
-                                else:
-                                    self.filename_parser = ImageXpressFilenameParser()
-                                    logger.info("No files found, defaulting to ImageXpress parser")
+                    # Process each wavelength for this well
+                    for wavelength, pattern in wavelength_patterns.items():
+                        logger.info(f"Processing wavelength {wavelength} with pattern {pattern} for well {well} and Z-plane {z_index}")
 
-                            # Construct the filename using the filename parser
-                            try:
-                                filename = self.filename_parser.construct_filename(well_pattern, site, int(wavelength), z_index)
-                                file_path = timepoint_path / filename
-                                logger.info(f"Looking for file: {file_path}")
-
-                                # If the file doesn't exist, try alternative extensions
-                                if not file_path.exists():
+                        # Get all tiles for this well, wavelength, and Z-plane
+                        tiles = []
+                        for site, x, y in positions:
+                            # Construct the filename and path
+                            # First, check if files are in ZStep folders
+                            zstep_folder = timepoint_path / f"ZStep_{z_index}"
+                            if zstep_folder.exists():
+                                # Files are in ZStep folders
+                                # Use the pattern from auto_detect_patterns
+                                filename = pattern.replace("{iii}", f"{site:03d}")
+                                file_path = zstep_folder / filename
+                                logger.info(f"Looking for file in ZStep folder: {file_path}")
+                            else:
+                                # Use the filename parser to construct the filename
+                                # Check if we need to auto-detect the parser
+                                if not hasattr(self, 'filename_parser') or self.filename_parser is None:
+                                    # Import here to avoid circular imports
+                                    # Get a sample of filenames from the timepoint_path
+                                    sample_files = []
                                     for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
-                                        alt_filename = self.filename_parser.construct_filename(well_pattern, site, int(wavelength), z_index, extension=ext)
-                                        alt_path = timepoint_path / alt_filename
-                                        if alt_path.exists():
-                                            file_path = alt_path
-                                            break
-                            except Exception as e:
-                                # Fallback to ImageXpress format if the parser fails
-                                logger.warning(f"Error constructing filename: {e}. Falling back to default format.")
-                                filename = f"{well_pattern}_s{site:03d}_w{wavelength}_z{z_index:03d}.tif"
-                                file_path = timepoint_path / filename
+                                        sample_files.extend([str(f) for f in timepoint_path.glob(f"*{ext}")][:10])
+                                    if sample_files:
+                                        self.filename_parser = detect_parser(sample_files)
+                                        logger.info(f"Auto-detected parser: {self.filename_parser.__class__.__name__}")
+                                    else:
+                                        self.filename_parser = ImageXpressFilenameParser()
+                                        logger.info("No files found, defaulting to ImageXpress parser")
 
-                        if file_path.exists():
-                            # Load the image
-                            img = self.fs_manager.load_image(file_path)
-                            if img is not None:
-                                # Apply preprocessing if available for this channel
-                                if wavelength in preprocessing_funcs:
-                                    img = preprocessing_funcs[wavelength](img)
-                                tiles.append((site, x, y, img))
-                        else:
-                            logger.warning(f"Tile not found: {file_path}")
+                                # Construct the filename using the filename parser
+                                try:
+                                    filename = self.filename_parser.construct_filename(well, site, int(wavelength), z_index)
+                                    file_path = timepoint_path / filename
+                                    logger.info(f"Looking for file: {file_path}")
 
-                    if not tiles:
-                        logger.warning(f"No tiles found for {well_pattern}_w{wavelength}_z{z_index}")
-                        continue
+                                    # If the file doesn't exist, try alternative extensions
+                                    if not file_path.exists():
+                                        for ext in ['.tif', '.tiff', '.TIF', '.TIFF']:
+                                            alt_filename = self.filename_parser.construct_filename(well, site, int(wavelength), z_index, extension=ext)
+                                            alt_path = timepoint_path / alt_filename
+                                            if alt_path.exists():
+                                                file_path = alt_path
+                                                break
+                                except Exception as e:
+                                    # Fallback to ImageXpress format if the parser fails
+                                    logger.warning(f"Error constructing filename: {e}. Falling back to default format.")
+                                    filename = f"{well}_s{site:03d}_w{wavelength}_z{z_index:03d}.tif"
+                                    file_path = timepoint_path / filename
 
-                    # Stitch the tiles
-                    logger.info(f"Stitching {len(tiles)} tiles for {well_pattern}_w{wavelength}_z{z_index}")
+                            if file_path.exists():
+                                # Load the image
+                                img = self.fs_manager.load_image(file_path)
+                                if img is not None:
+                                    # Apply preprocessing if available for this channel
+                                    if wavelength in preprocessing_funcs:
+                                        img = preprocessing_funcs[wavelength](img)
+                                    tiles.append((site, x, y, img))
+                            else:
+                                logger.warning(f"Tile not found: {file_path}")
 
-                    # Determine canvas size
-                    max_x = max(x + img.shape[1] for _, x, _, img in tiles)
-                    max_y = max(y + img.shape[0] for _, _, y, img in tiles)
-                    canvas = np.zeros((int(max_y), int(max_x)), dtype=np.uint16)
+                        if not tiles:
+                            logger.warning(f"No tiles found for {well}_w{wavelength}_z{z_index}")
+                            continue
 
-                    # Place tiles on canvas
-                    for site, x, y, img in tiles:
-                        x_start, y_start = int(x), int(y)
-                        x_end, y_end = x_start + img.shape[1], y_start + img.shape[0]
+                        # Stitch the tiles
+                        logger.info(f"Stitching {len(tiles)} tiles for {well}_w{wavelength}_z{z_index}")
 
-                        # Ensure we don't go out of bounds
-                        x_end = min(x_end, canvas.shape[1])
-                        y_end = min(y_end, canvas.shape[0])
+                        # Determine canvas size
+                        max_x = max(x + img.shape[1] for _, x, _, img in tiles)
+                        max_y = max(y + img.shape[0] for _, _, y, img in tiles)
+                        canvas = np.zeros((int(max_y), int(max_x)), dtype=np.uint16)
 
-                        # Place the tile
-                        canvas[y_start:y_end, x_start:x_end] = img[:y_end-y_start, :x_end-x_start]
+                        # Place tiles on canvas
+                        for site, x, y, img in tiles:
+                            x_start, y_start = int(x), int(y)
+                            x_end, y_end = x_start + img.shape[1], y_start + img.shape[0]
 
-                    # Save the stitched image
-                    output_filename = f"{well_pattern}_w{wavelength}_z{z_index:03d}.tif"
-                    output_path = stitched_dir / output_filename
-                    self.fs_manager.save_image(output_path, canvas)
-                    logger.info(f"Saved stitched image to {output_path}")
+                            # Ensure we don't go out of bounds
+                            x_end = min(x_end, canvas.shape[1])
+                            y_end = min(y_end, canvas.shape[0])
+
+                            # Place the tile
+                            canvas[y_start:y_end, x_start:x_end] = img[:y_end-y_start, :x_end-x_start]
+
+                        # Save the stitched image with Z-plane suffix
+                        output_filename = f"{well}_w{wavelength}_z{z_index:03d}.tif"
+                        output_path = stitched_dir / output_filename
+                        logger.info(f"Saving stitched image to {output_path}")
+                        self.fs_manager.save_image(output_path, canvas)
+                        logger.info(f"Saved stitched image to {output_path}")
+
+                        # Verify that the file was saved
+                        if not output_path.exists():
+                            logger.error(f"Failed to save stitched image to {output_path}")
 
             return True
 
         except Exception as e:
             logger.error(f"Error in stitch_across_z: {e}", exc_info=True)
             return False
-            
+
     def _detect_zstack_images(self, folder_path):
         """
         Detect if a folder contains Z-stack images based on filename patterns.
-        
+
         This is a helper method that delegates to a ZStackOrganizer if available,
         or implements the detection logic directly if not.
-        
+
         Args:
             folder_path: Path to the folder to check
-            
+
         Returns:
             tuple: (has_zstack, z_indices_map)
         """
@@ -445,7 +478,7 @@ class ZStackStitcher:
             # Implement detection logic directly
             folder_path = Path(folder_path)
             all_files = self.fs_manager.list_image_files(folder_path)
-            
+
             # Auto-detect parser if needed
             if self.filename_parser is None:
                 file_paths = [str(f) for f in all_files]
@@ -453,44 +486,44 @@ class ZStackStitcher:
                     self.filename_parser = detect_parser(file_paths)
                 else:
                     self.filename_parser = ImageXpressFilenameParser()
-                    
+
             z_indices = {}
-            
+
             for img_file in all_files:
                 metadata = self.filename_parser.parse_filename(str(img_file))
-                
+
                 if metadata and 'z_index' in metadata and metadata['z_index'] is not None:
                     well = metadata['well']
                     site = metadata['site']
                     channel = metadata['channel']
-                    
+
                     base_name = f"{well}_s{site:03d}_w{channel}"
-                    
+
                     if base_name not in z_indices:
                         z_indices[base_name] = []
-                        
+
                     z_indices[base_name].append(metadata['z_index'])
-            
+
             # Sort z_indices
             for base_name in z_indices:
                 z_indices[base_name].sort()
-                
+
             has_zstack = len(z_indices) > 0
-            
+
             return has_zstack, z_indices
-            
+
     def _create_projections(self, input_dir, output_dir, projection_types=None):
         """
         Create projections from Z-stack images.
-        
+
         This is a helper method that delegates to a ZStackProjector if available,
         or implements the projection creation directly if not.
-        
+
         Args:
             input_dir: Directory containing Z-stack images
             output_dir: Directory to save projections
             projection_types: List of projection types to create
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
@@ -503,18 +536,18 @@ class ZStackStitcher:
             # Implement projection creation directly
             logger.error("ZStackProjector not available, cannot create projections")
             return False
-            
+
     def _find_best_focus(self, input_dir, output_dir):
         """
         Find the best focus plane for each Z-stack.
-        
+
         This is a helper method that delegates to a ZStackFocusManager if available,
         or implements the best focus selection directly if not.
-        
+
         Args:
             input_dir: Directory containing Z-stack images
             output_dir: Directory to save best focus images
-            
+
         Returns:
             bool: True if successful, False otherwise
         """
