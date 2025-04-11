@@ -26,6 +26,7 @@ syn_data_params = {
                       "overlap_percent": 10,
                       "wavelengths": 2,
                       "cell_size_range": (5, 10),
+                      "wells": ['A01', 'B02'],
                   }
 # Test-specific parameters that can be customized per microscope
 TEST_PARAMS = {
@@ -104,6 +105,7 @@ def flat_plate_dir(test_dir, microscope_config, test_params):
     wavelengths = test_params.get("wavelengths", 2)
     z_stack_levels = test_params.get("z_stack_levels", 1)
     cell_size_range = test_params.get("cell_size_range", (5, 10))
+    wells = test_params.get("wells", ['A01'])  # Extract wells parameter
 
     generator = SyntheticMicroscopyGenerator(
         output_dir=str(plate_dir),
@@ -113,6 +115,7 @@ def flat_plate_dir(test_dir, microscope_config, test_params):
         wavelengths=wavelengths,
         z_stack_levels=z_stack_levels,
         cell_size_range=cell_size_range,
+        wells=wells,  # Pass wells parameter
         format=microscope_config["format"],
         auto_image_size=microscope_config["auto_image_size"]
     )
@@ -137,6 +140,7 @@ def zstack_plate_dir(test_dir, microscope_config, test_params):
     overlap_percent = test_params.get("overlap_percent", 10)
     wavelengths = test_params.get("wavelengths", 2)
     cell_size_range = test_params.get("cell_size_range", (5, 10))
+    wells = test_params.get("wells", ['A01'])  # Extract wells parameter
 
     generator = SyntheticMicroscopyGenerator(
         output_dir=str(plate_dir),
@@ -146,6 +150,7 @@ def zstack_plate_dir(test_dir, microscope_config, test_params):
         wavelengths=wavelengths,
         z_stack_levels=5,  # Always use 5 z-stack levels for this fixture
         cell_size_range=cell_size_range,
+        wells=wells,  # Pass wells parameter
         format=microscope_config["format"],
         auto_image_size=microscope_config["auto_image_size"]
     )
