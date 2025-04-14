@@ -243,23 +243,7 @@ class ZStackProcessor:
         except Exception as e:
             logger.error(f"Exception in detect_zstack_folders: {e}", exc_info=True)
             raise
-    def pad_site_number(self, filename):
-        """
-        Pad site number in filename to 3 digits.
 
-        Args:
-            filename (str): Filename to pad
-
-        Returns:
-            str: Filename with padded site number
-        """
-        site_match = re.search(r'_s(\d{1,3})(?=_|\.)', filename)
-        if site_match:
-            site_num = site_match.group(1)
-            if len(site_num) < 3:
-                padded = site_num.zfill(3)
-                filename = filename.replace(f"_s{site_num}", f"_s{padded}")
-        return filename
 
     def organize_zstack_folders(self, plate_folder):
         """
@@ -321,6 +305,7 @@ class ZStackProcessor:
                 logger.warning(f"Failed to remove Z-stack folder {z_folder}")
 
         return True
+
     def get_z_indices(self):
         """
         Return the list of detected Z indices after calling detect_z_stacks().
@@ -388,6 +373,7 @@ class ZStackProcessor:
             z_info[stack_id]['wavelengths'] = sorted(z_info[stack_id]['wavelengths'])
 
         return z_info
+
     def detect_zstack_images(self, folder_path):
         """
         Detect if a folder contains Z-stack images based on filename patterns.
@@ -469,13 +455,14 @@ class ZStackProcessor:
         """
         input_dir = Path(input_dir)
 
-        # If output_dir is None, create a directory named {plate_name}_best_focus
+        # If output_dir is None, create a directory named {plate_name}_processed
         if output_dir is None:
             plate_path = input_dir.parent if input_dir.name == "TimePoint_1" else input_dir
             parent_dir = plate_path.parent
             plate_name = plate_path.name
-            best_focus_suffix = self.config.best_focus_dir_suffix if hasattr(self.config, 'best_focus_dir_suffix') else "_best_focus"
-            output_dir = parent_dir / f"{plate_name}{best_focus_suffix}"
+            # Use processed directory for all intermediate images used for stitching
+            output_dir_suffix = "_processed"
+            output_dir = parent_dir / f"{plate_name}{output_dir_suffix}"
 
         # Create TimePoint_1 directory in output_dir
         timepoint_dir = self.config.timepoint_dir_name if hasattr(self.config, 'timepoint_dir_name') else "TimePoint_1"
@@ -776,8 +763,7 @@ class ZStackProcessor:
             return False, None
 
         # For projections, we'll save directly to the output directory
-        # This is because the output directory already includes the projection type in its name
-        # (e.g., synthetic_plate_projections_max/TimePoint_1)
+        # All intermediate images used for stitching should go in the processed directory
         projection_dirs = {}
         for proj_type in projection_types:
             # Always use the output directory directly
@@ -908,42 +894,35 @@ class ZStackProcessor:
             if isinstance(reference_z, str):
                 logger.info(f"Using reference_z: {reference_z}")
 
-                # Determine reference directory based on reference_z
+                # Use processed directory for all intermediate images used for stitching
+                processed_dir = parent_dir / f"{plate_name}_processed" / timepoint_dir
+                # Ensure the directory exists
+                self.fs_manager.ensure_directory(processed_dir)
+                reference_dir = processed_dir
+
                 if reference_z == 'max':
-                    reference_dir = parent_dir / f"{plate_name}_projections_max" / timepoint_dir
-                    # Ensure the directory exists
-                    self.fs_manager.ensure_directory(reference_dir)
-
                     # Create max projections for each Z-stack
-                    logger.info(f"Creating max projections for reference")
-                    self.create_zstack_projections(plate_path / timepoint_dir, reference_dir)
+                    logger.info(f"Creating max projections for reference in {processed_dir}")
+                    self.create_zstack_projections(plate_path / timepoint_dir, processed_dir)
                 elif reference_z == 'mean':
-                    reference_dir = parent_dir / f"{plate_name}_projections_mean" / timepoint_dir
-                    # Ensure the directory exists
-                    self.fs_manager.ensure_directory(reference_dir)
-
                     # Create mean projections for each Z-stack
-                    logger.info(f"Creating mean projections for reference")
-                    self.create_zstack_projections(plate_path / timepoint_dir, reference_dir, projection_types=['mean'])
+                    logger.info(f"Creating mean projections for reference in {processed_dir}")
+                    self.create_zstack_projections(plate_path / timepoint_dir, processed_dir, projection_types=['mean'])
                 elif reference_z == 'best_focus':
-                    reference_dir = parent_dir / f"{plate_name}_best_focus" / timepoint_dir
-                    # Ensure the directory exists
-                    self.fs_manager.ensure_directory(reference_dir)
-
                     # Create best focus projections for each Z-stack
-                    logger.info(f"Creating best focus projections for reference")
+                    logger.info(f"Creating best focus projections for reference in {processed_dir}")
                     # For best focus, we need to use the find_best_focus method
-                    self.find_best_focus(plate_path / timepoint_dir, reference_dir)
+                    self.find_best_focus(plate_path / timepoint_dir, processed_dir)
                 else:
                     logger.error(f"Invalid reference_z string: {reference_z}. Must be 'max', 'mean', or 'best_focus'.")
                     return False
             elif callable(reference_z):
-                # If reference_z is a function, we need to create a custom projection directory
-                custom_proj_dir = parent_dir / f"{plate_name}_projections_custom" / timepoint_dir
+                # Use processed directory for all intermediate images used for stitching
+                custom_proj_dir = parent_dir / f"{plate_name}_processed" / timepoint_dir
                 self.fs_manager.ensure_directory(custom_proj_dir)
 
                 # Create custom projections for each Z-stack
-                logger.info(f"Creating custom projections using provided function")
+                logger.info(f"Creating custom projections using provided function in {custom_proj_dir}")
 
                 # Process each Z-stack
                 for base_name, z_indices in z_indices_map.items():

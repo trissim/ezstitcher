@@ -11,495 +11,313 @@ from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.core.filename_parser import FilenameParser, detect_parser, create_parser
+from ezstitcher.core.image_locator import ImageLocator
+
 
 logger = logging.getLogger(__name__)
 
 class PlateProcessor:
     """
     High-level orchestrator for processing a microscopy plate.
-    Coordinates Z-stack handling, stitching, and output management.
+    Modular pipeline: flatten/rename, preprocessing, position generation, stitching, z-stack handling.
+    All orchestration is driven by a unified configuration model (PlateProcessorConfig).
     """
+
     def __init__(self, config: PlateProcessorConfig):
+        """
+        Initialize PlateProcessor with a unified configuration model.
+
+        Args:
+            config (PlateProcessorConfig): Unified configuration object (Pydantic or dataclass).
+        """
         self.config = config
         self.fs_manager = FileSystemManager()
         self.zstack_processor = ZStackProcessor(config.z_stack_processor)
         self.focus_analyzer = FocusAnalyzer(config.focus_analyzer)
         self.image_preprocessor = ImagePreprocessor(config.image_preprocessor)
         self.stitcher = Stitcher(config.stitcher)
-
-    # Methods removed as they're now in FileSystemManager
+        self._current_plate_folder = None
+        self.filename_parser = None
 
     def run(self, plate_folder):
         """
-        Process a plate folder with microscopy images.
+        Entry point: orchestrate the full plate processing pipeline.
 
         Args:
-            plate_folder (str or Path): Path to the plate folder
+            plate_folder (str or Path): Path to the plate folder.
 
         Returns:
-            bool: True if successful, False otherwise
+            bool: True if successful, False otherwise.
         """
+        self._current_plate_folder = plate_folder
+        plate_path = Path(plate_folder)
+        config = self.config
+        self.filename_parser = create_parser(config.microscope_type, plate_folder=plate_path)
         try:
-            plate_path = Path(plate_folder)
-            parent_dir = plate_path.parent
-            plate_name = plate_path.name
+            # Phase 1: Flatten and rename files (non-destructive, outputs to new dir if needed)
 
-            # Get configuration parameters
-            config = self.config
-            reference_channels = config.reference_channels
-            well_filter = config.well_filter
-            use_reference_positions = config.use_reference_positions
-            preprocessing_funcs = config.preprocessing_funcs
-            composite_weights = config.composite_weights
+            images_dir = ImageLocator.find_image_directory(plate_path)
+            self._flatten_and_rename(images_dir)
 
-            # Get stitcher configuration
-            stitcher_config = config.stitcher
-            margin_ratio = stitcher_config.margin_ratio
-            tile_overlap = stitcher_config.tile_overlap
-            tile_overlap_x = stitcher_config.tile_overlap_x
-            tile_overlap_y = stitcher_config.tile_overlap_y
-            max_shift = stitcher_config.max_shift
+            # Phase 2: Preprocessing (if any)
+            # (Handled within stitching phase as needed, see below)
 
-            # Get Z-stack configuration
-            z_config = config.z_stack_processor
-            focus_detect = z_config.focus_detect
-            focus_method = z_config.focus_method
-            create_projections = z_config.create_projections
-            stitch_z_reference = z_config.stitch_z_reference
-            save_projections = z_config.save_projections
-            stitch_all_z_planes = z_config.stitch_all_z_planes
-
-            # Create directory paths using config parameters
-            processed_dir = parent_dir / f"{plate_name}{config.output_dir_suffix}"
-            positions_dir = parent_dir / f"{plate_name}{config.positions_dir_suffix}"
-            stitched_dir = parent_dir / f"{plate_name}{config.stitched_dir_suffix}"
-            timepoint_dir = config.timepoint_dir_name
-
-            # Ensure directories exist using FileSystemManager
-            processed_dir = self.fs_manager.ensure_directory(processed_dir)
-            positions_dir = self.fs_manager.ensure_directory(positions_dir)
-            stitched_dir = self.fs_manager.ensure_directory(stitched_dir)
-
-            # Create TimePoint_1 directories
-            processed_timepoint_dir = self.fs_manager.ensure_directory(processed_dir / timepoint_dir)
-            stitched_timepoint_dir = self.fs_manager.ensure_directory(stitched_dir / timepoint_dir)
-
-            logger.info(f"Created processed directory: {processed_dir}")
-            logger.info(f"Created positions directory: {positions_dir}")
-            logger.info(f"Created stitched directory: {stitched_dir}")
-
-            dirs = {
-                'input': plate_path / timepoint_dir,
-                'processed': processed_timepoint_dir,
-                'positions': positions_dir,
-                'stitched': stitched_timepoint_dir
-            }
-
-            if not dirs['input'].exists():
-                logger.error(f"Input directory does not exist: {dirs['input']}")
+            # Phase 3: Z-stack handling (detection, best focus, projections)
+            zstack_result = self._handle_zstack(plate_path)
+            if zstack_result is False:
                 return False
+            input_dir = zstack_result
 
-            # 1. Detect and handle Z-stacks
-            has_zstack = self.zstack_processor.detect_z_stacks(plate_folder)
-
-            best_focus_dir = None
-            projections_dir = None
-
-            if has_zstack:
-                logger.info(f"Z-stack detected in {plate_folder}")
-
-                if focus_detect:
-                    best_focus_dir = parent_dir / f"{plate_name}{config.best_focus_dir_suffix}"
-                    self.fs_manager.ensure_directory(best_focus_dir)
-
-                    logger.info(f"Finding best focused images using method: {focus_method}")
-                    success, _ = self.zstack_processor.create_best_focus_images(
-                        dirs['input'],
-                        best_focus_dir,
-                        focus_method=focus_method,
-                        focus_wavelength=reference_channels[0]
-                    )
-
-                    # Ensure TimePoint_1 directory exists in best_focus_dir
-                    best_focus_timepoint_dir = best_focus_dir / timepoint_dir
-                    if not best_focus_timepoint_dir.exists():
-                        logger.error(f"{timepoint_dir} directory not created in {best_focus_dir}")
-                        return False
-                    if not success:
-                        logger.warning("No best focus images created")
-
-                if create_projections:
-                    projections_dir = parent_dir / f"{plate_name}{config.projections_dir_suffix}"
-                    projections_timepoint_dir = self.fs_manager.ensure_directory(projections_dir / timepoint_dir)
-
-                    logger.info(f"Creating projection: {stitch_z_reference}")
-                    success, _ = self.zstack_processor.create_zstack_projections(
-                        dirs['input'],
-                        projections_timepoint_dir,
-                        projection_types=[stitch_z_reference]
-                    )
-                    if not success:
-                        logger.warning("No projections created")
-
-                stitch_source = plate_folder
-                if stitch_z_reference == 'best_focus' and best_focus_dir:
-                    stitch_source = best_focus_dir
-                    logger.info(f"Using best focus images for stitching from {best_focus_dir}")
-                elif stitch_z_reference in ['max', 'mean'] and projections_dir:
-                    stitch_source = projections_dir
-                    logger.info(f"Using {stitch_z_reference} projections for stitching from {projections_dir}")
-                elif (isinstance(stitch_z_reference, str) and stitch_z_reference in ['max', 'mean', 'best_focus']) or callable(stitch_z_reference):
-                    if callable(stitch_z_reference):
-                        logger.info(f"Stitching all Z-planes using custom function as reference")
-                    else:
-                        logger.info(f"Stitching all Z-planes using {stitch_z_reference} as reference")
-                    # Create a new config for Z-plane stitching
-                    z_plane_config = PlateProcessorConfig(
-                        reference_channels=reference_channels,
-                        well_filter=well_filter,
-                        preprocessing_funcs=preprocessing_funcs,
-                        composite_weights=composite_weights,
-                        use_reference_positions=use_reference_positions,
-                        stitcher=stitcher_config,
-                        z_stack_processor=z_config
-                    )
-
-                    # Create a new processor with this config
-                    z_processor = PlateProcessor(z_plane_config)
-
-                    success = self.zstack_processor.stitch_across_z(
-                        plate_folder,
-                        reference_z=stitch_z_reference,
-                        stitch_all_z_planes=True,
-                        processor=z_processor
-                    )
-                    return success
-            else:
-                stitch_source = plate_folder
-                logger.info(f"No Z-stack detected in {plate_folder}, using standard stitching")
-
-            if stitch_source != plate_folder:
-                dirs['input'] = Path(stitch_source) / timepoint_dir
-
-            # 2. Find HTD file to get grid dimensions
-            htd_file = self.fs_manager.find_htd_file(plate_path)
-            grid_size_x, grid_size_y = 2, 2  # Default grid size for tests
-            if htd_file:
-                parsed = self.fs_manager.parse_htd_file(htd_file)
-                if parsed:
-                    grid_size_x, grid_size_y = parsed
-                    logger.info(f"Parsed grid dimensions from HTD file: {grid_size_x}x{grid_size_y}")
-                else:
-                    logger.warning("Could not parse grid dimensions from HTD file, using default 2x2")
-            else:
-                logger.warning("No HTD file found, using default grid size 2x2")
-
-            grid_dims = (grid_size_x, grid_size_y)
-            logger.info(f"Using grid dimensions: {grid_size_x}x{grid_size_y}")
-
-            # 3. Auto-detect patterns
-            patterns_by_well = self.stitcher.auto_detect_patterns(dirs['input'], well_filter)
-            if not patterns_by_well:
-                logger.error(f"No image patterns detected in {dirs['input']}")
-                return False
-
-            logger.info(f"Detected {len(patterns_by_well)} wells with images")
-
-            # 4. Process each well
-            for well, wavelength_patterns in patterns_by_well.items():
-                logger.info(f"\nProcessing well {well} with {len(wavelength_patterns)} wavelength(s)")
-
-                # Check if we need to use multiple reference channels
-                if len(reference_channels) > 1:
-                    logger.info(f"Using multiple reference channels: {reference_channels}")
-                    # Create composite reference channel
-                    ref_channel, ref_pattern, ref_dir, updated_patterns = self.stitcher.prepare_reference_channel(
-                        well, wavelength_patterns, dirs, reference_channels, preprocessing_funcs, composite_weights
-                    )
-                else:
-                    # Use single reference channel
-                    ref_channel, ref_pattern, ref_dir, updated_patterns = self.stitcher.prepare_reference_channel(
-                        well, wavelength_patterns, dirs, reference_channels, preprocessing_funcs, composite_weights
-                    )
-
-                if ref_channel is None:
-                    logger.error(f"Failed to prepare reference channel for well {well}")
-                    continue
-
-                if use_reference_positions:
-                    stitched_name = self.stitcher.compute_stitched_name(ref_pattern)
-                    positions_path = dirs['positions'] / f"{Path(stitched_name).stem}.csv"
-
-                    if not positions_path.exists():
-                        logger.error(f"Reference positions file not found: {positions_path}")
-                        logger.error("Cannot stitch using reference positions")
-                        return False
-
-                    logger.info(f"Using existing reference positions from {positions_path}")
-
-                    # Use the stitcher configuration directly
-                    success = self.stitcher.process_well_wavelengths(
-                        well, updated_patterns, dirs, grid_dims,
-                        ref_channel, ref_pattern, ref_dir,
-                        use_existing_positions=True
-                    )
-                else:
-                    # Use the stitcher configuration directly
-                    success = self.stitcher.process_well_wavelengths(
-                        well, updated_patterns, dirs, grid_dims,
-                        ref_channel, ref_pattern, ref_dir
-                    )
-
-                if success:
-                    logger.info(f"Completed processing well {well}")
-                else:
-                    logger.error(f"Failed to process well {well}")
-
-            # Clean up temporary folders if needed
-            self.fs_manager.clean_temp_folders(parent_dir, plate_name, keep_suffixes=['_stitched'])
-
-            return True
+            # Phase 4: Position generation and stitching
+            return self._stitch_plate(input_dir)
 
         except Exception as e:
             logger.error(f"Error in PlateProcessor.run: {e}", exc_info=True)
             return False
 
-    def _process_regular_plate(self, plate_folder: Path) -> bool:
+    def _flatten_and_rename(self, plate_path: Path):
         """
-        Process a regular (non-Z-stack) plate.
+        Flatten Z-stack folders and rename files for consistent site number padding if configured.
 
         Args:
-            plate_folder (Path): Path to the plate folder
+            plate_path (Path): Path to the plate folder.
+        """
+        config = self.config
+        if config.rename_files:
+            # Use FileSystemManager's rename utility (non-destructive if implemented as such)
+            self.fs_manager.rename_files_with_consistent_padding(
+                plate_path,
+                parser=self.filename_parser,
+                width=config.padding_width
+            )
+
+    def _handle_zstack(self, plate_path: Path):
+        """
+        Detect and process Z-stacks, create best focus/projection dirs as needed.
+
+        Args:
+            plate_path (Path): Path to the plate folder.
 
         Returns:
-            bool: True if successful, False otherwise
+            tuple: input_dir for downstream processing, or False on error.
         """
-        try:
-            logger.info(f"Processing regular plate: {plate_folder}")
+        config = self.config
+        parent_dir = plate_path.parent
+        plate_name = plate_path.name
+        z_config = config.z_stack_processor
 
-            # 1. Create output directories using config parameters
-            config = self.config
-            parent_dir = plate_folder.parent
-            plate_name = plate_folder.name
-
-            processed_dir = parent_dir / f"{plate_name}{config.output_dir_suffix}"
-            positions_dir = parent_dir / f"{plate_name}{config.positions_dir_suffix}"
-            stitched_dir = parent_dir / f"{plate_name}{config.stitched_dir_suffix}"
-            timepoint_dir = config.timepoint_dir_name
-
-            self.fs_manager.ensure_directory(processed_dir)
-            self.fs_manager.ensure_directory(positions_dir)
-            self.fs_manager.ensure_directory(stitched_dir)
-
-            # 2. Process each well
-            timepoint_path = plate_folder / timepoint_dir
-            if not timepoint_path.exists():
-                logger.error(f"{timepoint_dir} directory not found in {plate_folder}")
-                return False
-
-            # 3. Find all wells and filter if needed
-            wells = self.fs_manager.find_wells(timepoint_path)
-            if self.config.well_filter:
-                wells = [w for w in wells if w in self.config.well_filter]
-
-            if not wells:
-                logger.error(f"No wells found in {timepoint_path}")
-                return False
-
-            logger.info(f"Processing wells: {wells}")
-
-            # 4. Process each well
-            for well in wells:
-                success = self._process_well(timepoint_path, well, processed_dir, positions_dir, stitched_dir)
-                if not success:
-                    logger.error(f"Failed to process well: {well}")
-                    return False
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error in _process_regular_plate: {e}", exc_info=True)
+        # Create output directories
+        dirs = self.fs_manager.create_output_directories(
+            parent_dir, plate_name,
+            {
+                'processed': config.output_dir_suffix,
+                'positions': config.positions_dir_suffix,
+                'stitched': config.stitched_dir_suffix
+            }
+        )
+        dirs['input'] = ImageLocator.find_image_directory(plate_path)
+        if not dirs['input'].exists():
+            logger.error(f"Input directory does not exist: {dirs['input']}")
             return False
 
-    def _process_zstack_plate(self, plate_folder: Path) -> bool:
-        """
-        Process a Z-stack plate.
+        has_zstack = self.zstack_processor.detect_z_stacks(str(plate_path))
+        best_focus_dir = None
+        projections_dir = None
 
-        Args:
-            plate_folder (Path): Path to the plate folder
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            logger.info(f"Processing Z-stack plate: {plate_folder}")
-
-            # Get configuration parameters
-            config = self.config
-            z_config = config.z_stack_processor
-            parent_dir = plate_folder.parent
-            plate_name = plate_folder.name
-            timepoint_dir = config.timepoint_dir_name
-
-            # 1. Create projections if needed
-            if z_config.create_projections:
-                logger.info(f"Creating projections for Z-stack plate: {plate_folder}")
-                projections_dir = parent_dir / f"{plate_name}{config.projections_dir_suffix}"
-                projections_timepoint_dir = self.fs_manager.ensure_directory(projections_dir / timepoint_dir)
-
-                # Create projections using ZStackProcessor
-                success, _ = self.zstack_processor.create_zstack_projections(
-                    plate_folder / timepoint_dir,
-                    projections_timepoint_dir,
-                    projection_types=z_config.projection_types
-                )
-
-                if not success:
-                    logger.warning("Failed to create projections")
-
-            # 2. Select reference Z-plane for stitching
-            reference_z = z_config.stitch_z_reference
-            logger.info(f"Using reference Z-plane: {reference_z}")
-
-            # 3. Process the reference Z-plane
-            if reference_z == "best_focus" and z_config.focus_detect:
-                # Create best focus directory
+        if has_zstack:
+            # Best focus images
+            if getattr(z_config, "focus_detect", False):
                 best_focus_dir = parent_dir / f"{plate_name}{config.best_focus_dir_suffix}"
                 self.fs_manager.ensure_directory(best_focus_dir)
-
-                # Create best focus images
+                logger.info(f"Finding best focused images using method: {z_config.focus_method}")
                 success, _ = self.zstack_processor.create_best_focus_images(
-                    plate_folder / timepoint_dir,
+                    dirs['input'],
                     best_focus_dir,
                     focus_method=z_config.focus_method,
                     focus_wavelength=config.reference_channels[0]
                 )
+                if not success:
+                    logger.warning("No best focus images created")
 
-                if success:
-                    # Process the best focus directory as a regular plate
-                    return self._process_regular_plate(best_focus_dir)
-                else:
-                    logger.error("Failed to create best focus images")
-                    return False
+            # Projections
+            if getattr(z_config, "create_projections", False):
+                projections_dir = parent_dir / f"{plate_name}{config.projections_dir_suffix}"
+                logger.info(f"Creating projection: {getattr(z_config, 'stitch_z_reference', 'max')}")
+                success, _ = self.zstack_processor.create_zstack_projections(
+                    dirs['input'],
+                    projections_dir,
+                    projection_types=[getattr(z_config, "stitch_z_reference", "max")]
+                )
+                if not success:
+                    logger.warning("No projections created")
 
-            elif reference_z in ["max", "mean", "std"]:
-                # Use projection as reference
-                projection_dir = parent_dir / f"{plate_name}{config.projections_dir_suffix}"
-                if not projection_dir.exists():
-                    logger.error(f"Projection directory not found: {projection_dir}")
-                    return False
-
-                # Process the projection directory as a regular plate
-                return self._process_regular_plate(projection_dir)
-            else:
-                # Use specific Z-plane as reference
-                logger.info(f"Using specific Z-plane {reference_z} as reference")
-                # TODO: Implement specific Z-plane processing
-                pass
-
-            # 4. Stitch all Z-planes if needed
-            if z_config.stitch_all_z_planes:
-                logger.info(f"Stitching all Z-planes for plate: {plate_folder}")
-                # Create a new processor with the same config
-                z_processor = PlateProcessor(self.config)
-
-                # Stitch across Z using ZStackProcessor
+            # Determine which directory to use for stitching
+            stitch_z_reference = getattr(z_config, "stitch_z_reference", "max")
+            if stitch_z_reference == 'best_focus' and best_focus_dir:
+                input_dir = best_focus_dir
+                logger.info(f"Using best focus images for stitching from {best_focus_dir}")
+            elif stitch_z_reference in ['max', 'mean'] and projections_dir:
+                input_dir = projections_dir
+                logger.info(f"Using {stitch_z_reference} projections for stitching from {projections_dir}")
+            elif (isinstance(stitch_z_reference, str) and stitch_z_reference in ['max', 'mean', 'best_focus']) or callable(stitch_z_reference):
+                # Per-plane stitching
+                logger.info(f"Stitching all Z-planes using {stitch_z_reference} as reference")
+                z_plane_config = PlateProcessorConfig(
+                    reference_channels=config.reference_channels,
+                    well_filter=config.well_filter,
+                    preprocessing_funcs=config.preprocessing_funcs,
+                    composite_weights=config.composite_weights,
+                    use_reference_positions=config.use_reference_positions,
+                    stitcher=config.stitcher,
+                    z_stack_processor=config.z_stack_processor
+                )
+                z_processor = PlateProcessor(z_plane_config)
                 success = self.zstack_processor.stitch_across_z(
-                    plate_folder,
-                    reference_z=reference_z,
+                    str(plate_path),
+                    reference_z=stitch_z_reference,
                     stitch_all_z_planes=True,
                     processor=z_processor
                 )
+                return False if not success else dirs['input']
+            else:
+                input_dir = plate_path
+                logger.info(f"No Z-stack detected in {plate_path}, using standard stitching")
+        else:
+            input_dir = plate_path
+            logger.info(f"No Z-stack detected in {plate_path}, using standard stitching")
 
-                return success
+        return Path(input_dir)
 
-            return True
-
-        except Exception as e:
-            logger.error(f"Error in _process_zstack_plate: {e}", exc_info=True)
-            return False
-
-    # Method removed as it's now in FileSystemManager
-
-    def _process_well(self, timepoint_dir: Path, well: str,
-                      processed_dir: Path, positions_dir: Path,
-                      stitched_dir: Path) -> bool:
+    def _stitch_plate(self, input_dir: Path):
         """
-        Process a single well.
+        Detect patterns, generate positions, and perform stitching for all wells.
 
         Args:
-            timepoint_dir (Path): Path to the TimePoint_1 directory
-            well (str): Well name (e.g., 'A01')
-            processed_dir (Path): Path to the processed directory
-            positions_dir (Path): Path to the positions directory
-            stitched_dir (Path): Path to the stitched directory
+            input_dir (Path): Directory to plate folder.
 
         Returns:
-            bool: True if successful, False otherwise
+            bool: True if successful, False otherwise.
         """
-        try:
-            logger.info(f"Processing well: {well}")
-            config = self.config
-            timepoint_dir_name = config.timepoint_dir_name
+        config = self.config
+        plate_path = Path(self._current_plate_folder)
+        parent_dir = plate_path.parent
+        plate_name = plate_path.name
 
-            # 1. Create output directories
-            processed_timepoint_dir = self.fs_manager.ensure_directory(processed_dir / timepoint_dir_name)
-            positions_timepoint_dir = self.fs_manager.ensure_directory(positions_dir / timepoint_dir_name)
-            stitched_timepoint_dir = self.fs_manager.ensure_directory(stitched_dir / timepoint_dir_name)
+        # Output directories
+        processed_dir = parent_dir / f"{plate_name}{config.output_dir_suffix}"
+        positions_dir = parent_dir / f"{plate_name}{config.positions_dir_suffix}"
+        stitched_dir = parent_dir / f"{plate_name}{config.stitched_dir_suffix}"
 
-            # 2. Auto-detect patterns for this well
-            patterns = self.stitcher.auto_detect_patterns(timepoint_dir, [well])
-            if not patterns or well not in patterns:
-                logger.error(f"No image patterns detected for well {well}")
-                return False
+        # Find HTD file for grid size
+        htd_file = self.fs_manager.find_htd_file(plate_path)
+        grid_size_x, grid_size_y = 2, 2
+        if htd_file:
+            parsed = self.fs_manager.parse_htd_file(htd_file)
+            if parsed:
+                grid_size_x, grid_size_y = parsed
+                logger.info(f"Parsed grid dimensions from HTD file: {grid_size_x}x{grid_size_y}")
+            else:
+                logger.warning("Could not parse grid dimensions from HTD file, using default 2x2")
+        else:
+            logger.warning("No HTD file found, using default grid size 2x2")
+        grid_dims = (grid_size_x, grid_size_y)
+        logger.info(f"Using grid dimensions: {grid_size_x}x{grid_size_y}")
 
-            wavelength_patterns = patterns[well]
-            logger.info(f"Detected {len(wavelength_patterns)} wavelengths for well {well}")
+        # Detect patterns
+        images_dir = ImageLocator.find_image_directory(plate_path)
+        patterns_by_well = self.stitcher.pattern_matcher.auto_detect_patterns(images_dir, config.well_filter)
+        if not patterns_by_well:
+            logger.error(f"No image patterns detected in {input_dir}")
+            return False
+        logger.info(f"Detected {len(patterns_by_well)} wells with images")
 
-            # 3. Prepare directories for stitching
-            dirs = {
-                'input': timepoint_dir,
-                'processed': processed_timepoint_dir,
-                'positions': positions_dir,
-                'stitched': stitched_timepoint_dir
-            }
-
-            # 4. Find HTD file to get grid dimensions
-            htd_file = self.fs_manager.find_htd_file(timepoint_dir.parent)
-            grid_size_x, grid_size_y = 2, 2  # Default grid size
-            if htd_file:
-                parsed = self.fs_manager.parse_htd_file(htd_file)
-                if parsed:
-                    grid_size_x, grid_size_y = parsed
-
-            grid_dims = (grid_size_x, grid_size_y)
-
-            # 5. Prepare reference channel
-            reference_channels = config.reference_channels
-            preprocessing_funcs = config.preprocessing_funcs
-            composite_weights = config.composite_weights
-
+        # Process each well
+        for well, wavelength_patterns in patterns_by_well.items():
+            logger.info(f"Processing well {well} with {len(wavelength_patterns)} wavelength(s)")
             ref_channel, ref_pattern, ref_dir, updated_patterns = self.stitcher.prepare_reference_channel(
-                well, wavelength_patterns, dirs, reference_channels, preprocessing_funcs, composite_weights
+                well, wavelength_patterns,
+                {
+                    'input': input_dir,
+                    'images': images_dir,
+                    'processed': processed_dir,
+                    'positions': positions_dir,
+                    'stitched': stitched_dir
+                },
+                config.reference_channels,
+                config.preprocessing_funcs,
+                config.composite_weights
             )
 
-            if ref_channel is None:
-                logger.error(f"Failed to prepare reference channel for well {well}")
-                return False
-
-            # 6. Process wavelengths
-            success = self.stitcher.process_well_wavelengths(
-                well, updated_patterns, dirs, grid_dims,
-                ref_channel, ref_pattern, ref_dir
-            )
-
+            if config.use_reference_positions:
+                stitched_name = self.stitcher.compute_stitched_name(ref_pattern)
+                positions_path = positions_dir / f"{Path(stitched_name).stem}.csv"
+                if not positions_path.exists():
+                    logger.error(f"Reference positions file not found: {positions_path}")
+                    logger.error("Cannot stitch using reference positions")
+                    return False
+                logger.info(f"Using existing reference positions from {positions_path}")
+                success = self.stitcher.stitch_well_wavelengths(
+                    well, updated_patterns,
+                    {
+                        'input': input_dir,
+                        'processed': processed_dir,
+                        'positions': positions_dir,
+                        'stitched': stitched_dir
+                    },
+                    grid_dims,
+                    ref_channel, ref_pattern,
+                    use_existing_positions=True
+                )
+            else:
+                images_dir = ImageLocator.find_image_directory(plate_path)
+                success = self.stitcher.stitch_well_wavelengths(
+                    well, updated_patterns,
+                    {
+                        'input': input_dir,
+                        'images': images_dir, 
+                        'processed': processed_dir,
+                        'positions': positions_dir,
+                        'stitched': stitched_dir
+                    },
+                    grid_dims,
+                    ref_channel, ref_pattern
+                )
             if success:
-                logger.info(f"Successfully processed well {well}")
+                logger.info(f"Completed processing well {well}")
             else:
                 logger.error(f"Failed to process well {well}")
 
-            return success
+        # Clean up temporary folders if needed
+        #self.fs_manager.clean_temp_folders(parent_dir, plate_name, keep_suffixes=['_stitched'])
+        return True
 
-        except Exception as e:
-            logger.error(f"Error in _process_well: {e}", exc_info=True)
-            return False
+    def rename_files_with_consistent_padding(self, width=3):
+        """
+        Rename files in the plate directory to have consistent site number padding.
+
+        Args:
+            width (int, optional): Width to pad site numbers to. Defaults to 3.
+
+        Returns:
+            dict: Dictionary mapping original filenames to new filenames
+        """
+        if self._current_plate_folder is None:
+            logger.error("Plate folder not set. Run the 'run' method first.")
+            return {}
+
+        original_plate_path = Path(self._current_plate_folder)
+        directory_to_rename = self.fs_manager.mirror_directory_structure(original_plate_path, original_plate_path)
+        if directory_to_rename is None:
+            logger.error(f"Could not find image directory within {original_plate_path}")
+            return {}
+        if self.filename_parser is None:
+            logger.error("Filename parser not initialized. Run the 'run' method first.")
+            return {}
+        parser = self.filename_parser
+        logger.info(f"Renaming files in {directory_to_rename} for consistent padding (width={width})")
+        return self.fs_manager.rename_files_with_consistent_padding(
+            directory_to_rename,
+            parser=parser,
+            width=width,
+        )
