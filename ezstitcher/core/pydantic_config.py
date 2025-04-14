@@ -303,6 +303,9 @@ class PlateProcessorConfig(BaseModel):
         reference_channels: List of channels to use as reference for alignment
         well_filter: Optional list of wells to process
         use_reference_positions: Whether to use existing reference positions
+        rename_files: Whether to rename files to have consistent site number padding
+        padding_width: Width to pad site numbers to
+        dry_run: If True, only print what would be done without actually renaming
         output_dir_suffix: Suffix for the output directory
         positions_dir_suffix: Suffix for the positions directory
         stitched_dir_suffix: Suffix for the stitched directory
@@ -324,6 +327,11 @@ class PlateProcessorConfig(BaseModel):
 
     # Microscope type - can be 'auto', 'ImageXpress', 'OperaPhenix', etc.
     microscope_type: str = Field('auto', description="Type of microscope ('auto', 'ImageXpress', 'OperaPhenix')")
+
+    # File renaming parameters
+    rename_files: bool = Field(True, description="Whether to rename files to have consistent site number padding")
+    padding_width: int = Field(3, description="Width to pad site numbers to")
+    dry_run: bool = Field(False, description="If True, only print what would be done without actually renaming")
 
     # File system parameters
     output_dir_suffix: str = Field("_processed", description="Suffix for the output directory")

@@ -50,7 +50,7 @@ class Stitcher:
 
           file: <filename>; position: (x, y); grid: (col, row);
         """
-        all_files = self.fs_manager.path_list_from_pattern(image_dir, image_pattern)
+        all_files = self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, image_pattern)
         if len(all_files) != len(positions):
             logger.warning(
                 f"Number of matched files ({len(all_files)}) != number of positions ({len(positions)}). "
@@ -99,15 +99,7 @@ class Stitcher:
             dict: Dictionary mapping wells to wavelength patterns
         """
         # Use the PatternMatcher directly with the filename parser
-        patterns_by_well = self.pattern_matcher.auto_detect_patterns(folder_path, well_filter)
-
-        # Convert wavelength keys to strings for backward compatibility
-        for well, wavelength_patterns in patterns_by_well.items():
-            for wavelength in list(wavelength_patterns.keys()):
-                if not isinstance(wavelength, str):
-                    wavelength_patterns[str(wavelength)] = wavelength_patterns.pop(wavelength)
-
-        return patterns_by_well
+        return self.pattern_matcher.auto_detect_patterns(folder_path, well_filter)
 
     def prepare_reference_channel(self, well, wavelength_patterns, dirs, reference_channels, preprocessing_funcs=None, composite_weights=None):
         """
@@ -137,8 +129,8 @@ class Stitcher:
             ref_channel = reference_channels[0]
 
             if ref_channel in wavelength_patterns:
-                ref_pattern = wavelength_patterns[ref_channel]
-                ref_dir = dirs['input']
+                ref_pattern = wavelength_patterns[ref_channel][0]
+                ref_dir = dirs['processed']
 
                 # Apply preprocessing if needed
                 if preprocessing_funcs and ref_channel in preprocessing_funcs:
@@ -146,7 +138,7 @@ class Stitcher:
 
                     # Process images
                     self.process_imgs_from_pattern(
-                        dirs['input'],
+                        dirs['images'],
                         ref_pattern,
                         preprocessing_funcs[ref_channel],
                         processed_dir
@@ -154,12 +146,24 @@ class Stitcher:
 
                     # Use processed directory for reference
                     ref_dir = processed_dir
+                else:
+                    # No preprocessing needed, but still create symlinks to reference images
+                    # This ensures the reference directory always has images for position generation
+                    logger.info(f"Creating symlinks to reference channel {ref_channel} in processed directory")
+                    self.fs_manager.create_symlinks_from_pattern(
+                        dirs['images'],
+                        ref_pattern,
+                        processed_dir
+                    )
+
+                    # Use processed directory for reference
+                    ref_dir = processed_dir
 
                 # Check if the pattern has .tif extension, but files have .tiff extension
-                if ref_pattern.endswith('.tif') and not self.fs_manager.path_list_from_pattern(ref_dir, ref_pattern):
+                if ref_pattern.endswith('.tif') and not self.fs_manager.pattern_matcher.path_list_from_pattern(ref_dir, ref_pattern):
                     # Try with .tiff extension
                     tiff_pattern = ref_pattern[:-4] + '.tiff'
-                    if self.fs_manager.path_list_from_pattern(ref_dir, tiff_pattern):
+                    if self.fs_manager.pattern_matcher.path_list_from_pattern(ref_dir, tiff_pattern):
                         ref_pattern = tiff_pattern
                         # Update the pattern in the wavelength_patterns dictionary
                         wavelength_patterns[ref_channel] = tiff_pattern
@@ -188,7 +192,7 @@ class Stitcher:
             logger.info(f"Creating composite reference with input_dir={dirs['input']}, processed_dir={processed_dir}")
             composite_pattern = self.create_composite_reference(
                 well,
-                dirs['input'],
+                dirs['images'],
                 processed_dir,
                 reference_channels,
                 {channel: wavelength_patterns[channel] for channel in reference_channels},
@@ -204,7 +208,7 @@ class Stitcher:
             updated_patterns['composite'] = composite_pattern
 
             # Check if composite files were created
-            composite_files = self.fs_manager.path_list_from_pattern(processed_dir, composite_pattern)
+            composite_files = self.fs_manager.pattern_matcher.path_list_from_pattern(processed_dir, composite_pattern)
             logger.info(f"Created {len(composite_files)} composite files: {composite_files}")
 
             logger.info(f"Created composite reference with pattern {composite_pattern}")
@@ -234,13 +238,13 @@ class Stitcher:
         first_pattern = channel_patterns[first_channel]
 
         # Create composite pattern with the expected format
-        composite_pattern = f"composite_{well}_s{{iii}}_{well}_w1.tif"
+        composite_pattern = f"{well}_s{{iii}}_w1.tif"
 
         # Get files for each channel
         channel_files = {}
         for channel in reference_channels:
-            pattern = channel_patterns[channel]
-            files = self.fs_manager.path_list_from_pattern(input_dir, pattern)
+            pattern = channel_patterns[channel][0]
+            files = self.fs_manager.pattern_matcher.path_list_from_pattern(input_dir, pattern)
             channel_files[channel] = files
 
         # Check if all channels have the same number of files
@@ -473,33 +477,17 @@ class Stitcher:
             logger.info(f"Using pattern: {ashlar_pattern} for ashlar")
 
             # Check if the pattern has .tif extension, but files have .tiff extension
-            if image_pattern.endswith('.tif') and not self.fs_manager.path_list_from_pattern(image_dir, image_pattern):
+            if image_pattern.endswith('.tif') and not self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, image_pattern):
                 # Try with .tiff extension
                 tiff_pattern = image_pattern[:-4] + '.tiff'
-                if self.fs_manager.path_list_from_pattern(image_dir, tiff_pattern):
+                if self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, tiff_pattern):
                     image_pattern = tiff_pattern
                     ashlar_pattern = image_pattern.replace("{iii}", "{series}")
                     logger.info(f"Updated pattern to: {ashlar_pattern} for ashlar")
 
-            # Check if the pattern needs to include _z001 suffix
-            if '_z' not in image_pattern:
-                # Try with _z001 suffix
-                z_pattern = image_pattern.replace('.tif', '_z001.tif')
-                if self.fs_manager.path_list_from_pattern(image_dir, z_pattern):
-                    image_pattern = z_pattern
-                    ashlar_pattern = image_pattern.replace("{iii}", "{series}")
-                    logger.info(f"Updated pattern to include _z001 suffix: {ashlar_pattern} for ashlar")
-
             # Check if there are enough files for the grid size
-            files = self.fs_manager.path_list_from_pattern(image_dir, image_pattern)
+            files = self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, image_pattern)
 
-            # If no files found, check for TimePoint_1 subdirectory
-            if len(files) < grid_size_x * grid_size_y and (image_dir / "TimePoint_1").exists():
-                timepoint_dir = image_dir / "TimePoint_1"
-                files = self.fs_manager.path_list_from_pattern(timepoint_dir, image_pattern)
-                if len(files) >= grid_size_x * grid_size_y:
-                    logger.info(f"Using TimePoint_1 directory for images: {timepoint_dir}")
-                    image_dir = timepoint_dir
 
             if len(files) < grid_size_x * grid_size_y:
                 logger.error(f"Not enough files for grid size {grid_size_x}x{grid_size_y}. Found {len(files)} files.")
@@ -583,7 +571,8 @@ class Stitcher:
             self.fs_manager.ensure_directory(output_path.parent)
 
             # Parse CSV file
-            pos_entries = self.fs_manager.parse_positions_csv(positions_path)
+            from ezstitcher.core.csv_handler import CSVHandler
+            pos_entries = CSVHandler.parse_positions_csv(positions_path)
             if not pos_entries:
                 logger.error(f"No valid entries found in {positions_path}")
                 return False
@@ -713,9 +702,9 @@ class Stitcher:
             logger.error(f"Error in assemble_image: {e}")
             return False
 
-    def process_well_wavelengths(self, well, wavelength_patterns, dirs, grid_dims, ref_channel, ref_pattern, ref_dir, use_existing_positions=False):
+    def stitch_well_wavelengths(self, well, wavelength_patterns, dirs, grid_dims, ref_channel, ref_pattern, use_existing_positions=False):
         """
-        Process all wavelengths for a well.
+        stitch all wavelengths for a well.
 
         Args:
             well (str): Well ID
@@ -724,7 +713,6 @@ class Stitcher:
             grid_dims (tuple): Grid dimensions (grid_size_x, grid_size_y)
             ref_channel (str): Reference channel
             ref_pattern (str): Reference pattern
-            ref_dir (str or Path): Reference directory
             use_existing_positions (bool): Whether to use existing positions file instead of generating new ones
 
         Returns:
@@ -732,9 +720,9 @@ class Stitcher:
         """
         grid_size_x, grid_size_y = grid_dims
 
-        # Generate or use existing positions
-        stitched_name = self.compute_stitched_name(ref_pattern)
-        positions_path = dirs['positions'] / f"{Path(stitched_name).stem}.csv"
+        positions_path = dirs['positions'] / f"{Path(well).stem}.csv"
+
+        ref_dir = dirs['processed']
 
         if use_existing_positions:
             # Check if positions file exists
@@ -761,92 +749,94 @@ class Stitcher:
                 logger.error(f"Failed to generate positions for {well}")
                 return False
 
-        # Process each wavelength
-        for wavelength, pattern in wavelength_patterns.items():
-            # Skip the reference channel if it's the composite
-            if wavelength == 'composite' and ref_channel == 'composite':
-                logger.info(f"Skipping assembly of composite channel (used only for alignment)")
-                continue
-
+        # stitch each wavelength
+        for wavelength, patterns in wavelength_patterns.items():
+#            # Skip the reference channel if it's the composite
+#            if wavelength == 'composite' and ref_channel == 'composite':
+#                logger.info(f"Skipping assembly of composite channel (used only for alignment)")
+#                continue
+#
             # Use original image directory for assembly
-            img_dir = dirs['input']
+            img_dir = dirs['images']
 
-            # Get files for this wavelength to override the composite filenames
-            override_names = self.fs_manager.path_list_from_pattern(img_dir, pattern)
+            for pattern in patterns:
+                # Get files for this wavelength to override the composite filenames
+                override_names = self.fs_manager.pattern_matcher.path_list_from_pattern(img_dir, pattern)
+                stitched_name = self.compute_stitched_name(pattern)
+                output_path = dirs['stitched'] / stitched_name
 
-            # Assemble final image
-            stitched_name = self.compute_stitched_name(pattern)
-            output_path = dirs['stitched'] / stitched_name
+                # Assemble final image
+                logger.info(f"Assembling wavelength {wavelength} from {img_dir} to {output_path}")
 
-            logger.info(f"Assembling wavelength {wavelength} from {img_dir} to {output_path}")
+                # Use the assemble_image method to assemble the image
+                success = self.assemble_image(
+                    positions_path=positions_path,
+                    images_dir=img_dir,
+                    output_path=output_path,
+                    override_names=override_names
+                )
 
-            # Use the assemble_image method to assemble the image
-            success = self.assemble_image(
-                positions_path=positions_path,
-                images_dir=img_dir,
-                output_path=output_path,
-                override_names=override_names
-            )
-
-            if not success:
-                logger.error(f"Failed to assemble wavelength {wavelength} for {well}")
-
+                if not success:
+                    logger.error(f"Failed to assemble wavelength {wavelength} for {well}")
         logger.info(f"Completed processing well {well}")
         return True
 
-    def stitch(self, image_dir: Union[str, Path], output_dir: Union[str, Path], pattern: str,
-               positions_dir: Optional[Union[str, Path]] = None, grid_size_x: int = 3, grid_size_y: int = 3) -> bool:
-        """
-        Perform stitching on images in the given directory.
 
-        Args:
-            image_dir (str or Path): Directory containing images to stitch
-            output_dir (str or Path): Directory to save stitched images
-            pattern (str): Image pattern with '{iii}' placeholder
-            positions_dir (str or Path): Directory to save/load positions
-            grid_size_x (int): Number of tiles horizontally
-            grid_size_y (int): Number of tiles vertically
 
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            image_dir = Path(image_dir)
-            output_dir = Path(output_dir)
-
-            # Create output directory
-            self.fs_manager.ensure_directory(output_dir.parent)
-
-            # Create positions directory if needed
-            if positions_dir is None:
-                positions_dir = image_dir.parent / f"{image_dir.name}_positions"
-            positions_dir = Path(positions_dir)
-            self.fs_manager.ensure_directory(positions_dir)
-
-            # Generate positions
-            positions_path = positions_dir / f"{pattern.replace('{iii}', 'positions')}.csv"
-
-            if not positions_path.exists():
-                logger.info(f"Generating positions for {pattern}")
-                success = self.generate_positions(image_dir, pattern, positions_path, grid_size_x, grid_size_y)
-                if not success:
-                    logger.error(f"Failed to generate positions for {pattern}")
-                    return False
-
-            # Compute stitched filename
-            stitched_name = self.compute_stitched_name(pattern)
-            output_path = output_dir / stitched_name
-
-            # Assemble image
-            logger.info(f"Assembling stitched image for {pattern}")
-            success = self.assemble_image(positions_path, image_dir, output_path)
-            if not success:
-                logger.error(f"Failed to assemble image for {pattern}")
-                return False
-
-            logger.info(f"Successfully stitched {pattern} to {output_path}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error in stitch: {e}")
-            return False
+#    def stitch(self, image_dir: Union[str, Path], output_dir: Union[str, Path], pattern: str,
+#               positions_dir: Optional[Union[str, Path]] = None, grid_size_x: int = 3, grid_size_y: int = 3) -> bool:
+#        """
+#        Perform stitching on images in the given directory.
+#
+#        Args:
+#            image_dir (str or Path): Directory containing images to stitch
+#            output_dir (str or Path): Directory to save stitched images
+#            pattern (str): Image pattern with '{iii}' placeholder
+#            positions_dir (str or Path): Directory to save/load positions
+#            grid_size_x (int): Number of tiles horizontally
+#            grid_size_y (int): Number of tiles vertically
+#
+#        Returns:
+#            bool: True if successful, False otherwise
+#        """
+#        try:
+#            image_dir = Path(image_dir)
+#            output_dir = Path(output_dir)
+#
+#            # Create output directory
+#            self.fs_manager.ensure_directory(output_dir.parent)
+#
+#            # Create positions directory if needed
+#            if positions_dir is None:
+#                positions_dir = image_dir.parent / f"{image_dir.name}_positions"
+#            positions_dir = Path(positions_dir)
+#            self.fs_manager.ensure_directory(positions_dir)
+#
+#            # Generate positions
+#            positions_path = positions_dir / f"{pattern.replace('{iii}', 'positions')}.csv"
+#
+#            if not positions_path.exists():
+#                logger.info(f"Generating positions for {pattern}")
+#                success = self.generate_positions(image_dir, pattern, positions_path, grid_size_x, grid_size_y)
+#                if not success:
+#                    logger.error(f"Failed to generate positions for {pattern}")
+#                    return False
+#
+#            # Compute stitched filename
+#            stitched_name = self.compute_stitched_name(pattern)
+#            output_path = output_dir / stitched_name
+#
+#            # Assemble image
+#            logger.info(f"Assembling stitched image for {pattern}")
+#            success = self.assemble_image(positions_path, image_dir, output_path)
+#            if not success:
+#                logger.error(f"Failed to assemble image for {pattern}")
+#                return False
+#
+#            logger.info(f"Successfully stitched {pattern} to {output_path}")
+#            return True
+#
+#        except Exception as e:
+#            logger.error(f"Error in stitch: {e}")
+#            return False
+#

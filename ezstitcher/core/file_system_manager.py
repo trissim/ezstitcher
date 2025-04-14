@@ -16,7 +16,6 @@ import numpy as np
 from ezstitcher.core.filename_parser import FilenameParser, ImageXpressFilenameParser
 from ezstitcher.core.csv_handler import CSVHandler
 from ezstitcher.core.pattern_matcher import PatternMatcher
-from ezstitcher.core.directory_structure_manager import DirectoryStructureManager
 from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
 
@@ -44,7 +43,6 @@ class FileSystemManager:
         self.filename_parser = filename_parser or ImageXpressFilenameParser()
         self.csv_handler = CSVHandler()
         self.pattern_matcher = PatternMatcher(self.filename_parser)
-        self.dir_structure_manager = None  # Will be initialized when needed
 
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
         """
@@ -61,13 +59,18 @@ class FileSystemManager:
         return directory
 
     def list_image_files(self, directory: Union[str, Path],
-                         extensions: Optional[List[str]] = None) -> List[Path]:
+                         extensions: Optional[List[str]] = None,
+                         recursive: bool = False, # Add recursive argument
+                         flatten: bool = False    # Add flatten argument
+                         ) -> List[Path]:
         """
         List all image files in a directory with specified extensions.
 
         Args:
             directory (str or Path): Directory to search
             extensions (list): List of file extensions to include
+            recursive (bool): Whether to search recursively
+            flatten (bool): Whether to flatten Z-stack directories (implies recursive)
 
         Returns:
             list: List of Path objects for image files
@@ -75,27 +78,11 @@ class FileSystemManager:
         if extensions is None:
             extensions = self.default_extensions
 
-        directory = Path(directory)
-        image_files = []
+        # Use ImageLocator to find images, passing through arguments
+        # Pass recursive and flatten arguments here
+        return ImageLocator.find_images_in_directory(directory, extensions, recursive=recursive)
 
-        for ext in extensions:
-            image_files.extend(list(directory.glob(f"*{ext}")))
-
-        return sorted(image_files)
-
-    def path_list_from_pattern(self, directory: Union[str, Path], pattern: str) -> List[str]:
-        """
-        Get a list of filenames matching a pattern in a directory.
-
-        Args:
-            directory (str or Path): Directory to search
-            pattern (str): Pattern to match with {iii} placeholder for site index
-
-        Returns:
-            list: List of matching filenames
-        """
-        # Use the PatternMatcher with the current filename parser
-        return self.pattern_matcher.path_list_from_pattern(directory, pattern)
+    # Removed path_list_from_pattern - use pattern_matcher.path_list_from_pattern directly
 
     def load_image(self, file_path: Union[str, Path]) -> Optional[np.ndarray]:
         """
@@ -154,6 +141,63 @@ class FileSystemManager:
             logger.error(f"Error saving image {file_path}: {e}")
             return False
 
+    def create_symlinks_from_pattern(self, source_dir: Union[str, Path], pattern: str, target_dir: Union[str, Path]) -> int:
+        """
+        Create symlinks in the target directory for all files matching a pattern in the source directory.
+
+        This ensures that reference images are always available in the reference directory,
+        even when no preprocessing or composition is performed.
+
+        Args:
+            source_dir (str or Path): Directory containing source files
+            pattern (str): Pattern to match with {iii} placeholder for site index
+            target_dir (str or Path): Directory to create symlinks in
+
+        Returns:
+            int: Number of symlinks created
+        """
+        try:
+            source_dir = Path(source_dir)
+            target_dir = Path(target_dir)
+            self.ensure_directory(target_dir)
+
+            # Get matching files
+            matching_files = self.pattern_matcher.path_list_from_pattern(source_dir, pattern)
+            if not matching_files:
+                logger.warning(f"No files found matching pattern {pattern} in {source_dir}")
+                return 0
+
+            # Create symlinks
+            count = 0
+            for filename in matching_files:
+                source_path = source_dir / filename
+                target_path = target_dir / filename
+
+                # Skip if target already exists
+                if target_path.exists():
+                    if target_path.is_symlink() and target_path.resolve() == source_path.resolve():
+                        logger.debug(f"Symlink already exists: {target_path} -> {source_path}")
+                        count += 1
+                        continue
+                    else:
+                        logger.warning(f"Target file already exists and is not a symlink to source: {target_path}")
+                        continue
+
+                # Create symlink
+                try:
+                    target_path.symlink_to(source_path)
+                    logger.debug(f"Created symlink: {target_path} -> {source_path}")
+                    count += 1
+                except Exception as e:
+                    logger.error(f"Error creating symlink {target_path} -> {source_path}: {e}")
+
+            logger.info(f"Created {count} symlinks in {target_dir}")
+            return count
+
+        except Exception as e:
+            logger.error(f"Error creating symlinks from {source_dir} to {target_dir}: {e}")
+            return 0
+
     def copy_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
         """
         Copy a file from source to destination, preserving metadata.
@@ -211,145 +255,6 @@ class FileSystemManager:
             logger.error(f"Error removing directory {directory_path}: {e}")
             return False
 
-    def find_files_by_pattern(self, directory: Union[str, Path],
-                             pattern: Union[str, Pattern]) -> List[Path]:
-        """
-        Find files matching a regex pattern.
-
-        Args:
-            directory (str or Path): Directory to search
-            pattern (str or Pattern): Regex pattern to match
-
-        Returns:
-            list: List of matching Path objects
-        """
-        directory = Path(directory)
-
-        if isinstance(pattern, str):
-            pattern = re.compile(pattern)
-
-        matching_files = []
-        for file_path in directory.glob('*'):
-            if pattern.match(file_path.name):
-                matching_files.append(file_path)
-
-        return sorted(matching_files)
-
-    def find_files_by_parser(self, directory: Union[str, Path],
-                           parser: Optional[FilenameParser] = None,
-                           well: Optional[str] = None,
-                           site: Optional[int] = None,
-                           channel: Optional[int] = None,
-                           z_plane: Optional[int] = None) -> List[Tuple[Path, Dict[str, Any]]]:
-        """
-        Find files matching criteria using a filename parser.
-
-        Args:
-            directory (str or Path): Directory to search
-            parser (FilenameParser, optional): Filename parser instance (uses instance parser if None)
-            well (str, optional): Well identifier to match
-            site (int, optional): Site number to match
-            channel (int, optional): Channel number to match
-            z_plane (int, optional): Z-plane to match
-
-        Returns:
-            list: List of tuples (Path, metadata) for matching files
-        """
-        directory = Path(directory)
-        parser = parser or self.filename_parser
-
-        matching_files = []
-
-        # Check if TimePoint_1 directory exists and use it if it does
-        if (directory / "TimePoint_1").exists() and (directory / "TimePoint_1").is_dir():
-            search_dir = directory / "TimePoint_1"
-        else:
-            search_dir = directory
-
-        logger.debug(f"Searching for files in {search_dir} using {parser.__class__.__name__}")
-
-        for file_path in search_dir.glob('*'):
-            if not file_path.is_file():
-                continue
-
-            try:
-                metadata = parser.parse_filename(file_path.name)
-
-                # Skip if metadata is None
-                if metadata is None:
-                    continue
-
-                # Check if the file matches the criteria
-                # Handle both 'z_index' and 'z_plane' keys for Z-plane information
-                file_z_plane = metadata.get('z_index', metadata.get('z_plane'))
-
-                if (well is None or metadata.get('well') == well) and \
-                   (site is None or metadata.get('site') == site) and \
-                   (channel is None or metadata.get('channel') == channel) and \
-                   (z_plane is None or file_z_plane == z_plane):
-                    matching_files.append((file_path, metadata))
-            except (ValueError, KeyError, AttributeError) as e:
-                # Not a valid filename for this parser
-                logger.debug(f"Could not parse {file_path.name}: {e}")
-                continue
-
-        # Sort by well, site, channel, z_plane if available
-        def sort_key(item):
-            meta = item[1]
-            if meta is None:
-                return ('', 0, 0, 0)  # Default values for sorting
-
-            return (
-                meta.get('well', ''),
-                meta.get('site', 0),
-                meta.get('channel', 0),
-                meta.get('z_plane', 0)
-            )
-
-        sorted_files = sorted(matching_files, key=sort_key)
-        logger.debug(f"Found {len(sorted_files)} matching files")
-        return sorted_files
-
-    def parse_positions_csv(self, csv_path: Union[str, Path]) -> List[Tuple[str, float, float]]:
-        """
-        Parse a CSV file with lines of the form:
-          file: <filename>; grid: (col, row); position: (x, y)
-
-        Args:
-            csv_path (str or Path): Path to the CSV file
-
-        Returns:
-            list: List of tuples (filename, x_float, y_float)
-        """
-        return self.csv_handler.parse_positions_csv(csv_path)
-
-    def generate_positions_df(self, image_files, positions, grid_positions):
-        """
-        Generate a DataFrame with position information.
-
-        Args:
-            image_files (list): List of image filenames
-            positions (list): List of (x, y) position tuples
-            grid_positions (list): List of (row, col) grid position tuples
-
-        Returns:
-            pandas.DataFrame: DataFrame with position information
-        """
-        return self.csv_handler.generate_positions_df(image_files, positions, grid_positions)
-
-    def save_positions_df(self, df, positions_path):
-        """
-        Save a positions DataFrame to CSV.
-
-        Args:
-            df (pandas.DataFrame): DataFrame to save
-            positions_path (str or Path): Path to save the CSV file
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        return self.csv_handler.save_positions_df(df, positions_path)
-
     def find_htd_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
         """
         Find the HTD file for a plate or Index.xml for Opera Phenix.
@@ -381,27 +286,6 @@ class FileSystemManager:
                 if 'plate' in htd_file.name.lower():
                     return htd_file
             return htd_files[0]
-
-        # Look in parent directory
-        parent_dir = plate_path.parent
-        htd_files = list(parent_dir.glob("*.HTD"))
-        if htd_files:
-            for htd_file in htd_files:
-                if 'plate' in htd_file.name.lower():
-                    return htd_file
-            return htd_files[0]
-
-        # Look for Index.xml as a fallback for any microscope type
-        index_xml = plate_path / "Index.xml"
-        if index_xml.exists():
-            return index_xml
-
-        # Check for Index.xml in parent directory
-        parent_index_xml = plate_path.parent / "Index.xml"
-        if parent_index_xml.exists():
-            return parent_index_xml
-
-        return None
 
     def get_pixel_size(self, htd_path: Union[str, Path]) -> Optional[float]:
         """
@@ -503,114 +387,8 @@ class FileSystemManager:
             logger.error(f"Error parsing HTD file {htd_path}: {e}")
             return None
 
-    def find_wells(self, timepoint_dir: Union[str, Path]) -> List[str]:
-        """
-        Find all wells in the timepoint directory.
 
-        Deprecated: Use initialize_dir_structure(plate_folder).get_wells() instead.
 
-        Args:
-            timepoint_dir (str or Path): Path to the TimePoint_1 directory
-
-        Returns:
-            list: List of well names (e.g., ['A01', 'A02', ...])
-        """
-        warnings.warn(
-            "FileSystemManager.find_wells() is deprecated. Use initialize_dir_structure(plate_folder).get_wells() instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-
-        # Initialize directory structure manager for the parent directory
-        dir_structure = self.initialize_dir_structure(Path(timepoint_dir).parent)
-
-        # Return wells
-        return dir_structure.get_wells()
-
-    def initialize_dir_structure(self, plate_folder: Union[str, Path]) -> DirectoryStructureManager:
-        """
-        Initialize the directory structure manager for a plate folder.
-
-        Args:
-            plate_folder: Path to the plate folder
-
-        Returns:
-            DirectoryStructureManager instance
-        """
-        timepoint_dir_name = getattr(self.config, 'timepoint_dir_name', "TimePoint_1")
-        self.dir_structure_manager = DirectoryStructureManager(
-            plate_folder,
-            self.filename_parser,
-            timepoint_dir_name
-        )
-        return self.dir_structure_manager
-
-    def get_image_path(self, plate_folder: Union[str, Path], well: str, site: int,
-                      channel: int, z_index: Optional[int] = None) -> Optional[Path]:
-        """
-        Get the path to an image based on its metadata.
-
-        Args:
-            plate_folder: Path to the plate folder
-            well: Well ID (e.g., 'A01' or 'R01C01')
-            site: Site number
-            channel: Channel number
-            z_index: Z-index (optional)
-
-        Returns:
-            Path to the image if found, None otherwise
-        """
-        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
-            self.initialize_dir_structure(plate_folder)
-        return self.dir_structure_manager.get_image_path(well, site, channel, z_index)
-
-    def list_images_by_metadata(self, plate_folder: Union[str, Path], well: Optional[str] = None,
-                              site: Optional[int] = None, channel: Optional[int] = None,
-                              z_index: Optional[int] = None) -> List[Path]:
-        """
-        List images matching the specified metadata criteria.
-
-        Args:
-            plate_folder: Path to the plate folder
-            well: Well ID (optional)
-            site: Site number (optional)
-            channel: Channel number (optional)
-            z_index: Z-index (optional)
-
-        Returns:
-            List of Path objects for matching images
-        """
-        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
-            self.initialize_dir_structure(plate_folder)
-        return self.dir_structure_manager.list_images(well, site, channel, z_index)
-
-    def get_timepoint_dir(self, plate_folder: Union[str, Path]) -> Optional[Path]:
-        """
-        Get the path to the TimePoint directory if it exists.
-
-        Args:
-            plate_folder: Path to the plate folder
-
-        Returns:
-            Path to the TimePoint directory if found, None otherwise
-        """
-        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
-            self.initialize_dir_structure(plate_folder)
-        return self.dir_structure_manager.get_timepoint_dir()
-
-    def get_z_stack_dirs(self, plate_folder: Union[str, Path]) -> List[Tuple[int, Path]]:
-        """
-        Get the paths to Z-stack directories if they exist.
-
-        Args:
-            plate_folder: Path to the plate folder
-
-        Returns:
-            List of (z_index, directory) tuples
-        """
-        if self.dir_structure_manager is None or Path(plate_folder) != Path(self.dir_structure_manager.plate_folder):
-            self.initialize_dir_structure(plate_folder)
-        return self.dir_structure_manager.get_z_stack_dirs()
 
     def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
         """
@@ -635,19 +413,20 @@ class FileSystemManager:
                     import shutil
                     shutil.rmtree(item)
 
-    def create_output_directories(self, parent_dir, plate_name, suffixes):
+    def create_output_directories(self, plate_path, suffixes):
         """
         Create output directories for a plate.
 
         Args:
-            parent_dir (str or Path): Parent directory
-            plate_name (str): Name of the plate
+            plate_path (str): Path to plate folder
             suffixes (dict): Dictionary mapping directory types to suffixes
 
         Returns:
             dict: Dictionary mapping directory types to Path objects
         """
-        parent_dir = Path(parent_dir)
+        parent_dir = Path(plate_path).parent
+        plate_name = Path(plate_path).name
+        #parent_dir = Path(parent_dir)
         dirs = {}
 
         # Create directories for each suffix
@@ -658,58 +437,100 @@ class FileSystemManager:
 
         return dirs
 
-    def parse_filename(self, filename):
+    # Removed parse_filename and pad_site_number
+    # Use filename_parser methods directly
+
+
+    # Removed organize_zstack_folders - use flatten_z_stacks instead
+
+
+
+    def rename_files_with_consistent_padding(self, directory, parser=None, width=3, z_width=3):
         """
-        Parse a microscopy image filename.
+        Rename files in a directory to have consistent site number and Z-index padding.
 
         Args:
-            filename (str): Filename to parse
+            directory (str or Path): Directory containing files to rename
+            parser (FilenameParser, optional): Parser to use for filename parsing and padding
+            width (int, optional): Width to pad site numbers to
+            z_width (int, optional): Width to pad Z-index numbers to
 
         Returns:
-            dict: Dictionary with extracted components
+            dict: Dictionary mapping original filenames to new filenames
         """
-        return self.filename_parser.parse_filename(filename)
+        from ezstitcher.core.filename_parser import FilenameParser, create_parser
 
-    def pad_site_number(self, filename):
-        """
-        Ensure site number is padded to 3 digits.
+        directory = Path(directory)
 
-        Args:
-            filename (str): Filename to pad
+        # Use default parser if none provided
+        if parser is None:
+            parser = self.filename_parser
 
-        Returns:
-            str: Filename with padded site number
-        """
-        return self.filename_parser.pad_site_number(filename)
+            # If the default parser is not set, try to detect format from files in directory
+            if parser is None:
+                files = list(directory.glob('*.tif')) + list(directory.glob('*.tiff'))
+                if not files:
+                    logger.warning(f"No image files found in {directory}")
+                    return {}
 
-    def construct_filename(self, well, site, wavelength, z_index=None, extension='.tif'):
-        """
-        Construct a filename from components.
+                # Get filenames only
+                filenames = [f.name for f in files]
 
-        Args:
-            well (str): Well ID (e.g., 'A01')
-            site (int): Site number
-            wavelength (int): Wavelength number
-            z_index (int, optional): Z-index
-            extension (str, optional): File extension
+                # Detect format
+                format_type = FilenameParser.detect_format(filenames)
+                if format_type is None:
+                    logger.warning(f"Could not detect format for files in {directory}")
+                    return {}
 
-        Returns:
-            str: Constructed filename
-        """
-        return self.filename_parser.construct_filename(well, site, wavelength, z_index, extension)
+                # Create parser
+                parser = create_parser(format_type)
 
-    def auto_detect_patterns(self, folder_path, well_filter=None):
-        """
-        Automatically detect image patterns in a folder.
+        # Find all image files
+        files = list(directory.glob('*.tif')) + list(directory.glob('*.tiff'))
 
-        Args:
-            folder_path (str or Path): Path to the folder
-            well_filter (list): Optional list of wells to include
+        # Map original filenames to padded filenames
+        rename_map = {}
+        for file_path in files:
+            original_name = file_path.name
+            padded_name = parser.pad_site_number(original_name, width=width)
 
-        Returns:
-            dict: Dictionary mapping wells to wavelength patterns
-        """
-        return self.pattern_matcher.auto_detect_patterns(folder_path, well_filter)
+            # Only include files that need renaming
+            if original_name != padded_name:
+                rename_map[original_name] = padded_name
+
+        # Check for conflicts (e.g., both s1_w1.tif and s001_w1.tif exist)
+        # In this case, we'll skip renaming to avoid overwriting files
+        new_names = set(rename_map.values())
+        existing_names = set(f.name for f in files)
+        conflicts = new_names.intersection(existing_names)
+
+        if conflicts:
+            logger.warning(f"Found {len(conflicts)} filename conflicts. These files will not be renamed.")
+            for conflict in conflicts:
+                # Find all original names that would map to this conflict
+                conflicting_originals = [orig for orig, new in rename_map.items() if new == conflict]
+                logger.warning(f"Conflict: {conflicting_originals} -> {conflict}")
+
+                # Remove these entries from the rename map
+                for orig in conflicting_originals:
+                    if orig in rename_map:
+                        del rename_map[orig]
+
+        # Perform the renaming
+        for original_name, padded_name in rename_map.items():
+            original_path = directory / original_name
+            padded_path = directory / padded_name
+
+            try:
+                original_path.rename(padded_path)
+                logger.info(f"Renamed {original_name} -> {padded_name}")
+            except Exception as e:
+                logger.error(f"Failed to rename {original_name} -> {padded_name}: {e}")
+
+        return rename_map
+
+    # Removed construct_filename and auto_detect_patterns
+    # Use filename_parser.construct_filename and pattern_matcher.auto_detect_patterns directly
 
     def convert_opera_phenix_to_imagexpress(self, input_dir, output_dir=None):
         """
@@ -802,3 +623,75 @@ class FileSystemManager:
         except Exception as e:
             logger.error(f"Error converting Opera Phenix files to ImageXpress format: {e}")
             return False
+
+    def mirror_directory_structure(self, source_dir: Union[str, Path], base_output_dir: Union[str, Path]) -> Path:
+        """
+        Mirror the directory structure from source_dir to base_output_dir and copy non-image files.
+
+        This method recursively creates a directory structure in base_output_dir that mirrors the structure
+        in source_dir. It also copies all non-image files (HTD, XML, etc.) to the mirrored directory.
+
+        Args:
+            source_dir (str or Path): Source directory to mirror
+            base_output_dir (str or Path): Base output directory where the mirrored structure will be created
+
+        Returns:
+            Path: Path to the mirrored directory
+        """
+        source_dir = Path(source_dir)
+        base_output_dir = Path(base_output_dir)
+
+        # Ensure base output directory exists
+        self.ensure_directory(base_output_dir)
+
+        # Walk through the source directory structure
+        for root, dirs, files in os.walk(source_dir):
+            # Get relative path from source_dir
+            rel_path = Path(root).relative_to(source_dir)
+
+            # Create directories
+            for dir_name in dirs:
+                # Skip directories that might contain image files but don't need structure mirroring
+                if dir_name.lower() in ['thumbnails', 'thumb', 'thumbnail']:
+                    continue
+                self.ensure_directory(base_output_dir / rel_path / dir_name)
+
+            # Copy non-image files
+            for file_name in files:
+                if not any(file_name.lower().endswith(ext) for ext in ['.tif', '.tiff', '.jpg', '.jpeg', '.png']):
+                    source_file = Path(root) / file_name
+                    target_file = base_output_dir / rel_path / file_name
+                    logger.info(f"Copying non-image file: {file_name}")
+                    self.copy_file(source_file, target_file)
+
+        # Return the base output directory
+        return base_output_dir
+
+    # _copy_non_image_files method has been merged into mirror_directory_structure
+
+    def move_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
+        """
+        Move a file from source to destination.
+
+        Ensures the destination directory exists and handles errors.
+
+        Args:
+            source_path (str or Path): Source file path.
+            dest_path (str or Path): Destination file path.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        try:
+            import shutil
+            dest_dir = Path(dest_path).parent
+            self.ensure_directory(dest_dir) # Ensure destination directory exists
+
+            shutil.move(str(source_path), str(dest_path))
+            logger.debug(f"Moved file from {source_path} to {dest_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error moving file from {source_path} to {dest_path}: {e}")
+            return False
+            return False
+        return all_success

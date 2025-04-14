@@ -159,6 +159,11 @@ class PlateProcessorConfig:
     # Microscope type - can be 'auto', 'ImageXpress', 'OperaPhenix', etc.
     microscope_type: str = 'auto'
 
+    # File renaming parameters
+    rename_files: bool = True
+    padding_width: int = 3
+    dry_run: bool = False
+
     # File system parameters
     output_dir_suffix: str = "_processed"
     positions_dir_suffix: str = "_positions"
