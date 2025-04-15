@@ -249,14 +249,14 @@ class ImagePreprocessor:
 
     def create_composite(self, images, weights=None):
         """
-        Create a composite image from multiple channels.
+        Create a grayscale composite image from multiple channels.
 
         Args:
             images (dict): Dictionary mapping channel names to images
             weights (dict): Optional dictionary with weights for each channel
 
         Returns:
-            numpy.ndarray: Composite RGB image
+            numpy.ndarray: Grayscale composite image (16-bit)
         """
         if weights is None:
             weights = self.composite_weights
@@ -266,38 +266,36 @@ class ImagePreprocessor:
             channels = list(images.keys())
             weights = {ch: 1.0 / len(channels) for ch in channels}
 
+        # Get shape and dtype from first image
+        first_image = next(iter(images.values()))
+        shape = first_image.shape
+        dtype = first_image.dtype
+
         # Create empty composite
-        shape = next(iter(images.values())).shape
-        composite = np.zeros((*shape, 3), dtype=np.float32)
+        composite = np.zeros(shape, dtype=np.float32)
+        total_weight = 0.0
 
         # Add each channel with its weight
         for channel, image in images.items():
-            # Normalize to 0-1 range
-            norm_img = image.astype(np.float32) / 65535.0
-
-            # Get weight and color for this channel
+            # Get weight for this channel
             weight = weights.get(channel, 0.0)
+            if weight <= 0.0:
+                continue
 
-            # Default color mapping (can be customized)
-            if channel == '1':
-                # Red channel
-                composite[..., 0] += norm_img * weight
-            elif channel == '2':
-                # Green channel
-                composite[..., 1] += norm_img * weight
-            elif channel == '3':
-                # Blue channel
-                composite[..., 2] += norm_img * weight
-            else:
-                # Grayscale (add to all channels)
-                for i in range(3):
-                    composite[..., i] += norm_img * weight / 3.0
+            # Add to composite
+            composite += image.astype(np.float32) * weight
+            total_weight += weight
 
-        # Clip to valid range
-        composite = np.clip(composite, 0, 1.0)
+        # Normalize by total weight
+        if total_weight > 0:
+            composite /= total_weight
 
-        # Convert to 8-bit for RGB
-        composite = (composite * 255).astype(np.uint8)
+        # Convert back to original dtype (usually uint16)
+        if np.issubdtype(dtype, np.integer):
+            max_val = np.iinfo(dtype).max
+            composite = np.clip(composite, 0, max_val).astype(dtype)
+        else:
+            composite = composite.astype(dtype)
 
         return composite
 

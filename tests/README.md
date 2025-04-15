@@ -10,39 +10,26 @@ This directory contains tests for the EZStitcher package. The tests cover core f
 
 ## Test Organization
 
+The tests are organized into the following directories:
+
+- **`unit/`**: Unit tests for individual components
+- **`integration/`**: Integration tests for the full workflow
+- **`generators/`**: Synthetic data generators for testing
+
 ### Unit Tests
 
 These tests focus on testing individual components in isolation:
 
-- **`test_file_system_manager.py`**: Tests for the FileSystemManager class, which handles file system operations.
-- **`test_stitcher.py`**: Tests for the Stitcher class, which implements the core stitching algorithms.
-- **`test_zstack_processor.py`**: Tests for the ZStackProcessor class, which handles Z-stack processing.
-
-### Configuration Tests
-
-These tests focus on the configuration system:
-
-- **`test_config.py`**: Tests for the legacy dataclass-based configuration system. May be deprecated in the future.
-- **`test_pydantic_config.py`**: Tests for the newer Pydantic-based configuration system, which provides validation, serialization, and hierarchical configuration management.
+- **`test_image_locator_integration.py`**: Tests for the ImageLocator class, which handles image location operations.
+- **`test_microscope_auto_detection.py`**: Tests for microscope type auto-detection.
 
 ### Integration Tests
 
 These tests focus on testing how components work together:
 
-- **`test_integration.py`**: Integration tests for the full workflow using the legacy configuration system.
-- **`test_config_integration.py`**: Integration tests for the configuration system's integration with the processing pipeline.
-
-### Documentation and Example Tests
-
-These tests verify that the examples in the documentation work correctly:
-
-- **`test_documentation_examples.py`**: Tests for the examples in the documentation, using synthetic microscopy data.
-
-### Synthetic Workflow Tests
-
-These tests use synthetic microscopy data to test the library's functionality in realistic scenarios:
-
-- **`test_synthetic_workflow_class_based.py`**: Comprehensive tests using synthetic microscopy data with the class-based implementation.
+- **`test_synthetic_imagexpress_auto.py`**: Tests for the full workflow using synthetic ImageXpress data.
+- **`test_synthetic_opera_phenix_auto.py`**: Tests for the full workflow using synthetic Opera Phenix data.
+- **`test_auto_config.py`**: Tests for automatic configuration detection and handling.
 
 ## Running the Tests
 
@@ -118,6 +105,16 @@ If you encounter issues with NumPy or other dependencies:
 2. Try reinstalling NumPy: `pip uninstall numpy && pip install numpy`
 3. Check that all dependencies are installed: `pip install -r requirements.txt`
 
+## Test Data Management
+
+Test data is managed as follows:
+
+1. All test data is stored in the `/tests/tests_data/` directory
+2. Each test file has its own subdirectory
+3. Each test method has its own subdirectory
+4. A copy of the original data is kept with an `_original` suffix
+5. Test data is cleaned up before each test run
+
 ## Adding New Tests
 
 When adding new tests:
@@ -134,13 +131,3 @@ When adding new tests:
 3. **Documentation**: Tests should include docstrings explaining what they're testing and how they're testing it.
 4. **Synthetic Data**: Tests should use synthetic data rather than real data to ensure reproducibility and to avoid dependencies on external data.
 5. **Test Directory Structure**: Each test should create its own test data directory with a unique name to avoid interference between tests.
-
-## Known Test Redundancies
-
-There are some redundancies in the test suite that should be addressed in future refactoring:
-
-1. **Configuration Tests**: `test_config.py` and `test_pydantic_config.py` test similar functionality but for different configuration implementations. As the codebase transitions to Pydantic models, `test_config.py` may be deprecated.
-
-2. **Overlapping Test Coverage**: `test_documentation_examples.py` and `test_synthetic_workflow_class_based.py` have some overlapping test cases for Z-stack processing. These could potentially be consolidated.
-
-3. **Integration Test Redundancy**: `test_integration.py` and `test_config_integration.py` both test aspects of the configuration system's integration with the processing pipeline.

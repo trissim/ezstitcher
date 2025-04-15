@@ -437,15 +437,47 @@ class FileSystemManager:
 
         return dirs
 
-    # Removed parse_filename and pad_site_number
-    # Use filename_parser methods directly
+    def get_or_detect_parser(self, directory: Union[str, Path]) -> Optional[FilenameParser]:
+        """
+        Get the configured parser or detect one from files in the directory.
 
+        Args:
+            directory (str or Path): Directory containing files to analyze
 
-    # Removed organize_zstack_folders - use flatten_z_stacks instead
+        Returns:
+            FilenameParser or None: The parser to use, or None if detection fails
+        """
+        from ezstitcher.core.filename_parser import FilenameParser, create_parser
+        from ezstitcher.core.image_locator import ImageLocator
 
+        # Use the configured parser if available
+        if self.filename_parser is not None:
+            return self.filename_parser
 
+        # Otherwise, try to detect format from files in directory
+        directory = Path(directory)
 
-    def rename_files_with_consistent_padding(self, directory, parser=None, width=3, z_width=3):
+        # Use ImageLocator to find all image files
+        image_files = ImageLocator.find_images_in_directory(directory, recursive=False)
+
+        if not image_files:
+            logger.warning(f"No image files found in {directory}")
+            return None
+
+        # Get filenames only
+        filenames = [f.name for f in image_files]
+
+        # Detect format
+        format_type = FilenameParser.detect_format(filenames)
+        if format_type is None:
+            logger.warning(f"Could not detect format for files in {directory}")
+            return None
+
+        # Create and return parser
+        logger.info(f"Detected format {format_type} for files in {directory}")
+        return create_parser(format_type)
+
+    def rename_files_with_consistent_padding(self, directory, parser=None, width=3):
         """
         Rename files in a directory to have consistent site number and Z-index padding.
 
@@ -458,240 +490,251 @@ class FileSystemManager:
         Returns:
             dict: Dictionary mapping original filenames to new filenames
         """
-        from ezstitcher.core.filename_parser import FilenameParser, create_parser
+        from ezstitcher.core.image_locator import ImageLocator
 
         directory = Path(directory)
 
-        # Use default parser if none provided
+        # Use provided parser or detect one
         if parser is None:
-            parser = self.filename_parser
-
-            # If the default parser is not set, try to detect format from files in directory
+            parser = self.filename_parser or self.get_or_detect_parser(directory)
             if parser is None:
-                files = list(directory.glob('*.tif')) + list(directory.glob('*.tiff'))
-                if not files:
-                    logger.warning(f"No image files found in {directory}")
-                    return {}
+                return {}  # No parser available
 
-                # Get filenames only
-                filenames = [f.name for f in files]
+        # Use ImageLocator to find all image files
+        image_files = ImageLocator.find_images_in_directory(directory, recursive=False)
 
-                # Detect format
-                format_type = FilenameParser.detect_format(filenames)
-                if format_type is None:
-                    logger.warning(f"Could not detect format for files in {directory}")
-                    return {}
-
-                # Create parser
-                parser = create_parser(format_type)
-
-        # Find all image files
-        files = list(directory.glob('*.tif')) + list(directory.glob('*.tiff'))
-
-        # Map original filenames to padded filenames
+        # Map original filenames to reconstructed filenames
         rename_map = {}
-        for file_path in files:
+        for file_path in image_files:
             original_name = file_path.name
-            padded_name = parser.pad_site_number(original_name, width=width)
 
-            # Only include files that need renaming
-            if original_name != padded_name:
-                rename_map[original_name] = padded_name
+            # Parse the filename components
+            metadata = parser.parse_filename(original_name)
+            if not metadata:
+                continue  # Skip files that can't be parsed
 
-        # Check for conflicts (e.g., both s1_w1.tif and s001_w1.tif exist)
-        # In this case, we'll skip renaming to avoid overwriting files
-        new_names = set(rename_map.values())
-        existing_names = set(f.name for f in files)
-        conflicts = new_names.intersection(existing_names)
+            # Reconstruct the filename with proper padding
+            new_name = parser.construct_filename(
+                well=metadata['well'],
+                site=metadata['site'],
+                channel=metadata['channel'],
+                z_index=metadata.get('z_index'),
+                extension=metadata['extension'],
+                site_padding=width,
+                z_padding=width
+            )
 
-        if conflicts:
-            logger.warning(f"Found {len(conflicts)} filename conflicts. These files will not be renamed.")
-            for conflict in conflicts:
-                # Find all original names that would map to this conflict
-                conflicting_originals = [orig for orig, new in rename_map.items() if new == conflict]
-                logger.warning(f"Conflict: {conflicting_originals} -> {conflict}")
-
-                # Remove these entries from the rename map
-                for orig in conflicting_originals:
-                    if orig in rename_map:
-                        del rename_map[orig]
+            # Add to rename map if different
+            if original_name != new_name:
+                rename_map[original_name] = new_name
 
         # Perform the renaming
-        for original_name, padded_name in rename_map.items():
+        for original_name, new_name in rename_map.items():
             original_path = directory / original_name
-            padded_path = directory / padded_name
+            new_path = directory / new_name
 
             try:
-                original_path.rename(padded_path)
-                logger.info(f"Renamed {original_name} -> {padded_name}")
+                original_path.rename(new_path)
+                logger.debug(f"Renamed {original_path} to {new_path}")
             except Exception as e:
-                logger.error(f"Failed to rename {original_name} -> {padded_name}: {e}")
+                logger.error(f"Error renaming {original_path} to {new_path}: {e}")
 
         return rename_map
 
-    # Removed construct_filename and auto_detect_patterns
-    # Use filename_parser.construct_filename and pattern_matcher.auto_detect_patterns directly
 
-    def convert_opera_phenix_to_imagexpress(self, input_dir, output_dir=None):
-        """
-        Convert Opera Phenix files to ImageXpress format.
+        def convert_opera_phenix_to_imagexpress(self, input_dir, output_dir=None):
+            """
+            Convert Opera Phenix files to ImageXpress format.
 
-        This function copies Opera Phenix files to a new directory with ImageXpress-style filenames.
-        If output_dir is None, files are renamed in place.
+            This function copies Opera Phenix files to a new directory with ImageXpress-style filenames.
+            If output_dir is None, files are renamed in place.
 
-        Args:
-            input_dir (str or Path): Directory containing Opera Phenix files
-            output_dir (str or Path, optional): Directory to save converted files
+            Args:
+                input_dir (str or Path): Directory containing Opera Phenix files
+                output_dir (str or Path, optional): Directory to save converted files
 
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            import shutil
-            from ezstitcher.core.filename_parser import OperaPhenixFilenameParser
+            Returns:
+                bool: True if successful, False otherwise
+            """
+            try:
+                import shutil
+                from ezstitcher.core.filename_parser import OperaPhenixFilenameParser
 
-            input_dir = Path(input_dir)
-            if output_dir is None:
-                output_dir = input_dir
-            else:
-                output_dir = Path(output_dir)
-                self.ensure_directory(output_dir)
-
-                # Create TimePoint_1 directory in the output directory
-                # This is needed because ImageXpress format expects images in a TimePoint_1 subdirectory
-                timepoint_dir = output_dir / "TimePoint_1"
-                self.ensure_directory(timepoint_dir)
-
-                # Update output_dir to point to the TimePoint_1 directory
-                output_dir = timepoint_dir
-
-            # Create an Opera Phenix filename parser
-            opera_parser = OperaPhenixFilenameParser()
-
-            # Get all image files in the input directory
-            image_files = self.list_image_files(input_dir)
-
-            # Process each file
-            for img_file in image_files:
-                # Parse the filename
-                metadata = opera_parser.parse_filename(str(img_file))
-
-                if metadata:
-                    well = metadata['well']
-                    site = metadata['site']
-                    channel = metadata['channel']
-                    z_index = metadata.get('z_index')
-                    extension = img_file.suffix
-
-                    # Construct new filename in ImageXpress format
-                    # Convert Opera Phenix well format (R01C01) to ImageXpress well format (A01)
-                    # Extract row and column from Opera Phenix well format
-                    match = re.match(r"R(\d{2})C(\d{2})", well, re.I)
-                    if match:
-                        row = int(match.group(1))
-                        col = int(match.group(2))
-                        # Convert row number to letter (1 -> A, 2 -> B, etc.)
-                        row_letter = chr(64 + row)  # ASCII: 'A' = 65
-                        # Create ImageXpress well format
-                        imx_well = f"{row_letter}{col:02d}"
-                    else:
-                        # If well is not in Opera Phenix format, use it as is
-                        imx_well = well
-
-                    # Construct new filename in ImageXpress format
-                    if z_index is not None:
-                        new_name = f"{imx_well}_s{site:03d}_w{channel}_z{z_index:03d}{extension}"
-                    else:
-                        new_name = f"{imx_well}_s{site:03d}_w{channel}{extension}"
-
-                    # Create output path
-                    output_path = output_dir / new_name
-
-                    # Copy or rename the file
-                    if output_dir == input_dir:
-                        # Rename in place
-                        img_file.rename(output_path)
-                        logger.info(f"Renamed {img_file.name} to {new_name}")
-                    else:
-                        # Copy to new directory
-                        shutil.copy2(img_file, output_path)
-                        logger.info(f"Copied {img_file.name} to {new_name}")
+                input_dir = Path(input_dir)
+                if output_dir is None:
+                    output_dir = input_dir
                 else:
-                    logger.warning(f"Could not parse filename: {img_file.name}")
+                    output_dir = Path(output_dir)
+                    self.ensure_directory(output_dir)
 
-            return True
-        except Exception as e:
-            logger.error(f"Error converting Opera Phenix files to ImageXpress format: {e}")
-            return False
+                    # Create TimePoint_1 directory in the output directory
+                    # This is needed because ImageXpress format expects images in a TimePoint_1 subdirectory
+                    timepoint_dir = output_dir / "TimePoint_1"
+                    self.ensure_directory(timepoint_dir)
 
-    def mirror_directory_structure(self, source_dir: Union[str, Path], base_output_dir: Union[str, Path]) -> Path:
+                    # Update output_dir to point to the TimePoint_1 directory
+                    output_dir = timepoint_dir
+
+                # Create an Opera Phenix filename parser
+                opera_parser = OperaPhenixFilenameParser()
+
+                # Get all image files in the input directory
+                image_files = self.list_image_files(input_dir)
+
+                # Process each file
+                for img_file in image_files:
+                    # Parse the filename
+                    metadata = opera_parser.parse_filename(str(img_file))
+
+                    if metadata:
+                        well = metadata['well']
+                        site = metadata['site']
+                        channel = metadata['channel']
+                        z_index = metadata.get('z_index')
+                        extension = img_file.suffix
+
+                        # Construct new filename in ImageXpress format
+                        # Convert Opera Phenix well format (R01C01) to ImageXpress well format (A01)
+                        # Extract row and column from Opera Phenix well format
+                        match = re.match(r"R(\d{2})C(\d{2})", well, re.I)
+                        if match:
+                            row = int(match.group(1))
+                            col = int(match.group(2))
+                            # Convert row number to letter (1 -> A, 2 -> B, etc.)
+                            row_letter = chr(64 + row)  # ASCII: 'A' = 65
+                            # Create ImageXpress well format
+                            imx_well = f"{row_letter}{col:02d}"
+                        else:
+                            # If well is not in Opera Phenix format, use it as is
+                            imx_well = well
+
+                        # Construct new filename in ImageXpress format
+                        if z_index is not None:
+                            new_name = f"{imx_well}_s{site:03d}_w{channel}_z{z_index:03d}{extension}"
+                        else:
+                            new_name = f"{imx_well}_s{site:03d}_w{channel}{extension}"
+
+                        # Create output path
+                        output_path = output_dir / new_name
+
+                        # Copy or rename the file
+                        if output_dir == input_dir:
+                            # Rename in place
+                            img_file.rename(output_path)
+                            logger.info(f"Renamed {img_file.name} to {new_name}")
+                        else:
+                            # Copy to new directory
+                            shutil.copy2(img_file, output_path)
+                            logger.info(f"Copied {img_file.name} to {new_name}")
+                    else:
+                        logger.warning(f"Could not parse filename: {img_file.name}")
+
+                return True
+            except Exception as e:
+                logger.error(f"Error converting Opera Phenix files to ImageXpress format: {e}")
+                return False
+
+        def mirror_directory_structure(self, source_dir: Union[str, Path], base_output_dir: Union[str, Path]) -> Path:
+            """
+            Mirror the directory structure from source_dir to base_output_dir and copy non-image files.
+
+            This method recursively creates a directory structure in base_output_dir that mirrors the structure
+            in source_dir. It also copies all non-image files (HTD, XML, etc.) to the mirrored directory.
+
+            Args:
+                source_dir (str or Path): Source directory to mirror
+                base_output_dir (str or Path): Base output directory where the mirrored structure will be created
+
+            Returns:
+                Path: Path to the mirrored directory
+            """
+            source_dir = Path(source_dir)
+            base_output_dir = Path(base_output_dir)
+
+            # Ensure base output directory exists
+            self.ensure_directory(base_output_dir)
+
+            # Walk through the source directory structure
+            for root, dirs, files in os.walk(source_dir):
+                # Get relative path from source_dir
+                rel_path = Path(root).relative_to(source_dir)
+
+                # Create directories
+                for dir_name in dirs:
+                    # Skip directories that might contain image files but don't need structure mirroring
+                    if dir_name.lower() in ['thumbnails', 'thumb', 'thumbnail']:
+                        continue
+                    self.ensure_directory(base_output_dir / rel_path / dir_name)
+
+                # Copy non-image files
+                for file_name in files:
+                    if not any(file_name.lower().endswith(ext) for ext in ['.tif', '.tiff', '.jpg', '.jpeg', '.png']):
+                        source_file = Path(root) / file_name
+                        target_file = base_output_dir / rel_path / file_name
+                        logger.info(f"Copying non-image file: {file_name}")
+                        self.copy_file(source_file, target_file)
+
+            # Return the base output directory
+            return base_output_dir
+
+        # _copy_non_image_files method has been merged into mirror_directory_structure
+
+        def move_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
+            """
+            Move a file from source to destination.
+
+            Ensures the destination directory exists and handles errors.
+
+            Args:
+                source_path (str or Path): Source file path.
+                dest_path (str or Path): Destination file path.
+
+            Returns:
+                bool: True if successful, False otherwise.
+            """
+            try:
+                import shutil
+                dest_dir = Path(dest_path).parent
+                self.ensure_directory(dest_dir) # Ensure destination directory exists
+
+                shutil.move(str(source_path), str(dest_path))
+                logger.debug(f"Moved file from {source_path} to {dest_path}")
+                return True
+            except Exception as e:
+                logger.error(f"Error moving file from {source_path} to {dest_path}: {e}")
+                return False
+            return all_success
+
+    def cleanup_processed_files(self, processed_files, output_files):
         """
-        Mirror the directory structure from source_dir to base_output_dir and copy non-image files.
-
-        This method recursively creates a directory structure in base_output_dir that mirrors the structure
-        in source_dir. It also copies all non-image files (HTD, XML, etc.) to the mirrored directory.
+        Clean up processed files after they've been used to create output files.
 
         Args:
-            source_dir (str or Path): Source directory to mirror
-            base_output_dir (str or Path): Base output directory where the mirrored structure will be created
+            processed_files (set or list): Set or list of file paths to clean up
+            output_files (list): List of output file paths to preserve
 
         Returns:
-            Path: Path to the mirrored directory
+            int: Number of files successfully removed
         """
-        source_dir = Path(source_dir)
-        base_output_dir = Path(base_output_dir)
+        removed_count = 0
 
-        # Ensure base output directory exists
-        self.ensure_directory(base_output_dir)
+        # Convert to sets for efficient operations
+        processed_set = set(processed_files)
+        output_set = set(output_files)
 
-        # Walk through the source directory structure
-        for root, dirs, files in os.walk(source_dir):
-            # Get relative path from source_dir
-            rel_path = Path(root).relative_to(source_dir)
+        # Only remove files that are in processed_files but not in output_files
+        files_to_remove = processed_set - output_set
 
-            # Create directories
-            for dir_name in dirs:
-                # Skip directories that might contain image files but don't need structure mirroring
-                if dir_name.lower() in ['thumbnails', 'thumb', 'thumbnail']:
-                    continue
-                self.ensure_directory(base_output_dir / rel_path / dir_name)
+        for file_path in files_to_remove:
+            try:
+                path = Path(file_path)
+                if path.exists():
+                    path.unlink()
+                    removed_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to remove processed file {file_path}: {e}")
 
-            # Copy non-image files
-            for file_name in files:
-                if not any(file_name.lower().endswith(ext) for ext in ['.tif', '.tiff', '.jpg', '.jpeg', '.png']):
-                    source_file = Path(root) / file_name
-                    target_file = base_output_dir / rel_path / file_name
-                    logger.info(f"Copying non-image file: {file_name}")
-                    self.copy_file(source_file, target_file)
+        if removed_count > 0:
+            logger.info(f"Cleaned up {removed_count} processed files")
 
-        # Return the base output directory
-        return base_output_dir
-
-    # _copy_non_image_files method has been merged into mirror_directory_structure
-
-    def move_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
-        """
-        Move a file from source to destination.
-
-        Ensures the destination directory exists and handles errors.
-
-        Args:
-            source_path (str or Path): Source file path.
-            dest_path (str or Path): Destination file path.
-
-        Returns:
-            bool: True if successful, False otherwise.
-        """
-        try:
-            import shutil
-            dest_dir = Path(dest_path).parent
-            self.ensure_directory(dest_dir) # Ensure destination directory exists
-
-            shutil.move(str(source_path), str(dest_path))
-            logger.debug(f"Moved file from {source_path} to {dest_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Error moving file from {source_path} to {dest_path}: {e}")
-            return False
-            return False
-        return all_success
+        return removed_count

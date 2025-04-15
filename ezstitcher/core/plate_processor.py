@@ -36,7 +36,6 @@ class PlateProcessor:
         self.zstack_processor = ZStackProcessor(config.z_stack_processor)
         self.focus_analyzer = FocusAnalyzer(config.focus_analyzer)
         self.image_preprocessor = ImagePreprocessor(config.image_preprocessor)
-        self.stitcher = Stitcher(config.stitcher)
         self._current_plate_folder = None
         self.filename_parser = None
 
@@ -54,6 +53,9 @@ class PlateProcessor:
         plate_path = Path(plate_folder)
         config = self.config
         self.filename_parser = create_parser(config.microscope_type, plate_folder=plate_path)
+        config.stitcher.filename_parser = self.filename_parser
+        #self.stitcher.pattern_matcher = PatternMatcher(self.filename_parser)    
+        self.stitcher = Stitcher(config.stitcher,filename_parser=self.filename_parser)
         try:
             # Phase 1: Flatten and rename files (non-destructive, outputs to new dir if needed)
 
@@ -140,6 +142,12 @@ class PlateProcessor:
                 best_focus_dir = parent_dir / f"{plate_name}{config.best_focus_dir_suffix}"
                 self.fs_manager.ensure_directory(best_focus_dir)
                 logger.info(f"Finding best focused images using method: {z_config.focus_method}")
+                self.zstack_processor.focus_manager.create_best_focus_images(dirs['input'],
+                                                                             best_focus_dir,
+                                                                             z_config.focus_method,
+                                                                             config.reference_channels[0],
+                                                                             )
+
                 success, _ = self.zstack_processor.create_best_focus_images(
                     dirs['input'],
                     best_focus_dir,
@@ -264,3 +272,68 @@ class PlateProcessor:
         #self.fs_manager.clean_temp_folders(parent_dir, plate_name, keep_suffixes=['_stitched'])
         return True
 
+    def run(self, plate_folder):
+        """
+        Run the pipeline on the specified plate folder.
+        
+        Args:
+            plate_folder: Path to the plate folder
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        plate_path = Path(plate_folder)
+        config = self.config
+        
+        # Create output directories
+        dirs = self.fs_manager.create_output_directories(
+            plate_path,
+            {
+                'processed': config.processed_dir_suffix,
+                'post_processed': config.post_processed_dir_suffix,
+                'positions': config.positions_dir_suffix,
+                'stitched': config.stitched_dir_suffix
+            }
+        )
+        
+        # Find image directory
+        dirs['input'] = ImageLocator.find_image_directory(plate_path)
+        
+        # Phase 1: Reference Processing
+        logger.info("Phase 1: Reference Processing")
+        reference_patterns = self.process_images(
+            dirs['input'],
+            dirs['processed'],
+            config.reference_processing,
+            well_filter=config.well_filter
+        )
+        
+        # Phase 2: Generate Stitching Positions
+        logger.info("Phase 2: Generate Stitching Positions")
+        positions = self._generate_positions(
+            dirs['processed'],
+            dirs['positions'],
+            reference_patterns,
+            config.stitcher
+        )
+        
+        # Phase 3: Final Processing
+        logger.info("Phase 3: Final Processing")
+        final_patterns = self.process_images(
+            dirs['input'],
+            dirs['post_processed'],
+            config.final_processing,
+            well_filter=config.well_filter
+        )
+        
+        # Phase 4: Stitch Final Images
+        logger.info("Phase 4: Stitch Final Images")
+        success = self._stitch_images(
+            dirs['post_processed'],
+            dirs['stitched'],
+            dirs['positions'],
+            final_patterns,
+            config.stitcher
+        )
+        
+        return success

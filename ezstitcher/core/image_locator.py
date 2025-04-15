@@ -16,14 +16,6 @@ logger = logging.getLogger(__name__)
 class ImageLocator:
     """
     Locates images in various directory structures.
-
-    This class provides methods to find images in different directory structures:
-    - Images directly in the plate folder
-    - Images in a TimePoint_1 subfolder
-    - Images in Z-stack folders in the plate folder
-    - Images in Z-stack folders in the TimePoint_1 subfolder
-    - Images in an Images subfolder
-    - Images in an Images/TimePoint_1 subfolder
     """
 
     DEFAULT_EXTENSIONS = ['.tif', '.TIF', '.tiff', '.TIFF', '.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG']
@@ -155,14 +147,12 @@ class ImageLocator:
 
     @staticmethod
     def find_image_locations(plate_folder: Union[str, Path],
-                            timepoint_dir_name: str = None,  # Unused but kept for API compatibility
                             extensions: Optional[List[str]] = None) -> Dict[str, List[Path]]:
         """
         Find all image files recursively within plate_folder.
 
         Args:
             plate_folder: Path to the plate folder
-            timepoint_dir_name: Unused, kept for API compatibility
             extensions: List of file extensions to include. If None, uses DEFAULT_EXTENSIONS.
 
         Returns:
