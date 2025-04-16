@@ -435,6 +435,41 @@ class FileSystemManager:
 
         return dirs
 
+    def find_file_recursive(self, directory: Union[str, Path], filename: str) -> Optional[Path]:
+        """
+        Recursively search for a file by name in a directory and its subdirectories.
+        Returns the first instance found.
+
+        Args:
+            directory (str or Path): Directory to search in
+            filename (str): Name of the file to find
+
+        Returns:
+            Path or None: Path to the first instance of the file, or None if not found
+        """
+        try:
+            directory = Path(directory)
+
+            # Check if the file exists in the current directory
+            file_path = directory / filename
+            if file_path.exists() and file_path.is_file():
+                logger.debug(f"Found file {filename} in {directory}")
+                return file_path
+
+            # Recursively search in subdirectories
+            for item in directory.iterdir():
+                if item.is_dir():
+                    result = self.find_file_recursive(item, filename)
+                    if result is not None:
+                        return result
+
+            # File not found in this directory or its subdirectories
+            return None
+        except Exception as e:
+            logger.error(f"Error searching for file {filename} in {directory}: {e}")
+            return None
+
+
     def get_or_detect_parser(self, directory: Union[str, Path]) -> Optional[FilenameParser]:
         """
         Get the configured parser or detect one from files in the directory.
