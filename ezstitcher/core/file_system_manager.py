@@ -518,9 +518,9 @@ class FileSystemManager:
             # If force_suffixes is True, add default values for missing components
             if force_suffixes:
                 # Default values for missing components
-                site = metadata.get('site', 1)
-                channel = metadata.get('channel', 1)
-                z_index = metadata.get('z_index', 1)
+                site = metadata['site'] or 1
+                channel = metadata['channel'] or 1
+                z_index = metadata['z_index'] or 1 
             else:
                 # Use existing values or None
                 site = metadata.get('site')

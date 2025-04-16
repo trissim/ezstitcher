@@ -331,27 +331,25 @@ class ImageXpressFilenameParser(FilenameParser):
             well, site_str, channel_str, z_str, ext = match.groups()
 
             # Handle optional components - return None if missing
-            site = int(site_str) if site_str else None
-            channel = int(channel_str) if channel_str else None
-            z_index = int(z_str) if z_str else None
-            extension = ext if ext else '.tif' # Default if somehow empty
+            
+            result = {'well' : well,
+                      'site' : int(site_str) if site_str else None,
+                      'channel' : int(channel_str) if channel_str else None,
+                      'z_index' : int(z_str) if z_str else None,
+                      'extension' : ext if ext else '.tif'} # Default if somehow empty
 
-            result = {
-                'well': well,
-                'extension': extension
-            }
-
-            # Only add components if they exist
-            if site is not None:
-                result['site'] = site
-
-            if channel is not None:
-                result['channel'] = channel
-                result['wavelength'] = channel  # For backward compatibility
-
-            if z_index is not None:
-                result['z_index'] = z_index
-
+#
+#            # Only add components if they exist
+#            if site is not None:
+#                result['site'] = site
+#
+#            if channel is not None:
+#                result['channel'] = channel
+#                result['wavelength'] = channel  # For backward compatibility
+#
+#            if z_index is not None:
+#                result['z_index'] = z_index
+#
             return result
         else:
             logger.debug(f"Could not parse ImageXpress filename: {filename}")

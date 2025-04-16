@@ -246,6 +246,7 @@ class PipelineOrchestrator:
             meta = self.filename_parser.parse_filename(sample)
             flatten_patterns.append(self.filename_parser.construct_filename(well=meta['well'],
                                                                      site=meta['site'],
+                                                                     channel=meta['channel'],
                                                                      z_index='{iii}',
                                                                      extension='.tif'))
 
@@ -379,7 +380,7 @@ class PipelineOrchestrator:
                 # Get the output filename
                 pattern_with_site = pattern.replace('{iii}', '001')
                 metadata = self.filename_parser.parse_filename(pattern_with_site)
-                fname = self.filename_parser.construct_filename(well=metadata['well'], site=metadata['site'], extension='.tif')
+                fname = self.filename_parser.construct_filename(well=metadata['well'], site=metadata['site'], channel=metadata['channel'], extension='.tif')
 
                 # Save the projected image
                 output_path = output_dir / fname
