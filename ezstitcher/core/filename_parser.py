@@ -117,6 +117,7 @@ class FilenameParser(ABC):
         """
         pass
 
+    @abstractmethod
     def parse_filename(self, filename: str) -> Optional[Dict[str, Any]]:
         """
         Parse a microscopy image filename to extract all components.
@@ -127,59 +128,24 @@ class FilenameParser(ABC):
         Returns:
             dict or None: Dictionary with extracted components (including 'extension') or None if parsing fails
         """
-        # Extract just the basename for parsing
-        basename = os.path.basename(filename)
-
-        # Parse individual components
-        well = self.parse_well(basename)
-        site = self.parse_site(basename)
-        channel = self.parse_channel(basename)
-        z_index = self.parse_z_index(basename)
-
-        # Extract extension
-        _, extension = os.path.splitext(basename)
-
-        # For Z-stack images in ZStep folders, extract Z-index from folder name
-        if z_index is None and '/' in filename:
-            parts = filename.split('/')
-            if len(parts) >= 2:
-                folder = parts[-2]
-                if folder.startswith('ZStep_'):
-                    try:
-                        z_index = int(folder.split('_')[1])
-                    except (IndexError, ValueError):
-                        pass
-
-        # Only return a result if we have the minimum required components
-        if well is not None and site is not None and channel is not None:
-            result = {
-                'well': well,
-                'site': site,
-                'wavelength': channel,  # For backward compatibility
-                'channel': channel,
-                'extension': extension,
-            }
-
-            if z_index is not None:
-                result['z_index'] = z_index
-
-            return result
-
-        return None
+        pass
 
     @abstractmethod
-    def construct_filename(self, well: str, site: int, channel: int,
-                          z_index: Optional[int] = None,
-                          extension: str = '.tif') -> str:
+    def construct_filename(self, well: str, site: Optional[Union[int, str]] = None, channel: Optional[int] = None,
+                          z_index: Optional[Union[int, str]] = None,
+                          extension: str = '.tif',
+                          site_padding: int = 3, z_padding: int = 3) -> str:
         """
         Construct a filename from components.
 
         Args:
             well (str): Well ID (e.g., 'A01')
-            site (int): Site number
-            channel (int): Channel/wavelength number
-            z_index (int, optional): Z-index
+            site (int or str, optional): Site number or placeholder string (e.g., '{iii}')
+            channel (int, optional): Channel/wavelength number
+            z_index (int or str, optional): Z-index or placeholder string (e.g., '{zzz}')
             extension (str, optional): File extension
+            site_padding (int, optional): Width to pad site numbers to (default: 3)
+            z_padding (int, optional): Width to pad Z-index numbers to (default: 3)
 
         Returns:
             str: Constructed filename
@@ -331,7 +297,7 @@ class ImageXpressFilenameParser(FilenameParser):
             well, site_str, channel_str, z_str, ext = match.groups()
 
             # Handle optional components - return None if missing
-            
+
             result = {'well' : well,
                       'site' : int(site_str) if site_str else None,
                       'channel' : int(channel_str) if channel_str else None,
@@ -589,8 +555,8 @@ class OperaPhenixFilenameParser(FilenameParser):
 
         return None
 
-    def construct_filename(self, well: str, site, channel: int,
-                          z_index=None, extension: str = '.tiff',
+    def construct_filename(self, well: str, site: Optional[Union[int, str]] = None, channel: Optional[int] = None,
+                          z_index: Optional[Union[int, str]] = None, extension: str = '.tiff',
                           site_padding: int = 3, z_padding: int = 2) -> str:
         """
         Construct an Opera Phenix filename from components.
