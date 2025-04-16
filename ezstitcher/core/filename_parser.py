@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 class FilenameParser(ABC):
-    """Abstract base class for parsing microscopy image filenames."""
+    """Abstract base class for parsing microscopy image filenames and matching patterns.
+
+    This class handles both filename parsing and pattern matching functionality.
+    """
 
     @staticmethod
     def replace_placeholders(pattern: str, replacements: Union[str, Dict[str, str]] = '001') -> str:
@@ -51,57 +54,6 @@ class FilenameParser(ABC):
             result = re.sub(r'\{[^}]*\}', '001', result)
             return result
 
-    @abstractmethod
-    def parse_well(self, filename: str) -> Optional[str]:
-        """
-        Parse well ID from a filename.
-
-        Args:
-            filename (str): Filename to parse
-
-        Returns:
-            str or None: Well ID (e.g., 'A01') or None if parsing fails
-        """
-        pass
-
-    @abstractmethod
-    def parse_site(self, filename: str) -> Optional[int]:
-        """
-        Parse site number from a filename.
-
-        Args:
-            filename (str): Filename to parse
-
-        Returns:
-            int or None: Site number or None if parsing fails
-        """
-        pass
-
-    @abstractmethod
-    def parse_z_index(self, filename: str) -> Optional[int]:
-        """
-        Parse Z-index from a filename.
-
-        Args:
-            filename (str): Filename to parse
-
-        Returns:
-            int or None: Z-index or None if parsing fails
-        """
-        pass
-
-    @abstractmethod
-    def parse_channel(self, filename: str) -> Optional[int]:
-        """
-        Parse channel/wavelength from a filename.
-
-        Args:
-            filename (str): Filename to parse
-
-        Returns:
-            int or None: Channel/wavelength number or None if parsing fails
-        """
-        pass
 
     @classmethod
     @abstractmethod
@@ -152,68 +104,262 @@ class FilenameParser(ABC):
         """
         pass
 
-    def pad_site_number(self, filename: str, width: int = 3) -> str:
+    def path_list_from_pattern(self, directory, pattern):
         """
-        Ensure site number is padded to a consistent width.
+        Get a list of filenames matching a pattern in a directory.
 
         Args:
-            filename (str): Filename to pad
-            width (int): Width to pad to
+            directory (str or Path): Directory to search
+            pattern (str): Pattern to match with {iii} placeholder for site index
 
         Returns:
-            str: Filename with padded site number
+            list: List of matching filenames
         """
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
+        directory = Path(directory)
 
-        # Get site number
-        site = self.parse_site(basename)
-        if site is None:
-            return filename  # Return original if site can't be parsed
+        # Handle substitution of {series} if present (from Ashlar)
+        if "{series}" in pattern:
+            pattern = pattern.replace("{series}", "{iii}")
 
-        # Pad site number and replace in filename
-        site_str = str(site)
-        padded_site = site_str.zfill(width)
+        # Convert pattern to regex
+        # Replace {iii} with (\d+) to match any number of digits (padded or not)
+        regex_pattern = pattern.replace('{iii}', '(\\d+)')
 
-        # Use a generic approach that works for all formats
-        # For ImageXpress format: A01_s1_w1.tif -> A01_s001_w1.tif
-        result = re.sub(r'_s' + site_str + r'_', f'_s{padded_site}_', basename)
+        # Handle _z001 suffix if not already in the pattern
+        if '_z' not in regex_pattern:
+            regex_pattern = regex_pattern.replace('_w1', '_w1(?:_z\\d+)?')
 
-        # If the filename didn't change, it might be in a different format
-        # Try Opera Phenix format: r01c01f1p01-ch1.tiff -> r01c01f001p01-ch1.tiff
-        if result == basename:
-            result = re.sub(r'f' + site_str + r'p', f'f{padded_site}p', basename)
+        # Handle .tif vs .tiff extension
+        if regex_pattern.endswith('.tif'):
+            regex_pattern = regex_pattern[:-4] + '(?:\\.tif|\\.tiff)'
 
-        # If the path was provided, maintain it
-        if filename != basename:
-            return os.path.join(os.path.dirname(filename), result)
+        logger.debug(f"Regex pattern: {regex_pattern}")
+        regex = re.compile(regex_pattern)
+
+        # Find all matching files
+        matching_files = []
+        for file_path in directory.glob('*'):
+            if file_path.is_file() and regex.match(file_path.name):
+                matching_files.append(file_path.name)
+
+        # Log debug information
+        logger.debug(f"Pattern: {pattern}, Directory: {directory}, Files found: {len(matching_files)}")
+        if matching_files and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"First file: {matching_files[0]}")
+
+        # Use natural sorting instead of lexicographical sorting
+        return self._natural_sort(matching_files)
+
+    def metadata_from_pattern(self, pattern):
+        """
+        Extract metadata from a filename pattern.
+
+        Args:
+            pattern (str): Filename pattern
+
+        Returns:
+            dict: Dictionary with extracted metadata
+        """
+        return self.parse_filename(pattern.replace('{iii}', '001'))
+
+    def _natural_sort(self, file_list):
+        """
+        Sort filenames naturally, so that site numbers are sorted numerically.
+        E.g., ["s1", "s10", "s2"] -> ["s1", "s2", "s10"]
+
+        Args:
+            file_list (list): List of filenames to sort
+
+        Returns:
+            list: Naturally sorted list of filenames
+        """
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
+
+        return sorted(file_list, key=natural_sort_key)
+
+    def group_patterns_by_channel(self, patterns):
+        """
+        Group patterns by channel/wavelength using the filename parser.
+
+        Args:
+            patterns (list): List of patterns to group
+
+        Returns:
+            dict: Dictionary mapping channel numbers to patterns
+        """
+        patterns_by_channel = {}
+
+        for pattern in patterns:
+            # Use the filename parser to extract the channel
+            # Replace {iii} with a dummy site number for parsing
+            pattern_with_site = pattern.replace('{iii}', '001')
+            # Also replace {zzz} with a dummy z-index if present
+            if '{zzz}' in pattern_with_site:
+                pattern_with_site = pattern_with_site.replace('{zzz}', '001')
+
+            metadata = self.parse_filename(pattern_with_site)
+
+            if metadata and 'channel' in metadata:
+                channel = str(metadata['channel'])
+                if channel not in patterns_by_channel:
+                    patterns_by_channel[channel] = []
+                patterns_by_channel[channel].append(pattern)
+            else:
+                logger.warning(f"Could not extract channel from pattern: {pattern}")
+                continue
+
+        return patterns_by_channel
+
+    def group_patterns_by_z_index(self, patterns):
+        """
+        Group patterns by z-index using the filename parser.
+
+        Args:
+            patterns (list): List of patterns to group
+
+        Returns:
+            dict: Dictionary mapping z-indices to patterns
+        """
+        patterns_by_z = {}
+
+        for pattern in patterns:
+            # Check if this is a z-variable pattern (contains {zzz})
+            if '{zzz}' in pattern:
+                # This is a pattern with variable z-index
+                # Add it to a special 'variable' category
+                if 'variable' not in patterns_by_z:
+                    patterns_by_z['variable'] = []
+                patterns_by_z['variable'].append(pattern)
+                continue
+
+            # For fixed z-index patterns, extract the z-index
+            # Replace {iii} with a dummy site number for parsing
+            pattern_with_site = pattern.replace('{iii}', '001')
+            metadata = self.parse_filename(pattern_with_site)
+
+            if metadata and 'z_index' in metadata and metadata['z_index'] is not None:
+                z_index = str(metadata['z_index'])
+                if z_index not in patterns_by_z:
+                    patterns_by_z[z_index] = []
+                patterns_by_z[z_index].append(pattern)
+            else:
+                # If no z-index is found, put it in the '1' category (default z-index)
+                if '1' not in patterns_by_z:
+                    patterns_by_z['1'] = []
+                patterns_by_z['1'].append(pattern)
+
+        return patterns_by_z
+
+    def auto_detect_patterns(self, folder_path, well_filter=None, extensions=None, group_by='channel', variable_site=True, variable_z=False):
+        """
+        Automatically detect image patterns in a folder.
+
+        Args:
+            folder_path (str or Path): Path to the folder
+            well_filter (list): Optional list of wells to include
+            extensions (list): Optional list of file extensions to include
+            group_by (str): How to group patterns ('channel' or 'z_index')
+            variable_site (bool): Whether to generate patterns with variable site (default: True)
+            variable_z (bool): Whether to generate patterns with variable z-index (default: False)
+
+        Returns:
+            dict: Dictionary mapping wells to patterns grouped by channel or z-index
+        """
+        from collections import defaultdict
+        from ezstitcher.core.image_locator import ImageLocator
+
+        folder_path = Path(folder_path)
+        extensions = extensions or ['.tif', '.TIF', '.tiff', '.TIFF']
+
+        # Find all image files
+        image_dir = ImageLocator.find_image_directory(folder_path)
+        logger.info(f"Using image directory: {image_dir}")
+        image_paths = ImageLocator.find_images_in_directory(image_dir, extensions, recursive=True)
+
+        if not image_paths:
+            logger.warning(f"No image files found in {folder_path}")
+            return {}
+
+        # Process all images
+        patterns_by_well = defaultdict(list)
+        for img_path in image_paths:
+            metadata = self.parse_filename(img_path.name)
+            if not metadata or (well_filter and metadata['well'] not in well_filter):
+                continue
+
+            well = metadata['well']
+            channel = metadata['channel']
+            has_z = 'z_index' in metadata
+
+            # Generate patterns based on flags
+            if "_s" in img_path.name and "_w" in img_path.name:  # ImageXpress format
+                if variable_site and not variable_z:
+                    # Only variable site
+                    pattern = self.construct_filename(
+                        well=well, site="{iii}", channel=channel,
+                        z_index=metadata.get('z_index'),
+                        extension=metadata['extension']
+                    )
+                    patterns_by_well[well].append(pattern)
+                elif variable_z and not variable_site:
+                    # Only variable z-index
+                    if has_z:
+                        pattern = self.construct_filename(
+                            well=well, site=metadata['site'], channel=channel,
+                            z_index="{iii}", extension=metadata['extension']
+                        )
+                        pattern = re.sub(r'_z\d+', '_z{iii}', pattern)
+                        patterns_by_well[well].append(pattern)
+                elif variable_site and variable_z:
+                    # Both variable
+                    if has_z:
+                        pattern = self.construct_filename(
+                            well=well, site="{iii}", channel=channel,
+                            z_index="{iii}", extension=metadata['extension']
+                        )
+                        pattern = re.sub(r'_z\d+', '_z{iii}', pattern)
+                        patterns_by_well[well].append(pattern)
+                    else:
+                        pattern = self.construct_filename(
+                            well=well, site="{iii}", channel=channel,
+                            extension=metadata['extension']
+                        )
+                        patterns_by_well[well].append(pattern)
+            else:  # Opera Phenix format
+                if variable_site and not variable_z:
+                    # Only variable site
+                    pattern = re.sub(r'f\d+', 'f{iii}', img_path.name)
+                    patterns_by_well[well].append(pattern)
+                elif variable_z and not variable_site:
+                    # Only variable z-index
+                    if has_z:
+                        pattern = re.sub(r'p\d+', 'p{iii}', img_path.name)
+                        patterns_by_well[well].append(pattern)
+                elif variable_site and variable_z:
+                    # Both variable
+                    pattern = re.sub(r'f\d+', 'f{iii}', img_path.name)
+                    if has_z:
+                        pattern = re.sub(r'p\d+', 'p{iii}', pattern)
+                    patterns_by_well[well].append(pattern)
+
+        # Group patterns and remove duplicates
+        result = {}
+        for well, patterns in patterns_by_well.items():
+            # Remove duplicates while preserving order
+            unique_patterns = []
+            for pattern in patterns:
+                if pattern not in unique_patterns:
+                    unique_patterns.append(pattern)
+            result[well] = unique_patterns
+
+            # Group by channel or z-index
+            if group_by == 'z_index':
+                result[well] = self.group_patterns_by_z_index(unique_patterns)
+            else:  # Default to channel grouping
+                result[well] = self.group_patterns_by_channel(unique_patterns)
 
         return result
-
-    def add_z_suffix(self, filename: str, z_index: int) -> str:
-        """
-        Add or update Z-plane suffix in a filename.
-
-        Args:
-            filename (str): Filename to update
-            z_index (int): Z-index to add
-
-        Returns:
-            str: Filename with Z-plane suffix
-        """
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Check if filename already has a z-suffix
-        existing_z = self.parse_z_index(basename)
-
-        if existing_z is not None:
-            # Replace existing z-suffix
-            return re.sub(r'_z\d+(\.\w+)$', f'_z{z_index:03d}\1', basename)
-        else:
-            # Add new z-suffix before the extension
-            name, ext = os.path.splitext(basename)
-            return f"{name}_z{z_index:03d}{ext}"
 
     @classmethod
     def detect_format(cls, filenames: List[str]) -> Optional[str]:
@@ -264,11 +410,7 @@ class ImageXpressFilenameParser(FilenameParser):
     For those, use the OperaPhenixFilenameParser.
     """
 
-    #_pattern = re.compile(r'(?:.*?_)?([A-Z]d+)(?:_s(d+))?(?:_w(d+))?(?:_z(d+))?(.w+)?$') # All components except well are optional
     _pattern = re.compile(r'(?:.*?_)?([A-Z]\d+)(?:_s(\d+))?(?:_w(\d+))?(?:_z(\d+))?(\.\w+)?$')
-    #.*?_([A-Z]\d+)_s(\d+)_w(\d+)(?:_z(\d+))?(\.\w+)$
-    # Regex to capture components including optional z and extension
-    # Groups: 1=Well, 2=Site, 3=Channel, 4=Z-index (optional), 5=Extension
 
     @classmethod
     def can_parse(cls, filename: str) -> bool:
@@ -304,73 +446,11 @@ class ImageXpressFilenameParser(FilenameParser):
                       'z_index' : int(z_str) if z_str else None,
                       'extension' : ext if ext else '.tif'} # Default if somehow empty
 
-#
-#            # Only add components if they exist
-#            if site is not None:
-#                result['site'] = site
-#
-#            if channel is not None:
-#                result['channel'] = channel
-#                result['wavelength'] = channel  # For backward compatibility
-#
-#            if z_index is not None:
-#                result['z_index'] = z_index
-#
             return result
         else:
             logger.debug(f"Could not parse ImageXpress filename: {filename}")
             return None
 
-    def parse_well(self, filename: str) -> Optional[str]:
-        """Parse well ID from an ImageXpress filename."""
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Use the class-level pattern
-        match = self._pattern.match(basename)
-        return match.group(1) if match else None
-
-    def parse_site(self, filename: str) -> Optional[int]:
-        """Parse site number from an ImageXpress filename."""
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Use the class-level pattern
-        match = self._pattern.match(basename)
-        return int(match.group(2)) if match and match.group(2) else None
-
-    def parse_z_index(self, filename: str) -> Optional[int]:
-        """Parse Z-index from an ImageXpress filename."""
-
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Use the class-level pattern
-        match = self._pattern.match(basename)
-        if match and match.group(4):
-            return int(match.group(4))
-
-        # Try to extract Z-index from the folder name (e.g., ZStep_1)
-        dirname = os.path.dirname(filename)
-        if dirname:
-            folder_name = os.path.basename(dirname)
-            if folder_name.startswith('ZStep_'):
-                try:
-                    return int(folder_name.split('_')[1])
-                except (IndexError, ValueError):
-                    pass
-
-        return None
-
-    def parse_channel(self, filename: str) -> Optional[int]:
-        """Parse channel/wavelength from an ImageXpress filename."""
-
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Use the class-level pattern
-        match = self._pattern.match(basename)
-        return int(match.group(3)) if match and match.group(3) else None
 
     def construct_filename(self, well: str, site: Optional[Union[int, str]] = None, channel: Optional[int] = None,
                           z_index: Optional[Union[int, str]] = None, extension: str = '.tif',
@@ -448,81 +528,7 @@ class OperaPhenixFilenameParser(FilenameParser):
         # Check if the filename matches the Opera Phenix pattern
         return bool(cls._pattern.match(basename))
 
-    def parse_well(self, filename: str) -> Optional[str]:
-        """
-        Parse well ID from an Opera Phenix filename.
 
-        Example: r03c04f144p05-ch3sk1fk1fl1.tiff -> 'R03C04'
-        """
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Try to match the Opera Phenix pattern
-        match = self._pattern.match(basename)
-        if match:
-            row = int(match.group(1))
-            col = int(match.group(2))
-            return f"R{row:02d}C{col:02d}"
-
-        return None
-
-    def parse_site(self, filename: str) -> Optional[int]:
-        """
-        Parse site (field) number from an Opera Phenix filename.
-
-        Example: r03c04f144p05-ch3sk1fk1fl1.tiff -> 144
-        """
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Try to extract site from the Opera Phenix filename
-        match = self._pattern.match(basename)
-        if match:
-            return int(match.group(3))
-
-        return None
-
-    def parse_z_index(self, filename: str) -> Optional[int]:
-        """
-        Parse Z-index (plane) from an Opera Phenix filename.
-
-        Example: r03c04f144p05-ch3sk1fk1fl1.tiff -> 5
-        """
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Try to extract Z-index from the Opera Phenix filename
-        match = self._pattern.match(basename)
-        if match:
-            return int(match.group(4))
-
-        # Try to extract Z-index from the folder name (e.g., ZStep_1)
-        dirname = os.path.dirname(filename)
-        if dirname:
-            folder_name = os.path.basename(dirname)
-            if folder_name.startswith('ZStep_'):
-                try:
-                    return int(folder_name.split('_')[1])
-                except (IndexError, ValueError):
-                    pass
-
-        return None
-
-    def parse_channel(self, filename: str) -> Optional[int]:
-        """
-        Parse channel from an Opera Phenix filename.
-
-        Example: r03c04f144p05-ch3sk1fk1fl1.tiff -> 3
-        """
-        # Extract just the filename without the path
-        basename = os.path.basename(filename)
-
-        # Try to extract channel from the Opera Phenix filename
-        match = self._pattern.match(basename)
-        if match:
-            return int(match.group(5))
-
-        return None
 
     def parse_filename(self, filename: str) -> Optional[Dict[str, Any]]:
         """

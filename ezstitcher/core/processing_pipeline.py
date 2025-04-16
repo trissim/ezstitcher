@@ -11,7 +11,6 @@ from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.filename_parser import FilenameParser, detect_parser, create_parser
 from ezstitcher.core.image_locator import ImageLocator
-from ezstitcher.core.pattern_matcher import PatternMatcher
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -37,7 +36,6 @@ class PipelineOrchestrator:
         self.image_preprocessor = ImagePreprocessor()
         self.zstack_processor = ZStackProcessor(config.zstack_config)
         self.filename_parser = None
-        self.pattern_matcher = None
         self.stitcher = None
 
     def _prepare_images(self, plate_path):
@@ -85,7 +83,6 @@ class PipelineOrchestrator:
             # Setup
             plate_path = Path(plate_folder)
             self.filename_parser = create_parser('auto', plate_folder=plate_path)
-            self.pattern_matcher = PatternMatcher(filename_parser=self.filename_parser)
             self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.filename_parser)
 
             # Prepare images (pad filenames and organize Z-stack folders)
@@ -104,8 +101,8 @@ class PipelineOrchestrator:
                 self.fs_manager.ensure_directory(dir_path)
 
             # Get patterns by well
-            patterns_by_well = self.pattern_matcher.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter)
-            patterns_by_well_z = self.pattern_matcher.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter, variable_site=False, variable_z=True)
+            patterns_by_well = self.filename_parser.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter)
+            patterns_by_well_z = self.filename_parser.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter, variable_site=False, variable_z=True)
             # Well filter is already applied in auto_detect_patterns
 
             # Process each well
@@ -273,7 +270,7 @@ class PipelineOrchestrator:
         output_files = []
 
         for pattern in patterns:
-            matching_files = self.pattern_matcher.path_list_from_pattern(input_dir, pattern)
+            matching_files = self.filename_parser.path_list_from_pattern(input_dir, pattern)
             images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
             images = [img for img in images if img is not None]
             # Apply preprocessing if specified
@@ -312,7 +309,7 @@ class PipelineOrchestrator:
             patterns = [patterns] if not isinstance(patterns, list) else patterns
 
             for pattern in patterns:
-                for filename in self.pattern_matcher.path_list_from_pattern(input_dir, pattern):
+                for filename in self.filename_parser.path_list_from_pattern(input_dir, pattern):
                     metadata = self.filename_parser.parse_filename(filename)
                     if not metadata or 'site' not in metadata:
                         continue
@@ -369,7 +366,7 @@ class PipelineOrchestrator:
         """
         output_files = []
         for pattern in patterns:
-            matching_files = self.pattern_matcher.path_list_from_pattern(input_dir, pattern)
+            matching_files = self.filename_parser.path_list_from_pattern(input_dir, pattern)
             images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
             images = [img for img in images if img is not None]
 
@@ -451,7 +448,7 @@ class PipelineOrchestrator:
             channels_to_stitch.append("composite")
 
         # Use auto_detect_patterns to find all patterns for this well
-        patterns_by_well = self.pattern_matcher.auto_detect_patterns(dirs['post_processed'], well_filter=[well])
+        patterns_by_well = self.filename_parser.auto_detect_patterns(dirs['post_processed'], well_filter=[well])
 
         if not patterns_by_well or well not in patterns_by_well:
             logger.warning(f"No patterns found for well {well} in {dirs['post_processed']}")
@@ -468,7 +465,7 @@ class PipelineOrchestrator:
         # Stitch each pattern
         for pattern in all_patterns:
             # Find all matching files for this pattern
-            matching_files = self.pattern_matcher.path_list_from_pattern(dirs['post_processed'], pattern)
+            matching_files = self.filename_parser.path_list_from_pattern(dirs['post_processed'], pattern)
 
             if not matching_files:
                 logger.warning(f"No files found for pattern {pattern}")

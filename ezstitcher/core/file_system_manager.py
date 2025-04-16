@@ -15,7 +15,6 @@ import numpy as np
 
 from ezstitcher.core.filename_parser import FilenameParser, ImageXpressFilenameParser
 from ezstitcher.core.csv_handler import CSVHandler
-from ezstitcher.core.pattern_matcher import PatternMatcher
 from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
 
@@ -42,7 +41,6 @@ class FileSystemManager:
                                   '.png', '.PNG']
         self.filename_parser = filename_parser or ImageXpressFilenameParser()
         self.csv_handler = CSVHandler()
-        self.pattern_matcher = PatternMatcher(self.filename_parser)
 
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
         """
@@ -162,7 +160,7 @@ class FileSystemManager:
             self.ensure_directory(target_dir)
 
             # Get matching files
-            matching_files = self.pattern_matcher.path_list_from_pattern(source_dir, pattern)
+            matching_files = self.filename_parser.path_list_from_pattern(source_dir, pattern)
             if not matching_files:
                 logger.warning(f"No files found matching pattern {pattern} in {source_dir}")
                 return 0
@@ -520,7 +518,7 @@ class FileSystemManager:
                 # Default values for missing components
                 site = metadata['site'] or 1
                 channel = metadata['channel'] or 1
-                z_index = metadata['z_index'] or 1 
+                z_index = metadata['z_index'] or 1
             else:
                 # Use existing values or None
                 site = metadata.get('site')

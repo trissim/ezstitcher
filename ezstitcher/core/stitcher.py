@@ -17,7 +17,6 @@ from ashlar import fileseries, reg
 from ezstitcher.core.config import StitcherConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.image_preprocessor import create_linear_weight_mask
-from ezstitcher.core.pattern_matcher import PatternMatcher
 from ezstitcher.core.filename_parser import FilenameParser
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ class Stitcher:
         """
         self.config = config or StitcherConfig()
         self.fs_manager = FileSystemManager()
-        self.pattern_matcher = PatternMatcher(filename_parser)
+        self.filename_parser = filename_parser
 
     def generate_positions_df(self, image_dir, image_pattern, positions, grid_size_x, grid_size_y):
         """
@@ -50,7 +49,7 @@ class Stitcher:
 
           file: <filename>; position: (x, y); grid: (col, row);
         """
-        all_files = self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, image_pattern)
+        all_files = self.filename_parser.path_list_from_pattern(image_dir, image_pattern)
         if len(all_files) != len(positions):
             logger.warning(
                 f"Number of matched files ({len(all_files)}) != number of positions ({len(positions)}). "
@@ -147,16 +146,17 @@ class Stitcher:
             logger.info(f"Using pattern: {ashlar_pattern} for ashlar")
 
             # Check if the pattern has .tif extension, but files have .tiff extension
-            if image_pattern.endswith('.tif') and not self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, image_pattern):
+            if (image_pattern.endswith('.tif') and
+                not self.filename_parser.path_list_from_pattern(image_dir, image_pattern)):
                 # Try with .tiff extension
                 tiff_pattern = image_pattern[:-4] + '.tiff'
-                if self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, tiff_pattern):
+                if self.filename_parser.path_list_from_pattern(image_dir, tiff_pattern):
                     image_pattern = tiff_pattern
                     ashlar_pattern = image_pattern.replace("{iii}", "{series}")
                     logger.info(f"Updated pattern to: {ashlar_pattern} for ashlar")
 
             # Check if there are enough files for the grid size
-            files = self.fs_manager.pattern_matcher.path_list_from_pattern(image_dir, image_pattern)
+            files = self.filename_parser.path_list_from_pattern(image_dir, image_pattern)
 
 
             if len(files) < grid_size_x * grid_size_y:
