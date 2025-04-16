@@ -11,8 +11,8 @@ from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.zstack_processor import ZStackProcessor
 from ezstitcher.core.stitcher import Stitcher
-from ezstitcher.core.plate_processor import PlateProcessor
 from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
 # Import configuration classes
 from ezstitcher.core.config import (
@@ -35,7 +35,6 @@ from ezstitcher.core.pydantic_config import (
 )
 
 # Import utility classes
-from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.filename_parser import FilenameParser
 from ezstitcher.core.csv_handler import CSVHandler
 from ezstitcher.core.pattern_matcher import PatternMatcher

@@ -15,7 +15,7 @@ from ezstitcher.core import (
     FocusAnalyzer,
     ZStackProcessor,
     Stitcher,
-    PlateProcessor
+    PipelineOrchestrator
 )
 
 # Import configuration classes
@@ -24,13 +24,11 @@ from ezstitcher.core import (
     FocusAnalyzerConfig,
     ImagePreprocessorConfig,
     ZStackProcessorConfig,
-    PlateProcessorConfig,
     PipelineConfig
 )
 
 # Import Pydantic configuration classes
 from ezstitcher.core import (
-    PydanticPlateProcessorConfig,
     PydanticStitcherConfig,
     PydanticZStackProcessorConfig,
     PydanticFocusAnalyzerConfig,

@@ -7,27 +7,11 @@ This module provides the main entry point for the ezstitcher package.
 import logging
 from pathlib import Path
 
-# Import both dataclass and pydantic configs for backward compatibility
-from ezstitcher.core.config import (
-    PlateProcessorConfig, StitcherConfig, ZStackProcessorConfig,
-    FocusAnalyzerConfig, ImagePreprocessorConfig
-)
+# Import configuration classes
+from ezstitcher.core.config import PipelineConfig
 
-# Import Pydantic configs for new code
-from ezstitcher.core.pydantic_config import (
-    PlateProcessorConfig as PydanticPlateProcessorConfig,
-    StitcherConfig as PydanticStitcherConfig,
-    ZStackProcessorConfig as PydanticZStackProcessorConfig,
-    FocusAnalyzerConfig as PydanticFocusAnalyzerConfig,
-    ImagePreprocessorConfig as PydanticImagePreprocessorConfig,
-    ConfigPresets
-)
-from ezstitcher.core.plate_processor import PlateProcessor
-from ezstitcher.core.zstack_processor import ZStackProcessor
-from ezstitcher.core.stitcher import Stitcher
-from ezstitcher.core.focus_analyzer import FocusAnalyzer
-from ezstitcher.core.image_preprocessor import ImagePreprocessor
-from ezstitcher.core.image_locator import ImageLocator
+# Import the pipeline orchestrator
+from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
 def apply_nested_overrides(config_obj, overrides):
     """
@@ -52,20 +36,17 @@ def apply_nested_overrides(config_obj, overrides):
 
 
 
-def process_plate_auto(
+def process_plate(
     plate_folder: str | Path,
-    config: PlateProcessorConfig | None = None,
+    config = None,
     **kwargs
 ) -> bool:
     """
-    High-level function to process a plate folder.
-
-    Automatically detects if the plate contains Z-stacks and runs the appropriate workflow
-    using the modular OOP components internally.
+    High-level function to process a plate folder using the PipelineOrchestrator.
 
     Args:
         plate_folder: Path to the plate folder.
-        config: Optional PlateProcessorConfig. If None, a default config is created.
+        config: Optional PipelineConfig. If None, a default config is created.
         **kwargs: Optional overrides for config parameters.
 
     Returns:
@@ -75,16 +56,12 @@ def process_plate_auto(
 
     # Create default config if none provided
     if config is None:
-        config = PlateProcessorConfig()
-        # Ensure microscope_type is 'auto' for auto-detection
-        config.microscope_type = 'auto'
-        logging.info("No config provided, using default configuration with auto-detection")
+        config = PipelineConfig()
+        logging.info("No config provided, using default pipeline configuration")
 
     # Apply any config overrides in kwargs
     apply_nested_overrides(config, kwargs)
-    
-    processor = PlateProcessor(config)
 
-    #processor._current_plate_folder = plate_folder
-
-    return processor.run(plate_folder)
+    # Create and run the pipeline
+    pipeline = PipelineOrchestrator(config)
+    return pipeline.run(plate_folder)
