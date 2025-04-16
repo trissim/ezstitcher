@@ -18,6 +18,39 @@ logger = logging.getLogger(__name__)
 class FilenameParser(ABC):
     """Abstract base class for parsing microscopy image filenames."""
 
+    @staticmethod
+    def replace_placeholders(pattern: str, replacements: Union[str, Dict[str, str]] = '001') -> str:
+        """
+        Replace all placeholders in curly braces with specified values.
+
+        Args:
+            pattern (str): The string containing placeholders like {iii}, {zzz}, etc.
+            replacements (str or dict): Either a single replacement string for all placeholders,
+                                        or a dictionary mapping placeholder patterns to replacement values.
+
+        Returns:
+            str: The pattern with all placeholders replaced.
+
+        Examples:
+            >>> FilenameParser.replace_placeholders("A01_s{iii}_w2.tif")
+            'A01_s001_w2.tif'
+            >>> FilenameParser.replace_placeholders("A01_s{iii}_w{www}.tif", {'iii': '001', 'www': '002'})
+            'A01_s001_w002.tif'
+        """
+        if isinstance(replacements, str):
+            # Simple case: replace all placeholders with the same value
+            return re.sub(r'\{[^}]*\}', replacements, pattern)
+        else:
+            # Advanced case: use different replacements for different patterns
+            result = pattern
+            for placeholder, replacement in replacements.items():
+                # Escape curly braces for regex
+                placeholder_pattern = f'\\{{{placeholder}\\}}'
+                result = re.sub(placeholder_pattern, replacement, result)
+            # Replace any remaining unmatched placeholders with a default value
+            result = re.sub(r'\{[^}]*\}', '001', result)
+            return result
+
     @abstractmethod
     def parse_well(self, filename: str) -> Optional[str]:
         """
@@ -265,7 +298,8 @@ class ImageXpressFilenameParser(FilenameParser):
     For those, use the OperaPhenixFilenameParser.
     """
 
-    _pattern = re.compile(r'(?:.*?_)?([A-Z]\d+)_s(\d+)_w(\d+)(?:_z(\d+))?(\.\w+)?$') # Modified to make extension optional
+    #_pattern = re.compile(r'(?:.*?_)?([A-Z]d+)(?:_s(d+))?(?:_w(d+))?(?:_z(d+))?(.w+)?$') # All components except well are optional
+    _pattern = re.compile(r'(?:.*?_)?([A-Z]\d+)(?:_s(\d+))?(?:_w(\d+))?(?:_z(\d+))?(\.\w+)?$')
     #.*?_([A-Z]\d+)_s(\d+)_w(\d+)(?:_z(\d+))?(\.\w+)$
     # Regex to capture components including optional z and extension
     # Groups: 1=Well, 2=Site, 3=Channel, 4=Z-index (optional), 5=Extension
@@ -295,20 +329,29 @@ class ImageXpressFilenameParser(FilenameParser):
 
         if match:
             well, site_str, channel_str, z_str, ext = match.groups()
-            site = int(site_str)
-            channel = int(channel_str)
+
+            # Handle optional components - return None if missing
+            site = int(site_str) if site_str else None
+            channel = int(channel_str) if channel_str else None
             z_index = int(z_str) if z_str else None
             extension = ext if ext else '.tif' # Default if somehow empty
 
             result = {
                 'well': well,
-                'site': site,
-                'wavelength': channel, # For backward compatibility
-                'channel': channel,
                 'extension': extension
             }
+
+            # Only add components if they exist
+            if site is not None:
+                result['site'] = site
+
+            if channel is not None:
+                result['channel'] = channel
+                result['wavelength'] = channel  # For backward compatibility
+
             if z_index is not None:
                 result['z_index'] = z_index
+
             return result
         else:
             logger.debug(f"Could not parse ImageXpress filename: {filename}")
@@ -330,7 +373,7 @@ class ImageXpressFilenameParser(FilenameParser):
 
         # Use the class-level pattern
         match = self._pattern.match(basename)
-        return int(match.group(2)) if match else None
+        return int(match.group(2)) if match and match.group(2) else None
 
     def parse_z_index(self, filename: str) -> Optional[int]:
         """Parse Z-index from an ImageXpress filename."""
@@ -363,18 +406,18 @@ class ImageXpressFilenameParser(FilenameParser):
 
         # Use the class-level pattern
         match = self._pattern.match(basename)
-        return int(match.group(3)) if match else None
+        return int(match.group(3)) if match and match.group(3) else None
 
-    def construct_filename(self, well: str, site: Optional[int] = None, channel: Optional[int] = None,
-                          z_index: Optional[int] = None, extension: str = '.tif',
+    def construct_filename(self, well: str, site: Optional[Union[int, str]] = None, channel: Optional[int] = None,
+                          z_index: Optional[Union[int, str]] = None, extension: str = '.tif',
                           site_padding: int = 3, z_padding: int = 3) -> str:
         """Construct an ImageXpress filename from components, only including parts if provided.
 
         Args:
             well (str): Well ID (e.g., 'A01')
-            site (int, optional): Site number
+            site (int or str, optional): Site number or placeholder string (e.g., '{iii}')
             channel (int, optional): Channel number
-            z_index (int, optional): Z-index
+            z_index (int or str, optional): Z-index or placeholder string (e.g., '{zzz}')
             extension (str, optional): File extension
             site_padding (int, optional): Width to pad site numbers to (default: 3)
             z_padding (int, optional): Width to pad Z-index numbers to (default: 3)
@@ -387,11 +430,23 @@ class ImageXpressFilenameParser(FilenameParser):
 
         parts = [well]
         if site is not None:
-            parts.append(f"_s{site:0{site_padding}d}")
+            if isinstance(site, str):
+                # If site is a string (e.g., '{iii}'), use it directly
+                parts.append(f"_s{site}")
+            else:
+                # Otherwise, format it as a padded integer
+                parts.append(f"_s{site:0{site_padding}d}")
+
         if channel is not None:
             parts.append(f"_w{channel}")
+
         if z_index is not None:
-            parts.append(f"_z{z_index:0{z_padding}d}")
+            if isinstance(z_index, str):
+                # If z_index is a string (e.g., '{zzz}'), use it directly
+                parts.append(f"_z{z_index}")
+            else:
+                # Otherwise, format it as a padded integer
+                parts.append(f"_z{z_index:0{z_padding}d}")
 
         base_name = "".join(parts)
         return f"{base_name}{extension}"
@@ -536,17 +591,17 @@ class OperaPhenixFilenameParser(FilenameParser):
 
         return None
 
-    def construct_filename(self, well: str, site: int, channel: int,
-                          z_index: Optional[int] = None, extension: str = '.tiff',
+    def construct_filename(self, well: str, site, channel: int,
+                          z_index=None, extension: str = '.tiff',
                           site_padding: int = 3, z_padding: int = 2) -> str:
         """
         Construct an Opera Phenix filename from components.
 
         Args:
             well (str): Well ID (e.g., 'R03C04' or 'A01')
-            site (int): Site/field number
+            site: Site/field number (int) or placeholder string
             channel (int): Channel number
-            z_index (int, optional): Z-index/plane
+            z_index: Z-index/plane (int) or placeholder string
             extension (str, optional): File extension
             site_padding (int, optional): Width to pad site numbers to (default: 3)
             z_padding (int, optional): Width to pad Z-index numbers to (default: 2)
@@ -574,7 +629,21 @@ class OperaPhenixFilenameParser(FilenameParser):
         z_index = 1 if z_index is None else z_index
 
         # Construct filename in Opera Phenix format
-        return f"r{row:02d}c{col:02d}f{site:0{site_padding}d}p{z_index:0{z_padding}d}-ch{channel}sk1fk1fl1{extension}"
+        if isinstance(site, str):
+            # If site is a string (e.g., '{iii}'), use it directly
+            site_part = f"f{site}"
+        else:
+            # Otherwise, format it as a padded integer
+            site_part = f"f{site:0{site_padding}d}"
+
+        if isinstance(z_index, str):
+            # If z_index is a string (e.g., '{zzz}'), use it directly
+            z_part = f"p{z_index}"
+        else:
+            # Otherwise, format it as a padded integer
+            z_part = f"p{z_index:0{z_padding}d}"
+
+        return f"r{row:02d}c{col:02d}{site_part}{z_part}-ch{channel}sk1fk1fl1{extension}"
 
 
 

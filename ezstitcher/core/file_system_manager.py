@@ -477,15 +477,16 @@ class FileSystemManager:
         logger.info(f"Detected format {format_type} for files in {directory}")
         return create_parser(format_type)
 
-    def rename_files_with_consistent_padding(self, directory, parser=None, width=3):
+    def rename_files_with_consistent_padding(self, directory, parser=None, width=3, force_suffixes=False):
         """
         Rename files in a directory to have consistent site number and Z-index padding.
+        Optionally force the addition of missing optional suffixes (site, channel, z-index).
 
         Args:
             directory (str or Path): Directory containing files to rename
             parser (FilenameParser, optional): Parser to use for filename parsing and padding
             width (int, optional): Width to pad site numbers to
-            z_width (int, optional): Width to pad Z-index numbers to
+            force_suffixes (bool, optional): If True, add missing optional suffixes with default values
 
         Returns:
             dict: Dictionary mapping original filenames to new filenames
@@ -514,11 +515,24 @@ class FileSystemManager:
                 continue  # Skip files that can't be parsed
 
             # Reconstruct the filename with proper padding
+            # If force_suffixes is True, add default values for missing components
+            if force_suffixes:
+                # Default values for missing components
+                site = metadata.get('site', 1)
+                channel = metadata.get('channel', 1)
+                z_index = metadata.get('z_index', 1)
+            else:
+                # Use existing values or None
+                site = metadata.get('site')
+                channel = metadata.get('channel')
+                z_index = metadata.get('z_index')
+
+            # Reconstruct the filename with proper padding
             new_name = parser.construct_filename(
                 well=metadata['well'],
-                site=metadata['site'],
-                channel=metadata['channel'],
-                z_index=metadata.get('z_index'),
+                site=site,
+                channel=channel,
+                z_index=z_index,
                 extension=metadata['extension'],
                 site_padding=width,
                 z_padding=width

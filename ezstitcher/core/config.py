@@ -7,12 +7,15 @@ This module contains dataclasses for configuration of different components.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union, Callable, Any, Tuple
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class StitcherConfig:
     """Configuration for the Stitcher class."""
-    tile_overlap: float = 6.5
+    tile_overlap: float = 10
     tile_overlap_x: Optional[float] = None
     tile_overlap_y: Optional[float] = None
     max_shift: int = 50
@@ -37,6 +40,10 @@ class ImagePreprocessorConfig:
 
 @dataclass
 class ZStackProcessorConfig:
+    #"""Configuration for Z-stack processing."""
+    #focus_method: str = "combined"  # Method for focus detection
+    #focus_config: Optional[FocusAnalyzerConfig] = None
+    #projection_method: str = "max"  # Method for z-stack projection (max, mean, best_focus, none)
     """
     Configuration for the ZStackProcessor class.
 
@@ -59,93 +66,63 @@ class ZStackProcessorConfig:
         save_projections: Deprecated. Use save_reference instead.
         projection_types: Deprecated. Use additional_projections instead.
     """
-    # New primary parameters
-    z_reference_function: Union[str, Callable[[List[Any]], Any]] = "max_projection"
+
+#    reference_flatten="max"
+#    stitch_flatten=None
+
+    """Configuration for Z-stack processing."""
+    reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
+    stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
     save_reference: bool = True
-    stitch_all_z_planes: bool = False
     additional_projections: Optional[List[str]] = None
     focus_method: str = "combined"
     focus_config: FocusAnalyzerConfig = field(default_factory=lambda: FocusAnalyzerConfig())
 
-    # Deprecated parameters (kept for backward compatibility)
-    reference_method: Optional[Union[str, Callable[[List[Any]], Any]]] = None
-    focus_detect: Optional[bool] = None
-    stitch_z_reference: Optional[Union[str, Callable[[List[Any]], Any]]] = None
-    create_projections: Optional[bool] = None
-    save_projections: Optional[bool] = None
-    projection_types: Optional[List[str]] = None
-
     def __post_init__(self):
-        """Handle backward compatibility and parameter validation."""
-        # Handle deprecated parameters
+        """Validate and normalize configuration after initialization."""
+        # Validate reference_flatten
+        if isinstance(self.reference_flatten, str):
+            valid_methods = ["max_projection", "mean_projection", "best_focus"]
+            if self.reference_flatten not in valid_methods:
+                logger.warning(f"Invalid reference_flatten method: {self.reference_flatten}, using max_projection")
+                self.reference_flatten = "max_projection"
 
-        # First, handle reference_method if it's set (from previous version)
-        if self.reference_method is not None:
-            if isinstance(self.reference_method, str):
-                if self.reference_method == "best_focus":
-                    self.z_reference_function = "best_focus"
-                elif self.reference_method == "max_projection":
-                    self.z_reference_function = "max_projection"
-                elif self.reference_method == "mean_projection":
-                    self.z_reference_function = "mean_projection"
-                else:
-                    raise ValueError(f"Unknown reference_method: {self.reference_method}")
-            elif callable(self.reference_method):
-                self.z_reference_function = self.reference_method
+        # Validate stitch_flatten
+        if self.stitch_flatten is not None:
+            if isinstance(self.stitch_flatten, str):
+                valid_methods = ["max_projection", "mean_projection", "best_focus"]
+                if self.stitch_flatten not in valid_methods:
+                    logger.warning(f"Invalid stitch_flatten method: {self.stitch_flatten}, using max_projection")
+                    self.stitch_flatten = "max_projection"
 
-        # Then handle older stitch_z_reference and focus_detect parameters
-        if self.focus_detect is not None or self.stitch_z_reference is not None:
-            # Only override z_reference_function if at least one deprecated parameter is explicitly set
-            if self.stitch_z_reference is not None:
-                if self.stitch_z_reference == "best_focus":
-                    self.z_reference_function = "best_focus"
-                elif self.stitch_z_reference == "max":
-                    self.z_reference_function = "max_projection"
-                elif self.stitch_z_reference == "mean":
-                    self.z_reference_function = "mean_projection"
-                elif callable(self.stitch_z_reference):
-                    self.z_reference_function = self.stitch_z_reference
 
-            # If focus_detect is True and stitch_z_reference is not set, use best_focus
-            if self.focus_detect is True and self.stitch_z_reference is None:
-                self.z_reference_function = "best_focus"
+@dataclass
+class PipelineConfig:
+    """Configuration for the pipeline orchestrator."""
+    # Input/output configuration
+    processed_dir_suffix: str = "_processed"
+    post_processed_dir_suffix: str = "_post_processed"
+    positions_dir_suffix: str = "_positions"
+    stitched_dir_suffix: str = "_stitched"
 
-        # Handle deprecated create_projections and save_projections
-        if self.create_projections is not None:
-            self.save_reference = self.create_projections
-        if self.save_projections is not None:
-            self.save_reference = self.save_projections
+    # Well filtering
+    well_filter: Optional[List[str]] = None
 
-        # Handle deprecated projection_types
-        if self.projection_types is not None:
-            self.additional_projections = self.projection_types
+    # Reference processing (for position generation)
+    reference_channels: List[str] = field(default_factory=lambda: ["1"])
+    reference_preprocessing: Optional[Dict[str, Callable]] = None
+    reference_composite_weights: Optional[Dict[str, float]] = None
 
-        # If additional_projections is None, use default value for internal processing
-        if self.additional_projections is None:
-            self.additional_projections = ["max"]
+    # Final processing (for stitched output)
+    # Note: All available channels are always processed and stitched
+    final_preprocessing: Optional[Dict[str, Callable]] = None
+    final_composite_weights: Optional[Dict[str, float]] = None
 
-        # Set deprecated parameters for backward compatibility
-        if isinstance(self.z_reference_function, str):
-            if self.z_reference_function == "max_projection":
-                self.reference_method = "max_projection"
-                self.stitch_z_reference = "max"
-                self.focus_detect = False
-            elif self.z_reference_function == "mean_projection":
-                self.reference_method = "mean_projection"
-                self.stitch_z_reference = "mean"
-                self.focus_detect = False
-            elif self.z_reference_function == "best_focus":
-                self.reference_method = "best_focus"
-                self.stitch_z_reference = "best_focus"
-                self.focus_detect = True
-        elif callable(self.z_reference_function):
-            self.reference_method = self.z_reference_function
-            self.stitch_z_reference = self.z_reference_function
-            self.focus_detect = False
+    # Stitching configuration
+    stitcher: StitcherConfig = field(default_factory=StitcherConfig)
 
-        self.create_projections = self.save_reference
-        self.save_projections = self.save_reference
-        self.projection_types = self.additional_projections
+    # Z-stack processing configuration
+    zstack_config: ZStackProcessorConfig = field(default_factory=ZStackProcessorConfig)
 
 
 @dataclass

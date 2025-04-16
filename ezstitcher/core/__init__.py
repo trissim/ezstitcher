@@ -20,7 +20,8 @@ from ezstitcher.core.config import (
     FocusAnalyzerConfig,
     ImagePreprocessorConfig,
     ZStackProcessorConfig,
-    PlateProcessorConfig
+    PlateProcessorConfig,
+    PipelineConfig
 )
 
 # Import Pydantic configuration classes

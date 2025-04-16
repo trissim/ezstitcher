@@ -385,3 +385,63 @@ class ZStackProcessor:
                 logger.info(f"Saved {proj_type} projection for {base_name} to {output_path}")
 
         return True, projection_dirs
+
+    def process_stack(self, base_name, stack, output_dir):
+        """
+        Process a z-stack or single image uniformly.
+        
+        Args:
+            base_name (str): Base name for output files (without extension)
+            stack (list): List of images (numpy arrays)
+            output_dir (Path): Directory to save results
+            
+        Returns:
+            list: List of output file paths
+        """
+        # Handle single images the same way as stacks - just apply projection
+        # This simplifies the code and ensures consistent behavior
+        if self.config.projection_method != "none":
+            # Apply projection (for single images, this just returns the image)
+            if len(stack) == 1:
+                result = stack[0]  # No need for projection with single image
+            else:
+                result = self.create_projection(stack, self.config.projection_method)
+
+            # Use z001 suffix for projections
+            # This ensures consistency with per-plane files
+            filename = f"{base_name}.tif"
+            output_path = output_dir / filename
+            self.fs_manager.save_image(output_path, result)
+            return [output_path]
+        else:
+            # Save each z-plane with proper z-suffix
+            output_paths = []
+            for i, z_index in enumerate(range(1, len(stack) + 1)):
+                # Use filename parser to add z-suffix
+                filename = f"{base_name}_z{z_index:03d}.tif"
+                output_path = output_dir / filename
+                self.fs_manager.save_image(output_path, stack[i])
+                output_paths.append(output_path)
+        return output_paths
+
+    def create_projection(self, stack, method="max"):
+        """
+        Create a projection from a stack using the specified method.
+        
+        Args:
+            stack (list): List of images
+            method (str): Projection method (max, mean, best_focus)
+            
+        Returns:
+            numpy.ndarray: Projected image
+        """
+        if method == "max":
+            return self.image_preprocessor.max_projection(stack)
+        elif method == "mean":
+            return self.image_preprocessor.mean_projection(stack)
+        elif method == "best_focus":
+            best_idx, _ = self.focus_analyzer.find_best_focus(stack)
+            return stack[best_idx]
+        else:
+            logger.warning(f"Unknown projection method: {method}, using max")
+        return self.image_preprocessor.max_projection(stack)

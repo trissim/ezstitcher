@@ -109,6 +109,10 @@ class PatternMatcher:
             # Use the filename parser to extract the channel
             # Replace {iii} with a dummy site number for parsing
             pattern_with_site = pattern.replace('{iii}', '001')
+            # Also replace {zzz} with a dummy z-index if present
+            if '{zzz}' in pattern_with_site:
+                pattern_with_site = pattern_with_site.replace('{zzz}', '001')
+
             metadata = self.filename_parser.parse_filename(pattern_with_site)
 
             if metadata and 'channel' in metadata:
@@ -122,7 +126,47 @@ class PatternMatcher:
 
         return patterns_by_channel
 
-    def auto_detect_patterns(self, folder_path, well_filter=None, extensions=None):
+    def group_patterns_by_z_index(self, patterns):
+        """
+        Group patterns by z-index using the filename parser.
+
+        Args:
+            patterns (list): List of patterns to group
+
+        Returns:
+            dict: Dictionary mapping z-indices to patterns
+        """
+        patterns_by_z = {}
+
+        for pattern in patterns:
+            # Check if this is a z-variable pattern (contains {zzz})
+            if '{zzz}' in pattern:
+                # This is a pattern with variable z-index
+                # Add it to a special 'variable' category
+                if 'variable' not in patterns_by_z:
+                    patterns_by_z['variable'] = []
+                patterns_by_z['variable'].append(pattern)
+                continue
+
+            # For fixed z-index patterns, extract the z-index
+            # Replace {iii} with a dummy site number for parsing
+            pattern_with_site = pattern.replace('{iii}', '001')
+            metadata = self.filename_parser.parse_filename(pattern_with_site)
+
+            if metadata and 'z_index' in metadata and metadata['z_index'] is not None:
+                z_index = str(metadata['z_index'])
+                if z_index not in patterns_by_z:
+                    patterns_by_z[z_index] = []
+                patterns_by_z[z_index].append(pattern)
+            else:
+                # If no z-index is found, put it in the '1' category (default z-index)
+                if '1' not in patterns_by_z:
+                    patterns_by_z['1'] = []
+                patterns_by_z['1'].append(pattern)
+
+        return patterns_by_z
+
+    def auto_detect_patterns(self, folder_path, well_filter=None, extensions=None, group_by='channel', variable_site=True, variable_z=False):
         """
         Automatically detect image patterns in a folder.
 
@@ -130,18 +174,17 @@ class PatternMatcher:
             folder_path (str or Path): Path to the folder
             well_filter (list): Optional list of wells to include
             extensions (list): Optional list of file extensions to include
+            group_by (str): How to group patterns ('channel' or 'z_index')
+            variable_site (bool): Whether to generate patterns with variable site (default: True)
+            variable_z (bool): Whether to generate patterns with variable z-index (default: False)
 
         Returns:
-            dict: Dictionary mapping wells to wavelength patterns
+            dict: Dictionary mapping wells to patterns grouped by channel or z-index
         """
-
         folder_path = Path(folder_path)
+        extensions = extensions or ['.tif', '.TIF', '.tiff', '.TIFF']
 
-        # Default extensions
-        if extensions is None:
-            extensions = ['.tif', '.TIF', '.tiff', '.TIFF']
-
-        # Use ImageLocator to find all image files (including in subdirectories)
+        # Find all image files
         image_dir = ImageLocator.find_image_directory(folder_path)
         logger.info(f"Using image directory: {image_dir}")
         image_paths = ImageLocator.find_images_in_directory(image_dir, extensions, recursive=True)
@@ -150,53 +193,69 @@ class PatternMatcher:
             logger.warning(f"No image files found in {folder_path}")
             return {}
 
-        # Use defaultdict to simplify initialization
-        # patterns_by_well[well][channel] will automatically create a list when accessed
+        # Process all images
         patterns_by_well = defaultdict(list)
-
-        # Process all images in a single pass
         for img_path in image_paths:
-            # Parse the filename using the filename parser
             metadata = self.filename_parser.parse_filename(img_path.name)
-            if not metadata:
-                logger.warning(f"Unexpected filename format: {img_path.name}")
+            if not metadata or (well_filter and metadata['well'] not in well_filter):
                 continue
 
             well = metadata['well']
-            site = metadata['site']
             channel = metadata['channel']
-            z_index = metadata.get('z_index')  # May be None for non-Z-stack images
+            has_z = 'z_index' in metadata
 
-            # Filter wells if needed
-            if well_filter and well not in well_filter:
-                continue
-
-            # Track z-indices for this well and channel
-            channel_str = str(channel)
-
-            # Create pattern with proper padding and z-suffixes
-            base_filename = img_path.name
-
-            # Always use padded site numbers
-            site_str_padded = f"{site:03d}"
-
-            # Create pattern based on format
-            if "_s" in base_filename and "_w" in base_filename:  # ImageXpress format
-                # Replace site number with {iii} placeholder
-                if f"_s{site_str_padded}_" in base_filename:
-                    pattern = base_filename.replace(f"_s{site_str_padded}_", "_s{iii}_")
-                else:
-                    # Handle non-padded site numbers
-                    pattern = re.sub(r'_s\d+_', '_s{iii}_', base_filename)
+            # Generate patterns based on flags
+            if "_s" in img_path.name and "_w" in img_path.name:  # ImageXpress format
+                if variable_site and not variable_z:
+                    # Only variable site
+                    pattern = self.filename_parser.construct_filename(
+                        well=well, site="{iii}", channel=channel,
+                        z_index=metadata.get('z_index'),
+                        extension=metadata['extension']
+                    )
+                    patterns_by_well[well].append(pattern)
+                elif variable_z and not variable_site:
+                    # Only variable z-index
+                    if has_z:
+                        pattern = self.filename_parser.construct_filename(
+                            well=well, site=metadata['site'], channel=channel,
+                            z_index="{iii}", extension=metadata['extension']
+                        )
+                        pattern = re.sub(r'_z\d+', '_z{iii}', pattern)
+                        patterns_by_well[well].append(pattern)
+                elif variable_site and variable_z:
+                    # Both variable
+                    if has_z:
+                        pattern = self.filename_parser.construct_filename(
+                            well=well, site="{iii}", channel=channel,
+                            z_index="{iii}", extension=metadata['extension']
+                        )
+                        pattern = re.sub(r'_z\d+', '_z{iii}', pattern)
+                        patterns_by_well[well].append(pattern)
+                    else:
+                        pattern = self.filename_parser.construct_filename(
+                            well=well, site="{iii}", channel=channel,
+                            extension=metadata['extension']
+                        )
+                        patterns_by_well[well].append(pattern)
             else:  # Opera Phenix format
-                # Example: r01c01f001p01-ch1sk1fk1fl1.tiff -> r01c01f{iii}p01-ch1sk1fk1fl1.tiff
-                pattern = re.sub(r'f\d+', 'f{iii}', base_filename)
+                if variable_site and not variable_z:
+                    # Only variable site
+                    pattern = re.sub(r'f\d+', 'f{iii}', img_path.name)
+                    patterns_by_well[well].append(pattern)
+                elif variable_z and not variable_site:
+                    # Only variable z-index
+                    if has_z:
+                        pattern = re.sub(r'p\d+', 'p{iii}', img_path.name)
+                        patterns_by_well[well].append(pattern)
+                elif variable_site and variable_z:
+                    # Both variable
+                    pattern = re.sub(r'f\d+', 'f{iii}', img_path.name)
+                    if has_z:
+                        pattern = re.sub(r'p\d+', 'p{iii}', pattern)
+                    patterns_by_well[well].append(pattern)
 
-            # Store the pattern for this wavelength/channel
-            # The defaultdict will automatically create a list if it doesn't exist
-            patterns_by_well[well].append(pattern)
-
-        # Group patterns by channel for each well
+        # Group patterns and remove duplicates
         result = {}
         for well, patterns in patterns_by_well.items():
             # Remove duplicates while preserving order
@@ -204,9 +263,13 @@ class PatternMatcher:
             for pattern in patterns:
                 if pattern not in unique_patterns:
                     unique_patterns.append(pattern)
+            result[well] = unique_patterns
 
-            # Group by channel
-            result[well] = self.group_patterns_by_channel(unique_patterns)
+            # Group by channel or z-index
+            if group_by == 'z_index':
+                result[well] = self.group_patterns_by_z_index(unique_patterns)
+            else:  # Default to channel grouping
+                result[well] = self.group_patterns_by_channel(unique_patterns)
 
         return result
 

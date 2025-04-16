@@ -4,8 +4,8 @@ import pytest
 from pathlib import Path
 import numpy as np
 
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator, PipelineConfig
-from ezstitcher.core.config import StitcherConfig
+from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+from ezstitcher.core.config import ZStackProcessorConfig, StitcherConfig, PipelineConfig
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 
 # Define microscope configurations
@@ -201,8 +201,9 @@ def test_zstack_projection_minimal(zstack_plate_dir):
     # Create pipeline configuration
     config = PipelineConfig(
         reference_channels=["1"],
-        reference_z_method="max_projection",
-        preserve_z_planes=False,
+        zstack_config=ZStackProcessorConfig(
+            reference_flatten="max"
+        ),
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,
@@ -235,9 +236,11 @@ def test_zstack_per_plane_minimal(zstack_plate_dir):
     """Test processing a Z-stack plate with per-plane stitching."""
     # Create pipeline configuration
     config = PipelineConfig(
-        reference_channels=["1"],
-        reference_z_method="max_projection",
-        preserve_z_planes=True,  # Preserve Z-planes for stitching
+        reference_channels=["1","2"],
+        zstack_config=ZStackProcessorConfig(
+            reference_flatten="max",  # No projection, keep all planes
+            stitch_flatten=None
+        ),
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,
@@ -302,13 +305,15 @@ def test_multi_channel_minimal(flat_plate_dir):
     assert len(stitched_files) > 0, "No stitched files created"
 
 def test_best_focus_reference(zstack_plate_dir):
-    """Test processing a Z-stack plate using best focus as reference for stitching."""
+    """Test processing a Z-stack plate using best focus planes to be assembledfor stitching."""
     # Create pipeline configuration
     config = PipelineConfig(
-        reference_channels=["1"],
-        reference_z_method="best_focus",
-        focus_method="combined",
-        preserve_z_planes=False,  # Only stitch the best focus planes
+        #reference_channels=["1"],
+        zstack_config=ZStackProcessorConfig(
+            stitch_flatten='best_focus',
+            reference_flatten="max",
+            focus_method="combined"
+        ),
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,
