@@ -35,6 +35,6 @@ from ezstitcher.core.pydantic_config import (
 )
 
 # Import utility classes
-from ezstitcher.core.filename_parser import FilenameParser
+from ezstitcher.core.microscope_interfaces import FilenameParser
 from ezstitcher.core.csv_handler import CSVHandler
 from ezstitcher.core.image_locator import ImageLocator

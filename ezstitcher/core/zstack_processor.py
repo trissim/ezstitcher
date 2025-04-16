@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import List, Callable, Union, Optional, Any
 from ezstitcher.core.config import ZStackProcessorConfig, FocusAnalyzerConfig
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
-from ezstitcher.core.filename_parser import ImageXpressFilenameParser
+from ezstitcher.core.microscope_interfaces import MicroscopeHandler
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_locator import ImageLocator
@@ -25,12 +25,13 @@ class ZStackProcessor:
     - Best focus selection
     - Per-plane stitching
     """
-    def __init__(self, config: ZStackProcessorConfig, filename_parser=None, preprocessing_funcs=None):
+    def __init__(self, config: ZStackProcessorConfig, filename_parser=None, preprocessing_funcs=None, plate_folder=None):
         self.config = config
         self.fs_manager = FileSystemManager()
         self._z_info = None
         self._z_indices = []
         self.preprocessing_funcs = preprocessing_funcs or {}
+        self.plate_folder = plate_folder
 
         # Use focus_config from config if available, otherwise create one with the focus_method
         focus_config = config.focus_config or FocusAnalyzerConfig(method=config.focus_method)
@@ -38,7 +39,15 @@ class ZStackProcessor:
 
         # Initialize the filename parser
         if filename_parser is None:
-            self.filename_parser = ImageXpressFilenameParser()
+            # Auto-detect the parser if plate_folder is provided
+            if plate_folder:
+                handler = MicroscopeHandler(plate_folder=plate_folder, microscope_type='auto')
+                self.filename_parser = handler.parser
+                logger.info(f"Auto-detected parser for plate folder: {plate_folder}")
+            else:
+                # Set to None if no plate_folder provided
+                self.filename_parser = None
+                logger.info("No plate folder provided for auto-detection, parser will be detected when needed")
         else:
             self.filename_parser = filename_parser
 
@@ -56,6 +65,16 @@ class ZStackProcessor:
         Returns:
             tuple: (has_zstack, z_folders) where z_folders is a list of (z_index, folder_path) tuples
         """
+        # Update the plate_folder attribute if it's not already set
+        if not self.plate_folder:
+            self.plate_folder = plate_folder
+
+        # Auto-detect the parser if it's not already set
+        if self.filename_parser is None:
+            handler = MicroscopeHandler(plate_folder=plate_folder, microscope_type='auto')
+            self.filename_parser = handler.parser
+            logger.info("Auto-detected parser for plate folder")
+
         plate_path = ImageLocator.find_image_directory(Path(plate_folder))
 
         # Use ImageLocator to find Z-stack directories
@@ -118,15 +137,15 @@ class ZStackProcessor:
 
         return True
 
-    
+
     def create_projection(self, stack, method="max"):
         """
         Create a projection from a stack using the specified method.
-        
+
         Args:
             stack (list): List of images
             method (str): Projection method (max, mean, best_focus)
-            
+
         Returns:
             numpy.ndarray: Projected image
         """

@@ -9,7 +9,7 @@ from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.file_system_manager import FileSystemManager
-from ezstitcher.core.filename_parser import FilenameParser, detect_parser, create_parser
+from ezstitcher.core.microscope_interfaces import MicroscopeHandler, create_microscope_handler
 from ezstitcher.core.image_locator import ImageLocator
 
 # Set up logger
@@ -35,7 +35,7 @@ class PipelineOrchestrator:
         self.fs_manager = FileSystemManager()
         self.image_preprocessor = ImagePreprocessor()
         self.zstack_processor = ZStackProcessor(config.zstack_config)
-        self.filename_parser = None
+        self.microscope_handler = None
         self.stitcher = None
 
     def _prepare_images(self, plate_path):
@@ -44,6 +44,7 @@ class PipelineOrchestrator:
 
         Args:
             plate_path: Path to the plate folder
+            parser: FilenameParser to use for file operations
 
         Returns:
             Path: Path to the image directory
@@ -55,7 +56,7 @@ class PipelineOrchestrator:
         # Rename files with consistent padding and force missing suffixes
         self.fs_manager.rename_files_with_consistent_padding(
             image_dir,
-            parser=self.filename_parser,
+            parser=self.microscope_handler,
             width=3,  # Default padding width
             force_suffixes=True  # Force missing suffixes to be added
         )
@@ -82,8 +83,8 @@ class PipelineOrchestrator:
         try:
             # Setup
             plate_path = Path(plate_folder)
-            self.filename_parser = create_parser('auto', plate_folder=plate_path)
-            self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.filename_parser)
+            self.microscope_handler = create_microscope_handler('auto', plate_folder=plate_path)
+            self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
             # Prepare images (pad filenames and organize Z-stack folders)
             input_dir = self._prepare_images(plate_path)
@@ -101,8 +102,8 @@ class PipelineOrchestrator:
                 self.fs_manager.ensure_directory(dir_path)
 
             # Get patterns by well
-            patterns_by_well = self.filename_parser.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter)
-            patterns_by_well_z = self.filename_parser.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter, variable_site=False, variable_z=True)
+            patterns_by_well = self.microscope_handler.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter)
+            patterns_by_well_z = self.microscope_handler.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter, variable_site=False, variable_z=True)
             # Well filter is already applied in auto_detect_patterns
 
             # Process each well
@@ -192,9 +193,9 @@ class PipelineOrchestrator:
         # Flatten Z-stacks if needed
         flatten_patterns = []
         for pattern in patterns:
-            sample = FilenameParser.replace_placeholders(pattern, '001')
-            meta = self.filename_parser.parse_filename(sample)
-            flatten_patterns.append(self.filename_parser.construct_filename(well=meta['well'],
+            sample = pattern.replace('{iii}', '001')
+            meta = self.microscope_handler.parser.parse_filename(sample)
+            flatten_patterns.append(self.microscope_handler.parser.construct_filename(well=meta['well'],
                                                                      site=meta['site'],
                                                                      z_index='{iii}',
                                                                      extension='.tif'))
@@ -239,9 +240,9 @@ class PipelineOrchestrator:
 
         flatten_patterns = []
         for pattern in patterns:
-            sample = FilenameParser.replace_placeholders(pattern, '001')
-            meta = self.filename_parser.parse_filename(sample)
-            flatten_patterns.append(self.filename_parser.construct_filename(well=meta['well'],
+            sample = pattern.replace('{iii}', '001')
+            meta = self.microscope_handler.parser.parse_filename(sample)
+            flatten_patterns.append(self.microscope_handler.parser.construct_filename(well=meta['well'],
                                                                      site=meta['site'],
                                                                      channel=meta['channel'],
                                                                      z_index='{iii}',
@@ -270,7 +271,7 @@ class PipelineOrchestrator:
         output_files = []
 
         for pattern in patterns:
-            matching_files = self.filename_parser.path_list_from_pattern(input_dir, pattern)
+            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
             images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
             images = [img for img in images if img is not None]
             # Apply preprocessing if specified
@@ -309,8 +310,8 @@ class PipelineOrchestrator:
             patterns = [patterns] if not isinstance(patterns, list) else patterns
 
             for pattern in patterns:
-                for filename in self.filename_parser.path_list_from_pattern(input_dir, pattern):
-                    metadata = self.filename_parser.parse_filename(filename)
+                for filename in self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern):
+                    metadata = self.microscope_handler.parser.parse_filename(filename)
                     if not metadata or 'site' not in metadata:
                         continue
 
@@ -331,7 +332,7 @@ class PipelineOrchestrator:
                 continue
 
             # Create output filename with site and z-index
-            output_path = input_dir / self.filename_parser.construct_filename(
+            output_path = input_dir / self.microscope_handler.parser.construct_filename(
                 well=well,
                 site=site,
                 z_index=z_index,
@@ -366,7 +367,7 @@ class PipelineOrchestrator:
         """
         output_files = []
         for pattern in patterns:
-            matching_files = self.filename_parser.path_list_from_pattern(input_dir, pattern)
+            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
             images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
             images = [img for img in images if img is not None]
 
@@ -376,8 +377,8 @@ class PipelineOrchestrator:
 
                 # Get the output filename
                 pattern_with_site = pattern.replace('{iii}', '001')
-                metadata = self.filename_parser.parse_filename(pattern_with_site)
-                fname = self.filename_parser.construct_filename(well=metadata['well'], site=metadata['site'], channel=metadata['channel'], extension='.tif')
+                metadata = self.microscope_handler.parser.parse_filename(pattern_with_site)
+                fname = self.microscope_handler.parser.construct_filename(well=metadata['well'], site=metadata['site'], channel=metadata['channel'], extension='.tif')
 
                 # Save the projected image
                 output_path = output_dir / fname
@@ -448,7 +449,7 @@ class PipelineOrchestrator:
             channels_to_stitch.append("composite")
 
         # Use auto_detect_patterns to find all patterns for this well
-        patterns_by_well = self.filename_parser.auto_detect_patterns(dirs['post_processed'], well_filter=[well])
+        patterns_by_well = self.microscope_handler.parser.auto_detect_patterns(dirs['post_processed'], well_filter=[well])
 
         if not patterns_by_well or well not in patterns_by_well:
             logger.warning(f"No patterns found for well {well} in {dirs['post_processed']}")
@@ -465,7 +466,7 @@ class PipelineOrchestrator:
         # Stitch each pattern
         for pattern in all_patterns:
             # Find all matching files for this pattern
-            matching_files = self.filename_parser.path_list_from_pattern(dirs['post_processed'], pattern)
+            matching_files = self.microscope_handler.parser.path_list_from_pattern(dirs['post_processed'], pattern)
 
             if not matching_files:
                 logger.warning(f"No files found for pattern {pattern}")
@@ -536,17 +537,5 @@ class PipelineOrchestrator:
         Returns:
             tuple: (grid_size_x, grid_size_y)
         """
-        # Find HTD file
-        htd_file = self.fs_manager.find_htd_file(input_dir)
-
-        if htd_file:
-            # Parse HTD file
-            parsed = self.fs_manager.parse_htd_file(htd_file)
-            if parsed:
-                grid_size_x, grid_size_y = parsed
-                logger.info(f"Using grid dimensions from HTD file: {grid_size_x}x{grid_size_y}")
-                return grid_size_x, grid_size_y
-
-        # Default grid dimensions
-        logger.warning("Using default grid dimensions: 2x2")
-        return 2, 2
+        # Use the microscope handler to get grid dimensions
+        return self.microscope_handler.get_grid_dimensions(input_dir)

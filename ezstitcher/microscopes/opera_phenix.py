@@ -155,17 +155,8 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         Returns:
             Path to the Index.xml file, or None if not found
         """
-        plate_path = Path(plate_path)
         fs_manager = FileSystemManager()
-
-        # If not found in common locations, do a recursive search
-        # Start from the plate directory
-        result = fs_manager.find_file_recursive(plate_path, "Index.xml")
-        if result:
-            return result
-
-        # Not found anywhere
-        return None
+        return fs_manager.find_file_recursive(plate_path, "Index.xml")
 
     def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
         """

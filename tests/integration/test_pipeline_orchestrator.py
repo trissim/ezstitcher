@@ -27,10 +27,10 @@ MICROSCOPE_CONFIGS = {
 # Test parameters
 syn_data_params = {
     "grid_size": (4, 4),
-    "tile_size": (128, 128),
+    "tile_size": (64, 64),
     "overlap_percent": 10,
     "wavelengths": 2,
-    "cell_size_range": (5, 10),
+    "cell_size_range": (3, 6),
     "wells": ['A01', 'B02'],
 }
 
@@ -228,9 +228,9 @@ def test_zstack_projection_minimal(zstack_plate_dir):
     stitched_files = list(stitched_dir.glob("*.tif"))
     assert len(stitched_files) > 0, "No stitched files created"
 
-    # We're now keeping Z-plane files even with max projection, so just check that stitched files exist
-    # z_files = list(stitched_dir.glob("*_z*.tif"))
-    # assert len(z_files) == 0, "Z-plane files were created when using max projection"
+    # Check that no Z-plane files were created (since we're using max projection)
+    z_files = list(stitched_dir.glob("*_z*.tif"))
+    assert len(z_files) == 0, "Z-plane files were created when using max projection"
 
 def test_zstack_per_plane_minimal(zstack_plate_dir):
     """Test processing a Z-stack plate with per-plane stitching."""

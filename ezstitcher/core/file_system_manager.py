@@ -13,10 +13,9 @@ from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
 import numpy as np
 
-from ezstitcher.core.filename_parser import FilenameParser, ImageXpressFilenameParser
+from ezstitcher.core.microscope_interfaces import FilenameParser
 from ezstitcher.core.csv_handler import CSVHandler
 from ezstitcher.core.image_locator import ImageLocator
-from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class FileSystemManager:
         self.default_extensions = ['.tif', '.TIF', '.tiff', '.TIFF',
                                   '.jpg', '.JPG', '.jpeg', '.JPEG',
                                   '.png', '.PNG']
-        self.filename_parser = filename_parser or ImageXpressFilenameParser()
+        self.filename_parser = filename_parser
         self.csv_handler = CSVHandler()
 
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
@@ -139,62 +138,62 @@ class FileSystemManager:
             logger.error(f"Error saving image {file_path}: {e}")
             return False
 
-    def create_symlinks_from_pattern(self, source_dir: Union[str, Path], pattern: str, target_dir: Union[str, Path]) -> int:
-        """
-        Create symlinks in the target directory for all files matching a pattern in the source directory.
-
-        This ensures that reference images are always available in the reference directory,
-        even when no preprocessing or composition is performed.
-
-        Args:
-            source_dir (str or Path): Directory containing source files
-            pattern (str): Pattern to match with {iii} placeholder for site index
-            target_dir (str or Path): Directory to create symlinks in
-
-        Returns:
-            int: Number of symlinks created
-        """
-        try:
-            source_dir = Path(source_dir)
-            target_dir = Path(target_dir)
-            self.ensure_directory(target_dir)
-
-            # Get matching files
-            matching_files = self.filename_parser.path_list_from_pattern(source_dir, pattern)
-            if not matching_files:
-                logger.warning(f"No files found matching pattern {pattern} in {source_dir}")
-                return 0
-
-            # Create symlinks
-            count = 0
-            for filename in matching_files:
-                source_path = source_dir / filename
-                target_path = target_dir / filename
-
-                # Skip if target already exists
-                if target_path.exists():
-                    if target_path.is_symlink() and target_path.resolve() == source_path.resolve():
-                        logger.debug(f"Symlink already exists: {target_path} -> {source_path}")
-                        count += 1
-                        continue
-                    else:
-                        logger.warning(f"Target file already exists and is not a symlink to source: {target_path}")
-                        continue
-
-                # Create symlink
-                try:
-                    target_path.symlink_to(source_path)
-                    logger.debug(f"Created symlink: {target_path} -> {source_path}")
-                    count += 1
-                except Exception as e:
-                    logger.error(f"Error creating symlink {target_path} -> {source_path}: {e}")
-
-            logger.info(f"Created {count} symlinks in {target_dir}")
-            return count
-
-        except Exception as e:
-            logger.error(f"Error creating symlinks from {source_dir} to {target_dir}: {e}")
-            return 0
+#    def create_symlinks_from_pattern(self, source_dir: Union[str, Path], pattern: str, target_dir: Union[str, Path]) -> int:
+#        """
+#        Create symlinks in the target directory for all files matching a pattern in the source directory.
+#
+#        This ensures that reference images are always available in the reference directory,
+#        even when no preprocessing or composition is performed.
+#
+#        Args:
+#            source_dir (str or Path): Directory containing source files
+#            pattern (str): Pattern to match with {iii} placeholder for site index
+#            target_dir (str or Path): Directory to create symlinks in
+#
+#        Returns:
+#            int: Number of symlinks created
+#        """
+#        try:
+#            source_dir = Path(source_dir)
+#            target_dir = Path(target_dir)
+#            self.ensure_directory(target_dir)
+#
+#            # Get matching files
+#            matching_files = self.filename_parser.path_list_from_pattern(source_dir, pattern)
+#            if not matching_files:
+#                logger.warning(f"No files found matching pattern {pattern} in {source_dir}")
+#                return 0
+#
+#            # Create symlinks
+#            count = 0
+#            for filename in matching_files:
+#                source_path = source_dir / filename
+#                target_path = target_dir / filename
+#
+#                # Skip if target already exists
+#                if target_path.exists():
+#                    if target_path.is_symlink() and target_path.resolve() == source_path.resolve():
+#                        logger.debug(f"Symlink already exists: {target_path} -> {source_path}")
+#                        count += 1
+#                        continue
+#                    else:
+#                        logger.warning(f"Target file already exists and is not a symlink to source: {target_path}")
+#                        continue
+#
+#                # Create symlink
+#                try:
+#                    target_path.symlink_to(source_path)
+#                    logger.debug(f"Created symlink: {target_path} -> {source_path}")
+#                    count += 1
+#                except Exception as e:
+#                    logger.error(f"Error creating symlink {target_path} -> {source_path}: {e}")
+#
+#            logger.info(f"Created {count} symlinks in {target_dir}")
+#            return count
+#
+#        except Exception as e:
+#            logger.error(f"Error creating symlinks from {source_dir} to {target_dir}: {e}")
+#            return 0
 
     def copy_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
         """
@@ -253,139 +252,35 @@ class FileSystemManager:
             logger.error(f"Error removing directory {directory_path}: {e}")
             return False
 
-    def find_htd_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
-        """
-        Find the HTD file for a plate or Index.xml for Opera Phenix.
-
-        Args:
-            plate_path (str or Path): Path to the plate folder
-
-        Returns:
-            Path or None: Path to the HTD file, or None if not found
-        """
-        plate_path = Path(plate_path)
-
-        # Look for Opera Phenix Index.xml file
-        if hasattr(self.filename_parser, '__class__') and self.filename_parser.__class__.__name__ == 'OperaPhenixFilenameParser':
-            # Check for Index.xml in the plate directory
-            index_xml = plate_path / "Index.xml"
-            if index_xml.exists():
-                return index_xml
-
-            # Check for Index.xml in parent directory
-            parent_index_xml = plate_path.parent / "Index.xml"
-            if parent_index_xml.exists():
-                return parent_index_xml
-
-        # Look for ImageXpress HTD file in plate directory
-        htd_files = list(plate_path.glob("*.HTD"))
-        if htd_files:
-            for htd_file in htd_files:
-                if 'plate' in htd_file.name.lower():
-                    return htd_file
-            return htd_files[0]
-
-    def get_pixel_size(self, htd_path: Union[str, Path]) -> Optional[float]:
-        """
-        Get the pixel size from an HTD file or Index.xml file.
-
-        Args:
-            htd_path (str or Path): Path to the HTD file or Index.xml file
-
-        Returns:
-            float: Pixel size in micrometers, or None if not found
-        """
-        try:
-            htd_path = Path(htd_path)
-
-            # Check if this is an Opera Phenix Index.xml file
-            if htd_path.name == "Index.xml":
-                logger.info(f"Getting pixel size from Opera Phenix Index.xml file: {htd_path}")
-
-                try:
-                    # Use the OperaPhenixXmlParser to get the pixel size
-                    xml_parser = OperaPhenixXmlParser(htd_path)
-                    pixel_size = xml_parser.get_pixel_size()
-
-                    if pixel_size > 0:
-                        logger.info(f"Determined pixel size from Opera Phenix Index.xml: {pixel_size} µm")
-                        return pixel_size
-
-                    # If we couldn't determine the pixel size, use a default
-                    logger.warning(f"Could not determine pixel size from Opera Phenix Index.xml, using default 0.65 µm")
-                    return 0.65  # Default value in micrometers
-                except Exception as e:
-                    logger.error(f"Error getting pixel size from Opera Phenix Index.xml: {e}")
-                    return 0.65  # Default value in micrometers
-
-            # For ImageXpress HTD files, we don't have pixel size information
-            # We would need to extract it from the image metadata
-            logger.warning(f"Pixel size not available in HTD file: {htd_path}")
-            return None
-        except Exception as e:
-            logger.error(f"Error getting pixel size: {e}")
-            return None
-
-    def parse_htd_file(self, htd_path: Union[str, Path]) -> Optional[Tuple[int, int]]:
-        """
-        Parse an HTD file or Index.xml file to extract grid dimensions.
-
-        Args:
-            htd_path (str or Path): Path to the HTD file or Index.xml file
-
-        Returns:
-            tuple: (grid_size_x, grid_size_y) or None if parsing fails
-        """
-        try:
-            htd_path = Path(htd_path)
-
-            # Check if this is an Opera Phenix Index.xml file
-            if htd_path.name == "Index.xml":
-                logger.info(f"Found Opera Phenix Index.xml file: {htd_path}")
-
-                try:
-                    # Use the OperaPhenixXmlParser to get the grid size
-                    xml_parser = OperaPhenixXmlParser(htd_path)
-                    grid_size = xml_parser.get_grid_size()
-
-                    if grid_size[0] > 0 and grid_size[1] > 0:
-                        logger.info(f"Determined grid size from Opera Phenix Index.xml: {grid_size[0]}x{grid_size[1]}")
-                        return grid_size
-
-                    # If we couldn't determine the grid size, use a default
-                    logger.warning(f"Could not determine grid size from Opera Phenix Index.xml, using default 2x2")
-                    return 2, 2
-                except Exception as e:
-                    logger.error(f"Error parsing Opera Phenix Index.xml: {e}")
-                    # Use a default grid size for Opera Phenix
-                    return 2, 2
-
-            # For ImageXpress HTD files
-            with open(htd_path, 'r') as f:
-                htd_content = f.read()
-
-            # Extract grid dimensions - try multiple formats
-            # First try the new format with "XSites" and "YSites"
-            cols_match = re.search(r'"XSites", (\d+)', htd_content)
-            rows_match = re.search(r'"YSites", (\d+)', htd_content)
-
-            # If not found, try the old format with SiteColumns and SiteRows
-            if not (cols_match and rows_match):
-                cols_match = re.search(r'SiteColumns=(\d+)', htd_content)
-                rows_match = re.search(r'SiteRows=(\d+)', htd_content)
-
-            if cols_match and rows_match:
-                grid_size_x = int(cols_match.group(1))
-                grid_size_y = int(rows_match.group(1))
-                return grid_size_x, grid_size_y
-            else:
-                logger.warning(f"Could not parse grid dimensions from HTD file: {htd_path}")
-                return None
-        except Exception as e:
-            logger.error(f"Error parsing HTD file {htd_path}: {e}")
-            return None
-
-
+#    def find_metadata_file(self, plate_path: Union[str, Path], filename_pattern: str = "*.HTD") -> Optional[Path]:
+#        """
+#        Find a metadata file in a plate folder.
+#
+#        Args:
+#            plate_path (str or Path): Path to the plate folder
+#            filename_pattern (str): Glob pattern for the metadata file
+#
+#        Returns:
+#            Path or None: Path to the metadata file, or None if not found
+#        """
+#        plate_path = Path(plate_path)
+#
+#        # Look for files matching the pattern in the plate directory
+#        matching_files = list(plate_path.glob(filename_pattern))
+#        if matching_files:
+#            # If there are multiple files, try to find one with 'plate' in the name
+#            for file_path in matching_files:
+#                if 'plate' in file_path.name.lower():
+#                    return file_path
+#            # Otherwise, return the first one
+#            return matching_files[0]
+#
+#        # Check parent directory if not found
+#        parent_matching_files = list(plate_path.parent.glob(filename_pattern))
+#        if parent_matching_files:
+#            return parent_matching_files[0]
+#
+#        return None
 
 
     def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
@@ -480,35 +375,25 @@ class FileSystemManager:
         Returns:
             FilenameParser or None: The parser to use, or None if detection fails
         """
-        from ezstitcher.core.filename_parser import FilenameParser, create_parser
-        from ezstitcher.core.image_locator import ImageLocator
+        from ezstitcher.core.microscope_interfaces import MicroscopeHandler
 
         # Use the configured parser if available
         if self.filename_parser is not None:
             return self.filename_parser
 
-        # Otherwise, try to detect format from files in directory
-        directory = Path(directory)
-
-        # Use ImageLocator to find all image files
-        image_files = ImageLocator.find_images_in_directory(directory, recursive=False)
-
-        if not image_files:
-            logger.warning(f"No image files found in {directory}")
+        # Otherwise, create a MicroscopeHandler with auto-detection
+        try:
+            directory = Path(directory)
+            handler = MicroscopeHandler(plate_folder=directory, microscope_type='auto')
+            if handler.parser:
+                logger.info(f"Auto-detected parser for files in {directory}")
+                return handler.parser
+            else:
+                logger.warning(f"Could not detect parser for files in {directory}")
+                return None
+        except Exception as e:
+            logger.error(f"Error detecting parser for files in {directory}: {e}")
             return None
-
-        # Get filenames only
-        filenames = [f.name for f in image_files]
-
-        # Detect format
-        format_type = FilenameParser.detect_format(filenames)
-        if format_type is None:
-            logger.warning(f"Could not detect format for files in {directory}")
-            return None
-
-        # Create and return parser
-        logger.info(f"Detected format {format_type} for files in {directory}")
-        return create_parser(format_type)
 
     def rename_files_with_consistent_padding(self, directory, parser=None, width=3, force_suffixes=False):
         """
@@ -530,7 +415,9 @@ class FileSystemManager:
 
         # Use provided parser or detect one
         if parser is None:
-            parser = self.filename_parser or self.get_or_detect_parser(directory)
+            if self.parser is None:
+                self.parser = self.get_or_detect_parser(directory)
+            parser = self.parser
             if parser is None:
                 return {}  # No parser available
 
@@ -588,98 +475,6 @@ class FileSystemManager:
 
         return rename_map
 
-
-        def convert_opera_phenix_to_imagexpress(self, input_dir, output_dir=None):
-            """
-            Convert Opera Phenix files to ImageXpress format.
-
-            This function copies Opera Phenix files to a new directory with ImageXpress-style filenames.
-            If output_dir is None, files are renamed in place.
-
-            Args:
-                input_dir (str or Path): Directory containing Opera Phenix files
-                output_dir (str or Path, optional): Directory to save converted files
-
-            Returns:
-                bool: True if successful, False otherwise
-            """
-            try:
-                import shutil
-                from ezstitcher.core.filename_parser import OperaPhenixFilenameParser
-
-                input_dir = Path(input_dir)
-                if output_dir is None:
-                    output_dir = input_dir
-                else:
-                    output_dir = Path(output_dir)
-                    self.ensure_directory(output_dir)
-
-                    # Create TimePoint_1 directory in the output directory
-                    # This is needed because ImageXpress format expects images in a TimePoint_1 subdirectory
-                    timepoint_dir = output_dir / "TimePoint_1"
-                    self.ensure_directory(timepoint_dir)
-
-                    # Update output_dir to point to the TimePoint_1 directory
-                    output_dir = timepoint_dir
-
-                # Create an Opera Phenix filename parser
-                opera_parser = OperaPhenixFilenameParser()
-
-                # Get all image files in the input directory
-                image_files = self.list_image_files(input_dir)
-
-                # Process each file
-                for img_file in image_files:
-                    # Parse the filename
-                    metadata = opera_parser.parse_filename(str(img_file))
-
-                    if metadata:
-                        well = metadata['well']
-                        site = metadata['site']
-                        channel = metadata['channel']
-                        z_index = metadata.get('z_index')
-                        extension = img_file.suffix
-
-                        # Construct new filename in ImageXpress format
-                        # Convert Opera Phenix well format (R01C01) to ImageXpress well format (A01)
-                        # Extract row and column from Opera Phenix well format
-                        match = re.match(r"R(\d{2})C(\d{2})", well, re.I)
-                        if match:
-                            row = int(match.group(1))
-                            col = int(match.group(2))
-                            # Convert row number to letter (1 -> A, 2 -> B, etc.)
-                            row_letter = chr(64 + row)  # ASCII: 'A' = 65
-                            # Create ImageXpress well format
-                            imx_well = f"{row_letter}{col:02d}"
-                        else:
-                            # If well is not in Opera Phenix format, use it as is
-                            imx_well = well
-
-                        # Construct new filename in ImageXpress format
-                        if z_index is not None:
-                            new_name = f"{imx_well}_s{site:03d}_w{channel}_z{z_index:03d}{extension}"
-                        else:
-                            new_name = f"{imx_well}_s{site:03d}_w{channel}{extension}"
-
-                        # Create output path
-                        output_path = output_dir / new_name
-
-                        # Copy or rename the file
-                        if output_dir == input_dir:
-                            # Rename in place
-                            img_file.rename(output_path)
-                            logger.info(f"Renamed {img_file.name} to {new_name}")
-                        else:
-                            # Copy to new directory
-                            shutil.copy2(img_file, output_path)
-                            logger.info(f"Copied {img_file.name} to {new_name}")
-                    else:
-                        logger.warning(f"Could not parse filename: {img_file.name}")
-
-                return True
-            except Exception as e:
-                logger.error(f"Error converting Opera Phenix files to ImageXpress format: {e}")
-                return False
 
         def mirror_directory_structure(self, source_dir: Union[str, Path], base_output_dir: Union[str, Path]) -> Path:
             """
