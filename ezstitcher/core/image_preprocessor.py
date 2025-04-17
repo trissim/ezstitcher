@@ -55,31 +55,32 @@ def create_linear_weight_mask(height, width, margin_ratio=0.1):
 class ImagePreprocessor:
     """
     Handles image normalization, filtering, and compositing.
+    All methods are static and do not require an instance.
     """
-    def __init__(self, config: ImagePreprocessorConfig = None):
-        if config is None:
-            config = ImagePreprocessorConfig()
-        self.config = config
-        self.preprocessing_funcs = config.preprocessing_funcs or {}
-        self.composite_weights = config.composite_weights or {}
 
-    def preprocess(self, image, channel: str):
+    @staticmethod
+    def preprocess(image, channel: str, preprocessing_funcs=None):
         """
         Apply preprocessing to a single image for a given channel.
 
         Args:
             image (numpy.ndarray): Input image
             channel (str): Channel identifier
+            preprocessing_funcs (dict, optional): Dictionary mapping channels to preprocessing functions
 
         Returns:
             numpy.ndarray: Processed image
         """
-        func = self.preprocessing_funcs.get(channel)
+        if preprocessing_funcs is None:
+            preprocessing_funcs = {}
+
+        func = preprocessing_funcs.get(channel)
         if func:
             return func(image)
         return image
 
-    def blur(self, image, sigma=1):
+    @staticmethod
+    def blur(image, sigma=1):
         """
         Apply Gaussian blur to an image.
 
@@ -105,7 +106,8 @@ class ImagePreprocessor:
 
         return blurred
 
-    def sharpen(self, image, radius=1, amount=1.0):
+    @staticmethod
+    def sharpen(image, radius=1, amount=1.0):
         """
         Sharpen an image using unsharp masking.
 
@@ -138,28 +140,8 @@ class ImagePreprocessor:
 
         return sharpened
 
-    def enhance_contrast(self, image, percentile_low=2, percentile_high=98):
-        """
-        Enhance contrast using percentile-based normalization.
-
-        Args:
-            image (numpy.ndarray): Input image
-            percentile_low (float): Lower percentile for contrast stretching
-            percentile_high (float): Upper percentile for contrast stretching
-
-        Returns:
-            numpy.ndarray: Contrast-enhanced image
-        """
-        # Get percentile values
-        p_low, p_high = np.percentile(image, (percentile_low, percentile_high))
-
-        # Apply contrast stretching
-        enhanced = exposure.rescale_intensity(image, in_range=(p_low, p_high), out_range=(0, 65535))
-        enhanced = enhanced.astype(np.uint16)
-
-        return enhanced
-
-    def normalize(self, image, target_min=0, target_max=65535):
+    @staticmethod
+    def normalize(image, target_min=0, target_max=65535):
         """
         Normalize image to specified range.
 
@@ -185,7 +167,8 @@ class ImagePreprocessor:
 
         return normalized
 
-    def percentile_normalize(self, image, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):
+    @staticmethod
+    def percentile_normalize(image, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):
         """
         Normalize image using percentile-based contrast stretching.
 
@@ -213,7 +196,8 @@ class ImagePreprocessor:
 
         return normalized
 
-    def stack_percentile_normalize(self, stack, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):
+    @staticmethod
+    def stack_percentile_normalize(stack, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):
         """
         Normalize a stack of images using global percentile-based contrast stretching.
         This ensures consistent normalization across all images in the stack.
@@ -247,7 +231,8 @@ class ImagePreprocessor:
 
         return normalized
 
-    def create_composite(self, images, weights=None):
+    @staticmethod
+    def create_composite(images, weights=None):
         """
         Create a grayscale composite image from multiple channels.
 
@@ -258,9 +243,6 @@ class ImagePreprocessor:
         Returns:
             numpy.ndarray: Grayscale composite image (16-bit)
         """
-        if weights is None:
-            weights = self.composite_weights
-
         # Default weights if none provided
         if not weights:
             channels = list(images.keys())
@@ -299,7 +281,8 @@ class ImagePreprocessor:
 
         return composite
 
-    def apply_mask(self, image, mask):
+    @staticmethod
+    def apply_mask(image, mask):
         """
         Apply a mask to an image.
 
@@ -320,7 +303,8 @@ class ImagePreprocessor:
 
         return masked
 
-    def create_weight_mask(self, shape, margin_ratio=0.1):
+    @staticmethod
+    def create_weight_mask(shape, margin_ratio=0.1):
         """
         Create a weight mask for blending images.
 
@@ -333,7 +317,8 @@ class ImagePreprocessor:
         """
         return create_linear_weight_mask(shape, margin_ratio)
 
-    def max_projection(self, stack):
+    @staticmethod
+    def max_projection(stack):
         """
         Create a maximum intensity projection from a Z-stack.
 
@@ -350,7 +335,8 @@ class ImagePreprocessor:
         # Create max projection
         return np.max(stack, axis=0)
 
-    def mean_projection(self, stack):
+    @staticmethod
+    def mean_projection(stack):
         """
         Create a mean intensity projection from a Z-stack.
 
@@ -367,7 +353,50 @@ class ImagePreprocessor:
         # Create mean projection
         return np.mean(stack, axis=0).astype(stack[0].dtype)
 
-    def apply_function_to_stack(self, z_stack, func):
+    @staticmethod
+    def stack_equalize_histogram(stack, bins=65536, range_min=0, range_max=65535):
+        """
+        Apply true histogram equalization to an entire stack of images.
+        This ensures consistent contrast enhancement across all images in the stack.
+
+        Unlike standard histogram equalization applied to individual images,
+        this method computes a global histogram across the entire stack and
+        applies the same transformation to all images, preserving relative
+        intensity relationships between Z-planes.
+
+        Args:
+            stack (list or numpy.ndarray): Stack of images
+            bins (int): Number of bins for histogram computation
+            range_min (int): Minimum value for histogram range
+            range_max (int): Maximum value for histogram range
+
+        Returns:
+            numpy.ndarray: Histogram-equalized stack of images
+        """
+        # Convert to numpy array if it's a list
+        if isinstance(stack, list):
+            stack = np.array(stack)
+
+        # Flatten the entire stack to compute the global histogram
+        flat_stack = stack.flatten()
+
+        # Calculate the histogram and cumulative distribution function (CDF)
+        hist, bin_edges = np.histogram(flat_stack, bins=bins, range=(range_min, range_max))
+        cdf = hist.cumsum()
+
+        # Normalize the CDF to the range [0, 65535]
+        # Avoid division by zero
+        if cdf[-1] > 0:
+            cdf = 65535 * cdf / cdf[-1]
+
+        # Use linear interpolation to map input values to equalized values
+        equalized_stack = np.interp(stack.flatten(), bin_edges[:-1], cdf).reshape(stack.shape)
+
+        # Convert to uint16
+        return equalized_stack.astype(np.uint16)
+
+    @staticmethod
+    def apply_function_to_stack(z_stack, func):
         """
         Apply a function to a Z-stack, handling both stack and single-image functions.
 
@@ -389,7 +418,8 @@ class ImagePreprocessor:
         # Apply to each image individually
         return [func(img) for img in z_stack]
 
-    def create_projection(self, stack, method="max_projection", focus_analyzer=None):
+    @staticmethod
+    def create_projection(stack, method="max_projection", focus_analyzer=None):
         """
         Create a projection from a stack using the specified method.
 
@@ -402,15 +432,15 @@ class ImagePreprocessor:
             numpy.ndarray: Projected image
         """
         if method == "max_projection":
-            return self.max_projection(stack)
+            return ImagePreprocessor.max_projection(stack)
         elif method == "mean_projection":
-            return self.mean_projection(stack)
+            return ImagePreprocessor.mean_projection(stack)
         elif method == "best_focus":
             if focus_analyzer is None:
                 logger.warning("No focus analyzer provided for best_focus method, using max_projection instead")
-                return self.max_projection(stack)
+                return ImagePreprocessor.max_projection(stack)
             best_idx, _ = focus_analyzer.find_best_focus(stack)
             return stack[best_idx]
         else:
             logger.warning("Unknown projection method: %s, using max_projection", method)
-            return self.max_projection(stack)
+            return ImagePreprocessor.max_projection(stack)

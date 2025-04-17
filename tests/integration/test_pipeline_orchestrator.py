@@ -187,6 +187,17 @@ def background_subtract(img):
     background = np.percentile(img, 10)
     return np.clip(img - background, 0, 65535).astype(np.uint16)
 
+# Import the ImagePreprocessor for stack functions
+from ezstitcher.core.image_preprocessor import ImagePreprocessor
+
+# Create an instance of ImagePreprocessor for testing
+_image_preprocessor = ImagePreprocessor()
+
+# Define a wrapper function for stack_equalize_histogram
+def stack_equalize_histogram(stack):
+    """Apply true histogram equalization to an entire stack."""
+    return _image_preprocessor.stack_equalize_histogram(stack)
+
 def test_flat_plate_minimal(flat_plate_dir):
     """Test processing a flat plate with minimal configuration."""
     # Create pipeline configuration
@@ -407,4 +418,52 @@ def test_all_channels_stitched(flat_plate_dir):
 
     # Check if stitched files were created
     stitched_files = find_image_files(stitched_dir)
+    assert len(stitched_files) > 0, "No stitched files created"
+
+def test_mixed_preprocessing_functions(zstack_plate_dir):
+    """Test that both single-image and stack-processing functions can be used."""
+    # Create pipeline configuration with both types of preprocessing functions
+    config = PipelineConfig(
+        reference_channels=["1", "2"],
+        # Channel 1 uses a single-image function
+        # Channel 2 uses a stack-processing function
+        reference_preprocessing={
+            "1": background_subtract,  # Single-image function
+            "2": stack_equalize_histogram  # Stack-processing function
+        },
+        final_preprocessing={
+            "1": background_subtract,  # Single-image function
+            "2": stack_equalize_histogram  # Stack-processing function
+        },
+        reference_flatten="max_projection",
+        stitch_flatten="max_projection",
+        stitcher=StitcherConfig(
+            tile_overlap=10.0,
+            max_shift=50,
+            margin_ratio=0.1
+        )
+    )
+
+    # Create and run pipeline
+    pipeline = PipelineOrchestrator(config)
+    success = pipeline.run(zstack_plate_dir)
+
+    assert success, "Processing with mixed preprocessing functions failed"
+
+    # Check if output directories were created
+    processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_processed"
+    post_processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_post_processed"
+    stitched_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_stitched"
+
+    assert processed_dir.exists(), "Processed directory not created"
+    assert post_processed_dir.exists(), "Post-processed directory not created"
+    assert stitched_dir.exists(), "Stitched directory not created"
+
+    # Check if processed files were created for both channels
+    processed_files = find_image_files(processed_dir)
+    post_processed_files = find_image_files(post_processed_dir)
+    stitched_files = find_image_files(stitched_dir)
+
+    assert len(processed_files) > 0, "No processed files created"
+    assert len(post_processed_files) > 0, "No post-processed files created"
     assert len(stitched_files) > 0, "No stitched files created"
