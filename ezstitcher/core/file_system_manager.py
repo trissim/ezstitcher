@@ -14,7 +14,6 @@ import tifffile
 import numpy as np
 
 from ezstitcher.core.microscope_interfaces import FilenameParser
-from ezstitcher.core.csv_handler import CSVHandler
 from ezstitcher.core.image_locator import ImageLocator
 
 logger = logging.getLogger(__name__)
@@ -39,7 +38,6 @@ class FileSystemManager:
                                   '.jpg', '.JPG', '.jpeg', '.JPEG',
                                   '.png', '.PNG']
         self.filename_parser = filename_parser
-        self.csv_handler = CSVHandler()
 
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
         """
@@ -415,9 +413,7 @@ class FileSystemManager:
 
         # Use provided parser or detect one
         if parser is None:
-            if self.parser is None:
-                self.parser = self.get_or_detect_parser(directory)
-            parser = self.parser
+            parser = self.get_or_detect_parser(directory)
             if parser is None:
                 return {}  # No parser available
 

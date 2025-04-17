@@ -206,14 +206,65 @@ class Stitcher:
             positions_df = self.generate_positions_df(str(image_dir), original_pattern, positions, grid_size_x, grid_size_y)
 
             # Save to CSV
-            self.fs_manager.ensure_directory(positions_path.parent)
-            positions_df.to_csv(positions_path, index=False, sep=";", header=False)
+            self.save_positions_df(positions_df, positions_path)
 
             logger.info(f"Saved positions to {positions_path}")
             return True
 
         except Exception as e:
             logger.error(f"Error in generate_positions_ashlar: {e}")
+            return False
+
+    @staticmethod
+    def parse_positions_csv(csv_path):
+        """
+        Parse a CSV file with lines of the form:
+          file: <filename>; grid: (col, row); position: (x, y)
+
+        Args:
+            csv_path (str or Path): Path to the CSV file
+
+        Returns:
+            list: List of tuples (filename, x_float, y_float)
+        """
+        entries = []
+        with open(csv_path, 'r', encoding='utf-8') as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                # Example line:
+                # file: some_image.tif; grid: (0, 0); position: (123.45, 67.89)
+                file_match = re.search(r'file:\s*([^;]+);', line)
+                pos_match = re.search(r'position:\s*\(([^,]+),\s*([^)]+)\)', line)
+                if file_match and pos_match:
+                    fname = file_match.group(1).strip()
+                    x_val = float(pos_match.group(1).strip())
+                    y_val = float(pos_match.group(2).strip())
+                    entries.append((fname, x_val, y_val))
+        return entries
+
+    @staticmethod
+    def save_positions_df(df, positions_path):
+        """
+        Save a positions DataFrame to CSV.
+
+        Args:
+            df (pandas.DataFrame): DataFrame to save
+            positions_path (str or Path): Path to save the CSV file
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Ensure directory exists
+            Path(positions_path).parent.mkdir(parents=True, exist_ok=True)
+
+            # Save to CSV
+            df.to_csv(positions_path, index=False, sep=";", header=False)
+            return True
+        except Exception as e:
+            logger.error("Error saving positions CSV: %s", e)
             return False
 
     def assemble_image(self, positions_path: Union[str, Path],
@@ -241,16 +292,15 @@ class Stitcher:
             self.fs_manager.ensure_directory(output_path.parent)
 
             # Parse CSV file
-            from ezstitcher.core.csv_handler import CSVHandler
-            pos_entries = CSVHandler.parse_positions_csv(positions_path)
+            pos_entries = self.parse_positions_csv(positions_path)
             if not pos_entries:
-                logger.error(f"No valid entries found in {positions_path}")
+                logger.error("No valid entries found in %s", positions_path)
                 return False
 
             # Override filenames if provided
             if override_names is not None:
                 if len(override_names) != len(pos_entries):
-                    logger.error(f"Number of override_names ({len(override_names)}) doesn't match positions ({len(pos_entries)})")
+                    logger.error("Number of override_names (%d) doesn't match positions (%d)", len(override_names), len(pos_entries))
                     return False
 
                 pos_entries = [(override_names[i], x, y) for i, (_, x, y) in enumerate(pos_entries)]
@@ -259,13 +309,13 @@ class Stitcher:
             images_dir = Path(images_dir)
             for (fname, _, _) in pos_entries:
                 if not (images_dir / fname).exists():
-                    logger.error(f"Missing image: {fname} in {images_dir}")
+                    logger.error("Missing image: %s in %s", fname, images_dir)
                     return False
 
             # Read the first tile to get shape, dtype
             first_tile = self.fs_manager.load_image(images_dir / pos_entries[0][0])
             if first_tile is None:
-                logger.error(f"Failed to load first tile: {pos_entries[0][0]}")
+                logger.error("Failed to load first tile: %s", pos_entries[0][0])
                 return False
 
             tile_h, tile_w = first_tile.shape
@@ -283,7 +333,7 @@ class Stitcher:
             # Final canvas size
             final_w = int(np.ceil(max_x - min_x))
             final_h = int(np.ceil(max_y - min_y))
-            logger.info(f"Final canvas size: {final_h} x {final_w}")
+            logger.info("Final canvas size: %d x %d", final_h, final_w)
 
             # Prepare accumulators
             acc = np.zeros((final_h, final_w), dtype=np.float32)
@@ -294,21 +344,21 @@ class Stitcher:
 
             # Process each tile
             for i, (fname, x_f, y_f) in enumerate(pos_entries):
-                logger.info(f"Placing tile {i+1}/{len(pos_entries)}: {fname} at ({x_f}, {y_f})")
+                logger.info("Placing tile %d/%d: %s at (%.2f, %.2f)", i+1, len(pos_entries), fname, x_f, y_f)
 
                 # Load tile
                 tile_img = self.fs_manager.load_image(images_dir / fname)
                 if tile_img is None:
-                    logger.error(f"Failed to load tile: {fname}")
+                    logger.error("Failed to load tile: %s", fname)
                     continue
 
                 # Check shape and dtype
                 if tile_img.shape != (tile_h, tile_w):
-                    logger.error(f"Tile shape mismatch: {tile_img.shape} vs {tile_h}x{tile_w}")
+                    logger.error("Tile shape mismatch: %s vs %dx%d", tile_img.shape, tile_h, tile_w)
                     continue
 
                 if tile_img.dtype != dtype:
-                    logger.error(f"Tile dtype mismatch: {tile_img.dtype} vs {dtype}")
+                    logger.error("Tile dtype mismatch: %s vs %s", tile_img.dtype, dtype)
                     continue
 
                 # Apply weight mask
@@ -363,11 +413,11 @@ class Stitcher:
             blended = np.clip(blended, 0, max_val).astype(dtype)
 
             # Save stitched image
-            logger.info(f"Saving stitched image to {output_path}")
+            logger.info("Saving stitched image to %s", output_path)
             self.fs_manager.save_image(output_path, blended)
 
             return True
 
         except Exception as e:
-            logger.error(f"Error in assemble_image: {e}")
+            logger.error("Error in assemble_image: %s", e)
             return False
