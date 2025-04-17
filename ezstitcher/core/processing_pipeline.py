@@ -84,6 +84,8 @@ class PipelineOrchestrator:
             # Setup
             plate_path = Path(plate_folder)
             self.microscope_handler = create_microscope_handler('auto', plate_folder=plate_path)
+            self.config.grid_size = self.microscope_handler.get_grid_dimensions(plate_path)
+            self.config.pixel_size = self.microscope_handler.get_pixel_size(plate_path)
             self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
             # Prepare images (pad filenames and organize Z-stack folders)
@@ -401,9 +403,6 @@ class PipelineOrchestrator:
         """
         logger.info(f"Generating positions for well {well}")
 
-        # Get grid dimensions
-        grid_dims = self.get_grid_dimensions(dirs['input'])
-
         # Ensure positions directory exists
         self.fs_manager.ensure_directory(dirs['positions'])
 
@@ -412,15 +411,15 @@ class PipelineOrchestrator:
 
         # Use standardized reference pattern (without channel information)
         # After processing, all images are saved with well_s### format
-        reference_pattern = f"{well}_s{{iii}}.tif"
+        reference_pattern = self.microscope_handler.parser.construct_filename(well=well, site="{iii}", extension='.tif')
 
         # Generate positions
         self.stitcher.generate_positions(
             dirs['processed'],
             reference_pattern,
             positions_file,  # Pass the file path, not the directory
-            grid_dims[0],
-            grid_dims[1],
+            self.config.grid_size[0],
+            self.config.grid_size[1],
         )
 
         return positions_file, reference_pattern
@@ -473,11 +472,18 @@ class PipelineOrchestrator:
                 continue
 
             # Extract pattern suffix to determine output filename
+            parsable = pattern.replace('{iii}','001')
+            metadata = self.microscope_handler.parser.parse_filename(parsable)
+            output_filename = self.microscope_handler.parser.construct_filename(well=metadata['well'],
+                                                                                site=metadata['site'],
+                                                                                channel=metadata['channel'],
+                                                                                z_index=metadata['z_index'],
+                                                                                extension='.tif')
             # Example: A01_s{iii}_w1.tif -> _w1.tif
-            suffix = pattern.replace(f"{well}_s{{iii}}", "")
+            #suffix = pattern.replace(f"{well}_s{{iii}}", "")
 
             # Create output filename based on the pattern
-            output_filename = f"{well}{suffix}"
+            #output_filename = f"{well}{suffix}"
             output_path = dirs['stitched'] / output_filename
             logger.info(f"Stitching pattern {pattern} to {output_path}")
 

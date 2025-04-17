@@ -4,12 +4,12 @@ Opera Phenix XML parser for ezstitcher.
 This module provides a class for parsing Opera Phenix Index.xml files.
 """
 
-import os
-import re
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Tuple, Set
+from typing import Dict, Optional, Union, Any, Tuple
+import re
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +40,10 @@ class OperaPhenixXmlParser:
             match = re.match(r'{.*}', self.root.tag)
             self.namespace = match.group(0) if match else ""
 
-            logger.info(f"Parsed Opera Phenix XML file: {self.xml_path}")
-            logger.debug(f"XML namespace: {self.namespace}")
+            logger.info("Parsed Opera Phenix XML file: %s", self.xml_path)
+            logger.debug("XML namespace: %s", self.namespace)
         except Exception as e:
-            logger.error(f"Error parsing Opera Phenix XML file {self.xml_path}: {e}")
+            logger.error("Error parsing Opera Phenix XML file %s: %s", self.xml_path, e)
             raise
 
     def get_plate_info(self) -> Dict[str, Any]:
@@ -73,180 +73,166 @@ class OperaPhenixXmlParser:
         well_elems = plate_elem.findall(f"{self.namespace}Well")
         plate_info['wells'] = [well.get('id') for well in well_elems if well.get('id')]
 
-        logger.debug(f"Plate info: {plate_info}")
+        logger.debug("Plate info: %s", plate_info)
         return plate_info
 
     def get_grid_size(self) -> Tuple[int, int]:
         """
-        Determine the grid size (number of fields per well).
+        Determine the grid size (number of fields per well) by analyzing image positions.
+
+        This method analyzes the positions of images for a single well, channel, and plane
+        to determine the grid dimensions.
 
         Returns:
             Tuple of (grid_size_x, grid_size_y)
         """
         if self.root is None:
-            return (0, 0)
+            logger.error("XML not parsed, cannot determine grid size")
+            return (2, 2)  # Default grid size
 
-        # Get all wells
-        wells = self.root.findall(f".//{self.namespace}Well")
-        if not wells:
-            logger.warning("No Well elements found in XML")
-            return (0, 0)
+        # Get all image elements
+        image_elements = self.root.findall(f".//{self.namespace}Image")
 
-        # Find the first well with images
-        well_with_images = None
-        for well in wells:
-            well_id = self._get_element_text(well, 'id')
-            if well_id:
-                # Find all images for this well
-                images = well.findall(f"{self.namespace}Image")
-                if images:
-                    well_with_images = well
-                    break
+        if not image_elements:
+            logger.warning("No Image elements found in XML")
+            return (2, 2)  # Default grid size
 
-        if well_with_images is None:
-            logger.warning("No wells with images found in XML")
-            return (0, 0)
+        # Group images by well (Row+Col), channel, and plane
+        # We'll use the first group with multiple fields to determine grid size
+        image_groups = {}
 
-        # Extract field IDs from image IDs
-        field_ids = set()
-        for image in well_with_images.findall(f"{self.namespace}Image"):
-            image_id = image.get('id', '')
-            # Parse field ID from image ID (format: WWWWK1FXXXPYYRZ)
-            # Where WWWW is well ID, XXX is field ID, YY is plane ID, Z is channel ID
-            match = re.search(r'K\d+F(\d+)P\d+R\d+', image_id)
-            if match:
-                field_ids.add(int(match.group(1)))
+        for image in image_elements:
+            # Extract well, channel, and plane information
+            row_elem = image.find(f"{self.namespace}Row")
+            col_elem = image.find(f"{self.namespace}Col")
+            channel_elem = image.find(f"{self.namespace}ChannelID")
+            plane_elem = image.find(f"{self.namespace}PlaneID")
 
-        # Count unique field IDs
-        num_fields = len(field_ids)
-        if num_fields == 0:
-            logger.warning("No field IDs found in images")
-            return (0, 0)
+            if (row_elem is not None and row_elem.text and
+                col_elem is not None and col_elem.text and
+                channel_elem is not None and channel_elem.text and
+                plane_elem is not None and plane_elem.text):
 
-        # Assume a square grid for now (can be refined later)
-        # Most microscopes use square grids (e.g., 2x2, 3x3, etc.)
-        grid_size = int(num_fields ** 0.5)
+                # Create a key for grouping
+                group_key = f"R{row_elem.text}C{col_elem.text}_CH{channel_elem.text}_P{plane_elem.text}"
 
-        # If not a perfect square, try to find a reasonable grid size
-        if grid_size ** 2 != num_fields:
-            # Find factors of num_fields
-            factors = []
-            for i in range(1, int(num_fields ** 0.5) + 1):
-                if num_fields % i == 0:
-                    factors.append((i, num_fields // i))
+                # Extract position information
+                pos_x_elem = image.find(f"{self.namespace}PositionX")
+                pos_y_elem = image.find(f"{self.namespace}PositionY")
+                field_elem = image.find(f"{self.namespace}FieldID")
 
-            # Choose the factor pair with the smallest difference
-            if factors:
-                factors.sort(key=lambda x: abs(x[0] - x[1]))
-                grid_size_x, grid_size_y = factors[0]
-                logger.info(f"Non-square grid detected: {grid_size_x}x{grid_size_y} ({num_fields} fields)")
-                return (grid_size_x, grid_size_y)
+                if (pos_x_elem is not None and pos_x_elem.text and
+                    pos_y_elem is not None and pos_y_elem.text and
+                    field_elem is not None and field_elem.text):
 
-        logger.info(f"Detected grid size: {grid_size}x{grid_size} ({num_fields} fields)")
-        return (grid_size, grid_size)
+                    try:
+                        # Parse position values
+                        x_value = float(pos_x_elem.text)
+                        y_value = float(pos_y_elem.text)
+                        field_id = int(field_elem.text)
+
+                        # Add to group
+                        if group_key not in image_groups:
+                            image_groups[group_key] = []
+
+                        image_groups[group_key].append({
+                            'field_id': field_id,
+                            'pos_x': x_value,
+                            'pos_y': y_value,
+                            'pos_x_unit': pos_x_elem.get('Unit', ''),
+                            'pos_y_unit': pos_y_elem.get('Unit', '')
+                        })
+                    except (ValueError, TypeError):
+                        logger.warning("Could not parse position values for image in group %s", group_key)
+
+        # Find the first group with multiple fields
+        for group_key, images in image_groups.items():
+            if len(images) > 1:
+                logger.debug("Using image group %s with %d fields to determine grid size", group_key, len(images))
+
+                # Extract unique X and Y positions
+                # Use a small epsilon for floating point comparison
+                epsilon = 1e-10
+                x_positions = [img['pos_x'] for img in images]
+                y_positions = [img['pos_y'] for img in images]
+
+                # Use numpy to find unique positions
+                unique_x = np.unique(np.round(np.array(x_positions) / epsilon) * epsilon)
+                unique_y = np.unique(np.round(np.array(y_positions) / epsilon) * epsilon)
+
+                # Count unique positions
+                num_x_positions = len(unique_x)
+                num_y_positions = len(unique_y)
+
+                # If we have a reasonable number of positions, use them as grid dimensions
+                if num_x_positions > 0 and num_y_positions > 0:
+                    logger.info("Determined grid size from positions: %dx%d", num_x_positions, num_y_positions)
+                    return (num_x_positions, num_y_positions)
+
+                # Alternative approach: try to infer grid size from field IDs
+                if len(images) > 1:
+                    # Sort images by field ID
+                    sorted_images = sorted(images, key=lambda x: x['field_id'])
+                    max_field_id = sorted_images[-1]['field_id']
+
+                    # Try to determine if it's a square grid
+                    grid_size = int(np.sqrt(max_field_id) + 0.5)  # Round to nearest integer
+
+                    if grid_size ** 2 == max_field_id:
+                        logger.info("Determined square grid size from field IDs: %dx%d", grid_size, grid_size)
+                        return (grid_size, grid_size)
+
+                    # If not a perfect square, try to find factors
+                    for i in range(1, int(np.sqrt(max_field_id)) + 1):
+                        if max_field_id % i == 0:
+                            j = max_field_id // i
+                            logger.info("Determined grid size from field IDs: %dx%d", i, j)
+                            return (i, j)
+
+        # If we couldn't determine grid size, use a default
+        logger.warning("Could not determine grid size from XML, using default 2x2")
+        return (2, 2)  # Default grid size
 
     def get_pixel_size(self) -> float:
         """
-        Extract pixel size information from the XML.
+        Extract pixel size from the XML.
+
+        The pixel size is stored in ImageResolutionX/Y elements with Unit="m".
 
         Returns:
-            Pixel size in micrometers
+            Pixel size in micrometers (μm)
         """
         if self.root is None:
-            return 0.0
+            logger.warning("XML not parsed, using default pixel size")
+            return 0.65  # Default value in micrometers
 
-        # First, look for ImageResolutionX in the XML (most common in Opera Phenix)
-        resolution_elem = self.root.find(f".//{self.namespace}ImageResolutionX")
-        if resolution_elem is not None and resolution_elem.text:
+        # Try to find ImageResolutionX element
+        resolution_x = self.root.find(f".//{self.namespace}ImageResolutionX")
+        if resolution_x is not None and resolution_x.text:
             try:
-                # Get the unit attribute
-                unit = resolution_elem.get('Unit', '')
-                value = float(resolution_elem.text)
+                # Convert from meters to micrometers
+                pixel_size = float(resolution_x.text) * 1e6
+                logger.info("Found pixel size from ImageResolutionX: %.4f μm", pixel_size)
+                return pixel_size
+            except (ValueError, TypeError):
+                logger.warning("Could not parse pixel size from ImageResolutionX")
 
-                # Convert to micrometers based on unit
-                if unit.lower() == 'm':
-                    # Convert from meters to micrometers
-                    pixel_size = value * 1e6
-                    logger.info(f"Found pixel size from ImageResolutionX: {pixel_size:.4f} µm")
-                    return pixel_size
-                else:
-                    logger.warning(f"Unknown resolution unit: {unit}, assuming meters")
-                    pixel_size = value * 1e6
-                    logger.info(f"Found pixel size from ImageResolutionX: {pixel_size:.4f} µm (assuming meters)")
-                    return pixel_size
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Error parsing ImageResolutionX: {e}")
-
-        # If not found in ImageResolutionX, look for PixelSize in the PixelSizeCalibration section
-        pixel_size_elem = self.root.find(f".//{self.namespace}PixelSize")
-        if pixel_size_elem is not None and pixel_size_elem.text:
+        # If not found in ImageResolutionX, try ImageResolutionY
+        resolution_y = self.root.find(f".//{self.namespace}ImageResolutionY")
+        if resolution_y is not None and resolution_y.text:
             try:
-                # Get the unit attribute to ensure we're returning micrometers
-                unit = pixel_size_elem.get('Unit', '')
-                value = float(pixel_size_elem.text)
+                # Convert from meters to micrometers
+                pixel_size = float(resolution_y.text) * 1e6
+                logger.info("Found pixel size from ImageResolutionY: %.4f μm", pixel_size)
+                return pixel_size
+            except (ValueError, TypeError):
+                logger.warning("Could not parse pixel size from ImageResolutionY")
 
-                # Convert to micrometers if necessary
-                if unit.lower() in ['µm', 'um', 'micrometer', 'micrometers']:
-                    logger.info(f"Found pixel size from PixelSize: {value:.4f} µm")
-                    return value
-                elif unit.lower() in ['m', 'meter', 'meters']:
-                    pixel_size = value * 1e6
-                    logger.info(f"Found pixel size from PixelSize: {pixel_size:.4f} µm")
-                    return pixel_size
-                elif unit.lower() in ['mm', 'millimeter', 'millimeters']:
-                    pixel_size = value * 1e3
-                    logger.info(f"Found pixel size from PixelSize: {pixel_size:.4f} µm")
-                    return pixel_size
-                elif unit.lower() in ['nm', 'nanometer', 'nanometers']:
-                    pixel_size = value * 1e-3
-                    logger.info(f"Found pixel size from PixelSize: {pixel_size:.4f} µm")
-                    return pixel_size
-                else:
-                    logger.warning(f"Unknown pixel size unit: {unit}, assuming micrometers")
-                    logger.info(f"Found pixel size from PixelSize: {value:.4f} µm (assuming micrometers)")
-                    return value
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Error parsing PixelSize: {e}")
-
-        # If not found, use the default value
-        logger.warning("Pixel size not found in XML, using default value")
+        # If not found, use default value
+        logger.warning("Pixel size not found in XML, using default value of 0.65 μm")
         return 0.65  # Default value in micrometers
 
-    def get_channel_info(self) -> List[Dict[str, Any]]:
-        """
-        Extract channel information from the XML.
 
-        Returns:
-            List of dictionaries containing channel information
-        """
-        if self.root is None:
-            return []
-
-        # Look for channel entries in the Map section
-        channel_entries = self.root.findall(f".//{self.namespace}Map/{self.namespace}Entry")
-        if not channel_entries:
-            logger.warning("No channel entries found in XML")
-            return []
-
-        channel_info = []
-        for entry in channel_entries:
-            channel_id = entry.get('ChannelID')
-            if channel_id:
-                channel_data = {
-                    'channel_id': int(channel_id),
-                    'magnification': self._get_element_text(entry, 'ObjectiveMagnification'),
-                    'na': self._get_element_text(entry, 'ObjectiveNA'),
-                    'exposure_time': self._get_element_text(entry, 'ExposureTime'),
-                    'exposure_time_unit': self._get_element_attribute(entry, 'ExposureTime', 'Unit'),
-                    'channel_name': self._get_element_text(entry, 'ChannelName'),
-                }
-                channel_info.append(channel_data)
-
-        # Sort by channel ID
-        channel_info.sort(key=lambda x: x['channel_id'])
-
-        logger.debug(f"Channel info: {channel_info}")
-        return channel_info
 
     def get_image_info(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -281,56 +267,10 @@ class OperaPhenixXmlParser:
                 }
                 image_info[image_id] = image_data
 
-        logger.debug(f"Found {len(image_info)} images in XML")
+        logger.debug("Found %d images in XML", len(image_info))
         return image_info
 
-    def get_z_step_size(self) -> float:
-        """
-        Calculate the Z-step size from image positions.
 
-        Returns:
-            Z-step size in micrometers
-        """
-        if self.root is None:
-            return 0.0
-
-        # Extract all PositionZ elements
-        position_z_elems = self.root.findall(f".//{self.namespace}PositionZ")
-        if not position_z_elems:
-            logger.warning("No PositionZ elements found in XML")
-            return 0.0
-
-        # Extract unique Z positions
-        z_positions = set()
-        for elem in position_z_elems:
-            if elem.text and elem.get('Unit', '').lower() == 'm':
-                z_positions.add(float(elem.text))
-
-        # Sort Z positions
-        z_positions = sorted(z_positions)
-        logger.debug(f"Found {len(z_positions)} unique Z positions: {z_positions}")
-
-        if len(z_positions) <= 1:
-            logger.warning("Not enough Z positions to calculate step size")
-            return 0.0
-
-        # Calculate differences between consecutive Z positions
-        diffs = [abs(z_positions[i+1] - z_positions[i]) for i in range(len(z_positions)-1)]
-
-        # Use the median difference as the Z-step size
-        if diffs:
-            # Find the most common difference (mode)
-            from collections import Counter
-            diff_counts = Counter(diffs)
-            most_common_diff = diff_counts.most_common(1)[0][0]
-
-            # Convert from meters to micrometers
-            z_step_size = most_common_diff * 1e6
-            logger.info(f"Calculated Z-step size: {z_step_size:.2f} µm")
-            return z_step_size
-
-        logger.warning("Could not calculate Z-step size from XML")
-        return 0.0
 
     def get_well_positions(self) -> Dict[str, Tuple[int, int]]:
         """
@@ -357,7 +297,7 @@ class OperaPhenixXmlParser:
             if well_id and row and col:
                 well_positions[well_id] = (int(row), int(col))
 
-        logger.debug(f"Well positions: {well_positions}")
+        logger.debug("Well positions: %s", well_positions)
         return well_positions
 
     def _get_element_text(self, parent_elem, tag_name: str) -> Optional[str]:

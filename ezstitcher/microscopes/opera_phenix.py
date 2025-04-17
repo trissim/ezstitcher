@@ -177,10 +177,10 @@ class OperaPhenixMetadataHandler(MetadataHandler):
                 grid_size = xml_parser.get_grid_size()
 
                 if grid_size[0] > 0 and grid_size[1] > 0:
-                    logger.info(f"Determined grid size from Opera Phenix Index.xml: {grid_size[0]}x{grid_size[1]}")
+                    logger.info("Determined grid size from Opera Phenix Index.xml: %dx%d", grid_size[0], grid_size[1])
                     return grid_size
             except Exception as e:
-                logger.error(f"Error parsing Opera Phenix Index.xml: {e}")
+                logger.error("Error parsing Opera Phenix Index.xml: %s", e)
 
         # Default grid dimensions
         logger.warning("Using default grid dimensions: 2x2")
@@ -205,11 +205,11 @@ class OperaPhenixMetadataHandler(MetadataHandler):
                 pixel_size = xml_parser.get_pixel_size()
 
                 if pixel_size > 0:
-                    logger.info(f"Determined pixel size from Opera Phenix Index.xml: {pixel_size} µm")
+                    logger.info("Determined pixel size from Opera Phenix Index.xml: %.4f μm", pixel_size)
                     return pixel_size
             except Exception as e:
-                logger.error(f"Error getting pixel size from Opera Phenix Index.xml: {e}")
+                logger.error("Error getting pixel size from Opera Phenix Index.xml: %s", e)
 
         # Default value
-        logger.warning("Could not determine pixel size from Opera Phenix Index.xml, using default 0.65 µm")
+        logger.warning("Using default pixel size: 0.65 μm")
         return 0.65  # Default value in micrometers

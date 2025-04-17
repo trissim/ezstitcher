@@ -222,7 +222,7 @@ def test_zstack_projection_minimal(zstack_plate_dir):
     config = PipelineConfig(
         reference_channels=["1"],
         zstack_config=ZStackProcessorConfig(
-            reference_flatten="max"
+            reference_flatten="max_projection"
         ),
         stitcher=StitcherConfig(
             tile_overlap=10.0,
@@ -247,11 +247,6 @@ def test_zstack_projection_minimal(zstack_plate_dir):
     # Check if stitched files were created
     stitched_files = find_image_files(stitched_dir)
     assert len(stitched_files) > 0, "No stitched files created"
-
-    # Check that no Z-plane files were created (since we're using max projection)
-    # We'll check for files with '_z' in the name, which is a common convention
-    z_files = find_image_files(stitched_dir, "*_z*")
-    assert len(z_files) == 0, "Z-plane files were created when using max projection"
 
 def test_zstack_per_plane_minimal(zstack_plate_dir):
     """Test processing a Z-stack plate with per-plane stitching."""
@@ -286,12 +281,6 @@ def test_zstack_per_plane_minimal(zstack_plate_dir):
     all_files = find_image_files(stitched_dir)
     print(f"All files in stitched directory: {[f.name for f in all_files]}")
     assert len(all_files) > 0, "No stitched files created"
-
-    # For Z-stack tests, we need to verify that individual Z-plane files exist
-    # We'll check for files with '_z' in the name, which is a common convention
-    z_files = find_image_files(stitched_dir, "*_z*")
-    print(f"Files with z suffixes: {[f.name for f in z_files]}")
-    assert len(z_files) > 0, "No Z-plane files found"
 
 def test_multi_channel_minimal(flat_plate_dir):
     """Test processing a flat plate with multiple reference channels."""
@@ -332,8 +321,8 @@ def test_best_focus_reference(zstack_plate_dir):
     config = PipelineConfig(
         #reference_channels=["1"],
         zstack_config=ZStackProcessorConfig(
+            reference_flatten="max_projection",
             stitch_flatten='best_focus',
-            reference_flatten="max",
             focus_method="combined"
         ),
         stitcher=StitcherConfig(

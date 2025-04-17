@@ -149,13 +149,13 @@ class ZStackProcessor:
         Returns:
             numpy.ndarray: Projected image
         """
-        if method == "max":
+        if method == "max_projection":
             return self.image_preprocessor.max_projection(stack)
-        elif method == "mean":
+        elif method == "mean_projection":
             return self.image_preprocessor.mean_projection(stack)
         elif method == "best_focus":
             best_idx, _ = self.focus_analyzer.find_best_focus(stack)
             return stack[best_idx]
         else:
-            logger.warning(f"Unknown projection method: {method}, using max")
+            logger.warning(f"Unknown projection method: {method}, using max_projection")
         return self.image_preprocessor.max_projection(stack)
