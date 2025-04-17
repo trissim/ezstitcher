@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Union
 
 from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-from ezstitcher.core.config import ZStackProcessorConfig, StitcherConfig, PipelineConfig
+from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 from ezstitcher.core.image_locator import ImageLocator
 
@@ -221,9 +221,7 @@ def test_zstack_projection_minimal(zstack_plate_dir):
     # Create pipeline configuration
     config = PipelineConfig(
         reference_channels=["1"],
-        zstack_config=ZStackProcessorConfig(
-            reference_flatten="max_projection"
-        ),
+        reference_flatten="max_projection",
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,
@@ -253,10 +251,8 @@ def test_zstack_per_plane_minimal(zstack_plate_dir):
     # Create pipeline configuration
     config = PipelineConfig(
         reference_channels=["1","2"],
-        zstack_config=ZStackProcessorConfig(
-            reference_flatten="max",  # No projection, keep all planes
-            stitch_flatten=None
-        ),
+        reference_flatten="max",  # No projection, keep all planes
+        stitch_flatten=None,
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,
@@ -320,11 +316,9 @@ def test_best_focus_reference(zstack_plate_dir):
     # Create pipeline configuration
     config = PipelineConfig(
         #reference_channels=["1"],
-        zstack_config=ZStackProcessorConfig(
-            reference_flatten="max_projection",
-            stitch_flatten='best_focus',
-            focus_method="combined"
-        ),
+        reference_flatten="max_projection",
+        stitch_flatten='best_focus',
+        focus_method="combined",
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,

@@ -35,7 +35,7 @@ class PipelineOrchestrator:
         self.image_preprocessor = ImagePreprocessor()
 
         # Initialize focus analyzer directly
-        focus_config = config.zstack_config.focus_config or FocusAnalyzerConfig(method=config.zstack_config.focus_method)
+        focus_config = config.focus_config or FocusAnalyzerConfig(method=config.focus_method)
         self.focus_analyzer = FocusAnalyzer(focus_config)
 
         self.microscope_handler = None
@@ -107,8 +107,16 @@ class PipelineOrchestrator:
                 self.fs_manager.ensure_directory(dir_path)
 
             # Get patterns by well
-            patterns_by_well = self.microscope_handler.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter)
-            patterns_by_well_z = self.microscope_handler.auto_detect_patterns(dirs['input'], well_filter=self.config.well_filter, variable_site=False, variable_z=True)
+            patterns_by_well = self.microscope_handler.auto_detect_patterns(
+                dirs['input'],
+                well_filter=self.config.well_filter,
+                variable_components=['site']
+            )
+            patterns_by_well_z = self.microscope_handler.auto_detect_patterns(
+                dirs['input'],
+                well_filter=self.config.well_filter,
+                variable_components=['z_index']
+            )
             # Well filter is already applied in auto_detect_patterns
 
             # Process each well
@@ -204,7 +212,7 @@ class PipelineOrchestrator:
                                                                      site=meta['site'],
                                                                      z_index='{iii}',
                                                                      extension='.tif'))
-        flatten_method = self.config.zstack_config.reference_flatten
+        flatten_method = self.config.reference_flatten
         flattened_files = self.flatten_zstacks(dirs['processed'],dirs['processed'],flatten_patterns,method=flatten_method)
 
         if flattened_files:
@@ -253,7 +261,7 @@ class PipelineOrchestrator:
                                                                      z_index='{iii}',
                                                                      extension='.tif'))
 
-        flatten_method = self.config.zstack_config.stitch_flatten
+        flatten_method = self.config.stitch_flatten
         flattened_files = self.flatten_zstacks(dirs['post_processed'],dirs['post_processed'],flatten_patterns,method=flatten_method)
 
         if flattened_files:
@@ -455,7 +463,11 @@ class PipelineOrchestrator:
             channels_to_stitch.append("composite")
 
         # Use auto_detect_patterns to find all patterns for this well
-        patterns_by_well = self.microscope_handler.parser.auto_detect_patterns(dirs['post_processed'], well_filter=[well])
+        patterns_by_well = self.microscope_handler.parser.auto_detect_patterns(
+            dirs['post_processed'],
+            well_filter=[well],
+            variable_components=['site']
+        )
 
         if not patterns_by_well or well not in patterns_by_well:
             logger.warning(f"No patterns found for well {well} in {dirs['post_processed']}")
