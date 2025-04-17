@@ -152,7 +152,7 @@ class PipelineOrchestrator:
         self.process_final_images(well, wavelength_patterns, wavelength_patterns_z, dirs)
 
         # 4. Stitch final images
-        self.stitch_images(well, wavelength_patterns, dirs, positions_file)
+        self.stitch_images(well, dirs, positions_file)
 
     def process_reference_images(self, well, wavelength_patterns, wavelength_patterns_z, dirs):
         """
@@ -192,7 +192,7 @@ class PipelineOrchestrator:
         composite_files = self.create_composite(
             well,
             dirs['processed'],
-            {ch: wavelength_patterns[ch] for ch in reference_channels},
+            wavelength_patterns,
             self.config.reference_composite_weights
         )
 
@@ -242,7 +242,17 @@ class PipelineOrchestrator:
             )
             processed_files.extend(tile_files)
 
-        flatten_patterns = self._create_flatten_patterns(patterns, include_channel=True)
+        patterns_chan = self.microscope_handler.parser.auto_detect_patterns(
+            dirs['post_processed'],
+            well_filter=[well],
+            variable_components=['z_index']
+        )[well]
+
+        flatten_patterns = []
+        for patterns in patterns_chan.values():
+            flatten_patterns.extend(patterns)
+
+        #flatten_patterns = self._create_flatten_patterns(all_patterns, include_channel=True)
 
         flatten_method = self.config.stitch_flatten
         flattened_files = self.flatten_zstacks(dirs['post_processed'],dirs['post_processed'],flatten_patterns,method=flatten_method)
@@ -437,28 +447,24 @@ class PipelineOrchestrator:
 
         return positions_file, reference_pattern
 
-    def stitch_images(self, well, wavelength_patterns, dirs, positions_file):
+    def stitch_images(self, well, dirs, positions_file):
         """
         Stitch images for a well.
 
         Args:
             well: Well identifier
-            wavelength_patterns: Dictionary mapping wavelengths to patterns
             dirs: Dictionary of directories
             positions_file: Path to positions file
         """
         logger.info("Stitching images for well %s", well)
 
-        # Get grid dimensions
-        grid_dims = self.microscope_handler.get_grid_dimensions(dirs['input'])
-
         # Always stitch all available channels
-        channels_to_stitch = list(wavelength_patterns.keys())
-        logger.info("Stitching all %d available channels for well %s", len(channels_to_stitch), well)
+        #channels_to_stitch = list(wavelength_patterns.keys())
+        #logger.info("Stitching all %d available channels for well %s", len(channels_to_stitch), well)
 
         # Add composite if needed
-        if len(channels_to_stitch) > 1 and self.config.final_composite_weights:
-            channels_to_stitch.append("composite")
+        #if len(channels_to_stitch) > 1 and self.config.final_composite_weights:
+        #    channels_to_stitch.append("composite")
 
         # Use auto_detect_patterns to find all patterns for this well
         patterns_by_well = self.microscope_handler.parser.auto_detect_patterns(

@@ -715,19 +715,30 @@ class SyntheticMicroscopyGenerator:
                     site_positions[site_index] = (x_pos, y_pos)
                     site_index += 1
 
-            # For multiple Z-stack levels, create proper ZStep folders
+            # For multiple Z-stack levels
             if self.z_stack_levels > 1:
-                # Make sure all ZStep folders are created first
-                for z in range(self.z_stack_levels):
-                    z_level = z + 1  # 1-based Z level index
-                    zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
-                    zstep_dir.mkdir(exist_ok=True)
-                    print(f"Created ZStep folder: {zstep_dir}")
+                # Handle differently based on format
+                if self.format == 'ImageXpress':
+                    # For ImageXpress, create ZStep folders
+                    # Make sure all ZStep folders are created first
+                    for z in range(self.z_stack_levels):
+                        z_level = z + 1  # 1-based Z level index
+                        zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
+                        zstep_dir.mkdir(exist_ok=True)
+                        print(f"Created ZStep folder: {zstep_dir}")
+                else:  # OperaPhenix
+                    # Opera Phenix doesn't use ZStep folders - all images go directly in the Images folder
+                    print(f"Opera Phenix format: all Z-stack images will be placed directly in the Images folder")
 
                 # Now generate images for each Z-level
                 for z in range(self.z_stack_levels):
                     z_level = z + 1  # 1-based Z level index
-                    zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
+
+                    # For ImageXpress, use ZStep folders; for Opera Phenix, use the Images folder directly
+                    if self.format == 'ImageXpress':
+                        target_dir = self.timepoint_dir / f"ZStep_{z_level}"
+                    else:  # OperaPhenix
+                        target_dir = self.timepoint_dir  # This is already set to self.images_dir for Opera Phenix
 
                     # Generate images for each wavelength at this Z level
                     for w in range(self.wavelengths):
@@ -752,23 +763,23 @@ class SyntheticMicroscopyGenerator:
 
                                 # Create filename based on format
                                 if self.format == 'ImageXpress':
-                                    # ImageXpress format: WellID_sXXX_wY_zZZZ.tif
-                                    # Create filename without Z-index and without zero-padding site indices
+                                    # ImageXpress format: WellID_sXXX_wY.tif (Z-level is indicated by the ZStep folder)
+                                    # Create filename without zero-padding site indices
                                     # This tests the padding functionality in the stitcher
-                                    filename = f"{well}_s{site_index}_w{wavelength}_z{z_level}.tif"
+                                    filename = f"{well}_s{site_index}_w{wavelength}.tif"
                                 else:  # OperaPhenix
                                     # Opera Phenix format: rXXcYYfZZZpWW-chVskNfkNflN.tiff
                                     # Extract row and column from well ID (e.g., 'A01' -> row=1, col=1)
                                     row = ord(well[0]) - ord('A') + 1
                                     col = int(well[1:3])
                                     filename = f"r{row:02d}c{col:02d}f{site_index}p{z_level:02d}-ch{wavelength}sk1fk1fl1.tiff"
-                                filepath = zstep_dir / filename
+                                filepath = target_dir / filename
 
                                 # Save image without compression
                                 tifffile.imwrite(filepath, tile, compression=None)
 
                                 # Print progress with full path for debugging
-                                print(f"  Saved tile: {zstep_dir.name}/{filename} (position: {x_pos}, {y_pos})")
+                                print(f"  Saved tile: {target_dir.name}/{filename} (position: {x_pos}, {y_pos})")
                                 print(f"  Full path: {filepath.resolve()}")
                                 site_index += 1
             else:
