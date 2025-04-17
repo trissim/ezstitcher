@@ -85,9 +85,9 @@ Opera Phenix microscopes typically organize files in the following structure:
 
     plate_folder/
     ├── Images/
-    │   ├── 0101K1F1P1R1.tiff  # Well A01, Channel 1, Field 1, Plane 1, Round 1
-    │   ├── 0101K1F1P2R1.tiff  # Well A01, Channel 1, Field 1, Plane 2, Round 1
-    │   ├── 0101K1F2P1R1.tiff  # Well A01, Channel 1, Field 2, Plane 1, Round 1
+    │   ├── r01c01f01p01-ch1sk1fk1fl1.tif  # Well A01, Channel 1, Field 1, Plane 1 
+    │   ├── r01c01f01p02-ch1sk1fk1fl1.tif  # Well A01, Channel 1, Field 1, Plane 2 
+    │   ├── r01c01f02p01-ch1sk1fk1fl1.tif  # Well A01, Channel 1, Field 2, Plane 1 
     │   └── ...
     ├── Index.xml
     └── ...

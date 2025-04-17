@@ -1,10 +1,10 @@
 Microscope Formats
-=================
+==================
 
 This page describes the file naming conventions and directory structures for different microscope types supported by EZStitcher.
 
 ImageXpress
-----------
+-----------
 
 ImageXpress microscopes use the following file naming convention:
 
@@ -20,7 +20,7 @@ For example:
 - ``A01_s1_w1_z1.tif``: Well A01, Site 1, Channel 1, Z-index 1
 
 Directory Structure
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 ImageXpress typically organizes files in the following structure:
 
@@ -62,7 +62,7 @@ Alternatively, Z-stacks may be organized with Z-index in the filename:
     └── ...
 
 Metadata
-^^^^^^
+^^^^^^&^
 
 ImageXpress metadata is stored in XML files with names like:
 
@@ -77,7 +77,7 @@ The metadata contains information about:
 - Acquisition settings
 
 Opera Phenix
------------
+------------
 
 Opera Phenix microscopes use the following file naming convention:
 
@@ -87,22 +87,22 @@ Opera Phenix microscopes use the following file naming convention:
 
 For example:
 
-- ``0101K1F1P1R1.tiff``: Well A01, Channel 1, Field 1, Plane 1, Round 1
-- ``0101K2F1P1R1.tiff``: Well A01, Channel 2, Field 1, Plane 1, Round 1
-- ``0101K1F2P1R1.tiff``: Well A01, Channel 1, Field 2, Plane 1, Round 1
-- ``0101K1F1P2R1.tiff``: Well A01, Channel 1, Field 1, Plane 2, Round 1
+
+- ``r01c01f01p01-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 1
+- ``r01c01f01p01-ch2sk1fk1fl1.tiff``: Well A01, Channel 2, Field 1, Plane 1
+- ``r01c01f02p01-ch2sk1fk1fl1.tiff``: Well A01, Channel 1, Field 2, Plane 1
+- ``r01c01f01p02-ch2sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 2
 
 Components:
 
-- ``<row>``: Row number (01 = A, 02 = B, etc.)
-- ``<col>``: Column number (01, 02, etc.)
-- ``K<channel>``: Channel number (K1, K2, etc.)
-- ``F<field>``: Field/site number (F1, F2, etc.)
-- ``P<plane>``: Z-plane number (P1, P2, etc.)
-- ``R<round>``: Round number (R1, R2, etc.)
+- ``r<row>``: Row number (r01 = A, r02 = B, etc.)
+- ``c<col>``: Column number (c01, c02, etc.)
+- ``ch<channel>``: Channel number (ch1, ch2, etc.)
+- ``f<field>``: Field/site number (f1, f2, etc.)
+- ``p<plane>``: Z-plane number (p1, p2, etc.)
 
 Directory Structure
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 Opera Phenix typically organizes files in the following structure:
 
@@ -110,15 +110,15 @@ Opera Phenix typically organizes files in the following structure:
 
     plate_folder/
     ├── Images/
-    │   ├── 0101K1F1P1R1.tiff
-    │   ├── 0101K1F1P2R1.tiff
-    │   ├── 0101K1F2P1R1.tiff
+    │   ├── r01c01f01p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f02p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f03p01-ch1sk1fk1fl1.tiff
     │   └── ...
     ├── Index.xml
     └── ...
 
 Metadata
-^^^^^^
+^^^^^^^^
 
 Opera Phenix metadata is stored in XML files with names like:
 
@@ -132,7 +132,7 @@ The metadata contains information about:
 - Acquisition settings
 
 Automatic Detection
-----------------
+-------------------
 
 EZStitcher can automatically detect the microscope type based on the file structure and naming conventions:
 
@@ -153,7 +153,7 @@ The detection algorithm:
 4. Selects the most likely microscope type based on the results
 
 Adding Support for New Microscopes
--------------------------------
+----------------------------------
 
 To add support for a new microscope type:
 
@@ -164,7 +164,7 @@ To add support for a new microscope type:
 See the :doc:`../development/extending` section for details.
 
 Comparison of Microscope Formats
------------------------------
+--------------------------------
 
 .. list-table::
    :header-rows: 1

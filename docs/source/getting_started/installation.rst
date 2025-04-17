@@ -61,7 +61,6 @@ Core Dependencies
 - **tifffile**: TIFF file handling
 - **ashlar**: Image stitching backend
 - **opencv-python**: Computer vision algorithms
-- **pydantic**: Data validation
 - **PyYAML**: YAML file handling
 
 Optional Dependencies
@@ -84,7 +83,7 @@ Common Issues
 
    .. code-block:: bash
 
-       pip install numpy scikit-image scipy pandas imageio tifffile ashlar opencv-python pydantic PyYAML
+       pip install numpy scikit-image scipy pandas imageio tifffile ashlar opencv-python PyYAML
 
 2. **Version Conflicts**:
 

@@ -117,23 +117,29 @@ ImageXpress
 
 .. code-block:: text
 
-    A01_s1_w1.tif
+    A01_s1_w1(_z1).tif
 
 - **A01**: Well identifier (row A, column 01)
-- **s1**: Site identifier (site 1)
+- **s1**: Site/Field identifier (site/field 1)
 - **w1**: Channel identifier (wavelength 1)
+- **z1**: Z/Plane identifier (z/plane 1)
 
 Opera Phenix
 ~~~~~~~~~~~~
 
 .. code-block:: text
 
-    0101K1F1P1R1.tiff
+    r01c01f01p01-ch1sk1fk1fl1.tiff
 
-- **0101**: Well identifier (row 01, column 01, equivalent to A01)
-- **K1**: Channel identifier (channel 1)
-- **F1**: Field identifier (field 1)
-- **P1**: Plane identifier (plane 1)
-- **R1**: Round identifier (round 1)
+- **r01c01**: Well identifier (row 01, column 01, equivalent to A01)
+- **f01**: Site/Field identifier (site/field 1)
+- **p01**: Z/Plane identifier (z/plane 1)
+- **ch1**: Channel identifier (wavelength 1)
+
+- ``r<row>``: Row number (r01 = A, r02 = B, etc.)
+- ``c<col>``: Column number (c01, c02, etc.)
+- ``ch<channel>``: Channel number (ch1, ch2, etc.)
+- ``f<field>``: Field/site number (f1, f2, etc.)
+- ``p<plane>``: Z-plane number (p1, p2, etc.)
 
 These naming conventions are used to extract components from filenames and to generate patterns for finding files.
