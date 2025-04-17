@@ -8,10 +8,13 @@ for ImageXpress microscopes.
 import os
 import re
 import logging
+import tifffile
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
 
 from ezstitcher.core.microscope_interfaces import FilenameParser, MetadataHandler
+from ezstitcher.core.image_locator import ImageLocator
+from ezstitcher.core.file_system_manager import FileSystemManager as fsman
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +195,47 @@ class ImageXpressMetadataHandler(MetadataHandler):
     
     def get_pixel_size(self, plate_path: Union[str, Path]) -> Optional[float]:
         """
+        Extract pixel size from TIFF metadata.
+        
+        Looks for spatial-calibration-x in the ImageDescription tag.
+        
+        Args:
+            image_path: Path to a TIFF image
+            
+        Returns:
+            float: Pixel size in microns (default 1.0 if not found)
+        """
+        for image_path in ImageLocator.find_images_in_directory(plate_path):
+            try:
+                # Read TIFF tags
+                with tifffile.TiffFile(image_path) as tif:
+                    # Try to get ImageDescription tag
+                    if tif.pages[0].tags.get('ImageDescription'):
+                        desc = tif.pages[0].tags['ImageDescription'].value
+                        # Look for spatial calibration using regex
+                        match = re.search(r'id="spatial-calibration-x"[^>]*value="([0-9.]+)"', desc)
+
+                        if match:
+                            print(f"Found pixel size metadata {str(float(match.group(1)))} in {image_path}")
+                            return float(match.group(1))
+                        
+                        # Alternative pattern for some formats
+                        match = re.search(r'Spatial Calibration: ([0-9.]+) [uµ]m', desc)
+                        if match:
+
+                            print(f"Found pixel size metadata {str(float(match.group(1)))} in {image_path}")
+                            return float(match.group(1))
+
+            except Exception as e:
+                print(f"Error reading metadata from {image_path}: {e}")
+            
+            # Default value if metadata not found
+            return 1.0
+
+
+
+
+        """
         Get the pixel size from metadata.
         
         Args:
@@ -202,5 +246,4 @@ class ImageXpressMetadataHandler(MetadataHandler):
         """
         # ImageXpress HTD files typically don't contain pixel size information
         # We would need to extract it from the image metadata
-        logger.warning("Pixel size not available in HTD file, using default")
         return 0.65  # Default value in micrometers

@@ -425,6 +425,7 @@ class PipelineOrchestrator:
             site_padding=DEFAULT_PADDING,
             z_padding=DEFAULT_PADDING
         )
+        grid_dims = self.microscope_handler.get_grid_dimensions(dirs['input'])
 
         # Generate positions
         self.stitcher.generate_positions(

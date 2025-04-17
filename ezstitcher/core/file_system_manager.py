@@ -27,21 +27,12 @@ class FileSystemManager:
     Abstracts away direct file system interactions for improved testability.
     """
 
-    def __init__(self, config=None, filename_parser=None):
-        """
-        Initialize the FileSystemManager.
+    default_extensions = ['.tif', '.TIF', '.tiff', '.TIFF',
+                          '.jpg', '.JPG', '.jpeg', '.JPEG',
+                          '.png', '.PNG']
 
-        Args:
-            config (dict, optional): Configuration dictionary
-            filename_parser (FilenameParser, optional): Parser for microscopy filenames
-        """
-        self.config = config or {}
-        self.default_extensions = ['.tif', '.TIF', '.tiff', '.TIFF',
-                                  '.jpg', '.JPG', '.jpeg', '.JPEG',
-                                  '.png', '.PNG']
-        self.filename_parser = filename_parser
-
-    def ensure_directory(self, directory: Union[str, Path]) -> Path:
+    @staticmethod
+    def ensure_directory(directory: Union[str, Path]) -> Path:
         """
         Ensure a directory exists, creating it if necessary.
 
@@ -55,7 +46,8 @@ class FileSystemManager:
         directory.mkdir(parents=True, exist_ok=True)
         return directory
 
-    def list_image_files(self, directory: Union[str, Path],
+    @staticmethod
+    def list_image_files(directory: Union[str, Path],
                          extensions: Optional[List[str]] = None,
                          recursive: bool = False, # Add recursive argument
                          flatten: bool = False    # Add flatten argument
@@ -73,7 +65,7 @@ class FileSystemManager:
             list: List of Path objects for image files
         """
         if extensions is None:
-            extensions = self.default_extensions
+            extensions = FileSystemManager.default_extensions
 
         # Use ImageLocator to find images, passing through arguments
         # Pass recursive and flatten arguments here
@@ -81,7 +73,8 @@ class FileSystemManager:
 
     # Removed path_list_from_pattern - use pattern_matcher.path_list_from_pattern directly
 
-    def load_image(self, file_path: Union[str, Path]) -> Optional[np.ndarray]:
+    @staticmethod
+    def load_image(file_path: Union[str, Path]) -> Optional[np.ndarray]:
         """
         Load an image and ensure it's 2D grayscale.
 
@@ -113,7 +106,8 @@ class FileSystemManager:
             logger.error(f"Error loading image {file_path}: {e}")
             return None
 
-    def save_image(self, file_path: Union[str, Path], image: np.ndarray,
+    @staticmethod
+    def save_image(file_path: Union[str, Path], image: np.ndarray,
                   compression: Optional[str] = None) -> bool:
         """
         Save an image to disk.
@@ -138,7 +132,8 @@ class FileSystemManager:
             logger.error(f"Error saving image {file_path}: {e}")
             return False
 
-    def copy_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
+    @staticmethod
+    def copy_file(source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
         """
         Copy a file from source to destination, preserving metadata.
 
@@ -165,7 +160,8 @@ class FileSystemManager:
             logger.error(f"Error copying file from {source_path} to {dest_path}: {e}")
             return False
 
-    def remove_directory(self, directory_path: Union[str, Path], recursive: bool = True) -> bool:
+    @staticmethod
+    def remove_directory(directory_path: Union[str, Path], recursive: bool = True) -> bool:
         """
         Remove a directory and optionally all its contents.
 
@@ -194,7 +190,8 @@ class FileSystemManager:
             logger.error(f"Error removing directory {directory_path}: {e}")
             return False
 
-    def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
+    @staticmethod
+    def clean_temp_folders(parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
         """
         Clean up temporary folders created during processing.
 
@@ -217,7 +214,8 @@ class FileSystemManager:
                     import shutil
                     shutil.rmtree(item)
 
-    def create_output_directories(self, plate_path, suffixes):
+    @staticmethod
+    def create_output_directories(plate_path, suffixes):
         """
         Create output directories for a plate.
 
@@ -236,12 +234,13 @@ class FileSystemManager:
         # Create directories for each suffix
         for dir_type, suffix in suffixes.items():
             dir_path = parent_dir / f"{plate_name}{suffix}"
-            self.ensure_directory(dir_path)
+            FileSystemManager.ensure_directory(dir_path)
             dirs[dir_type] = dir_path
 
         return dirs
 
-    def find_file_recursive(self, directory: Union[str, Path], filename: str) -> Optional[Path]:
+    @staticmethod
+    def find_file_recursive(directory: Union[str, Path], filename: str) -> Optional[Path]:
         """
         Recursively search for a file by name in a directory and its subdirectories.
         Returns the first instance found.
@@ -265,7 +264,7 @@ class FileSystemManager:
             # Recursively search in subdirectories
             for item in directory.iterdir():
                 if item.is_dir():
-                    result = self.find_file_recursive(item, filename)
+                    result = FileSystemManager.find_file_recursive(item, filename)
                     if result is not None:
                         return result
 
@@ -275,8 +274,8 @@ class FileSystemManager:
             logger.error(f"Error searching for file {filename} in {directory}: {e}")
             return None
 
-
-    def get_or_detect_parser(self, directory: Union[str, Path]) -> Optional[FilenameParser]:
+    @staticmethod
+    def _detect_parser(directory: Union[str, Path]) -> Optional[FilenameParser]:
         """
         Get the configured parser or detect one from files in the directory.
 
@@ -287,9 +286,6 @@ class FileSystemManager:
             FilenameParser or None: The parser to use, or None if detection fails
         """
 
-        # Use the configured parser if available
-        if self.filename_parser is not None:
-            return self.filename_parser
 
         # Otherwise, create a MicroscopeHandler with auto-detection
         try:
@@ -305,7 +301,8 @@ class FileSystemManager:
             logger.error(f"Error detecting parser for files in {directory}: {e}")
             return None
 
-    def rename_files_with_consistent_padding(self, directory, parser=None, width=3, force_suffixes=False):
+    @staticmethod
+    def rename_files_with_consistent_padding(directory, parser=None, width=3, force_suffixes=False):
         """
         Rename files in a directory to have consistent site number and Z-index padding.
         Optionally force the addition of missing optional suffixes (site, channel, z-index).
@@ -325,7 +322,7 @@ class FileSystemManager:
 
         # Use provided parser or detect one
         if parser is None:
-            parser = self.get_or_detect_parser(directory)
+            parser = FileSystemManager._detect_parser(directory)
             if parser is None:
                 return {}  # No parser available
 
@@ -383,7 +380,8 @@ class FileSystemManager:
 
         return rename_map
 
-    def detect_zstack_folders(self, plate_folder, pattern=None):
+    @staticmethod
+    def detect_zstack_folders(plate_folder, pattern=None):
         """
         Detect Z-stack folders in a plate folder.
 
@@ -406,7 +404,8 @@ class FileSystemManager:
 
         return bool(z_folders), z_folders
 
-    def organize_zstack_folders(self, plate_folder, filename_parser=None):
+    @staticmethod
+    def organize_zstack_folders(plate_folder, filename_parser=None):
         """
         Organize Z-stack folders by moving files to the plate folder with proper naming.
 
@@ -419,11 +418,10 @@ class FileSystemManager:
         """
         # Auto-detect the parser if it's not provided
         if filename_parser is None:
-            handler = MicroscopeHandler(plate_folder=plate_folder, microscope_type='auto')
-            filename_parser = handler.parser
+            filename_parser = FileSystemManager._detect_parser(plate_folder)
             logger.info("Auto-detected parser for plate folder")
 
-        has_zstack_folders, z_folders = self.detect_zstack_folders(plate_folder)
+        has_zstack_folders, z_folders = FileSystemManager.detect_zstack_folders(plate_folder)
         if not has_zstack_folders:
             return False
 
@@ -432,7 +430,7 @@ class FileSystemManager:
         # Process each Z-stack folder
         for z_index, z_folder in z_folders:
             # Get all image files in this folder
-            image_files = self.list_image_files(z_folder)
+            image_files = FileSystemManager.list_image_files(z_folder)
 
             for img_file in image_files:
                 # Parse the filename
@@ -451,15 +449,16 @@ class FileSystemManager:
 
                 # Copy file to plate folder
                 new_path = plate_path / new_name
-                self.copy_file(img_file, new_path)
+                FileSystemManager.copy_file(img_file, new_path)
 
         # Remove Z-stack folders
         for _, z_folder in z_folders:
-            self.remove_directory(z_folder)
+            FileSystemManager.remove_directory(z_folder)
 
         return True
 
-    def cleanup_processed_files(self, processed_files, output_files):
+    @staticmethod
+    def cleanup_processed_files(processed_files, output_files):
         """
         Clean up processed files after they've been used to create output files.
 
