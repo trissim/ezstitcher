@@ -38,7 +38,7 @@ class SyntheticMicroscopyGenerator:
                  stage_error_px=2,
                  wavelengths=2,
                  z_stack_levels=1,
-                 z_step_size=1.0,
+                 z_step_size=0.1,
                  num_cells=50,
                  cell_size_range=(10, 30),
                  cell_eccentricity_range=(0.1, 0.5),
@@ -51,7 +51,7 @@ class SyntheticMicroscopyGenerator:
                  wavelength_backgrounds=None,  # Background intensities for each wavelength
                  wells=['A01'],  # List of wells to generate
                  format='ImageXpress',  # Format of the filenames ('ImageXpress' or 'OperaPhenix')
-                 auto_image_size=False,  # Automatically calculate image size based on grid and tile size
+                 auto_image_size=True,  # Automatically calculate image size based on grid and tile size
                  random_seed=None):
         """
         Initialize the synthetic microscopy generator.
@@ -371,7 +371,7 @@ class SyntheticMicroscopyGenerator:
             # Scale blur by z_step_size to create more realistic Z-stack effect
             # z_step_size controls the amount of blur between Z-steps
             # Reduce blur by at least 4-fold
-            blur_sigma = (self.z_step_size / 4.0) * (1.0 + 2.0 * (1.0 - z_factor))
+            blur_sigma = (self.z_step_size) * (1.0 + 2.0 * (1.0 - z_factor))
             print(f"  Z-level {z_level}: blur_sigma={blur_sigma:.2f} (z_factor={z_factor:.2f}, z_step_size={self.z_step_size})")
             image = filters.gaussian(image, sigma=blur_sigma, preserve_range=True)
 

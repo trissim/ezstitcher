@@ -54,13 +54,13 @@ class PipelineConfig:
 
     # Reference processing (for position generation)
     reference_channels: List[str] = field(default_factory=lambda: ["1"])
-    reference_preprocessing: Optional[Dict[str, Callable]] = None
+    reference_processing: Optional[Union[Callable, List[Callable], Dict[str, Union[Callable, List[Callable]]]]] = None
+
     reference_composite_weights: Optional[Dict[str, float]] = None
 
     # Final processing (for stitched output)
     # Note: All available channels are always processed and stitched
-    final_preprocessing: Optional[Dict[str, Callable]] = None
-    final_composite_weights: Optional[Dict[str, float]] = None
+    final_processing: Optional[Dict[str, Callable]] = None
 
     # Stitching configuration
     stitcher: StitcherConfig = field(default_factory=StitcherConfig)

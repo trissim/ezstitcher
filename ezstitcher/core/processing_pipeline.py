@@ -175,9 +175,9 @@ class PipelineOrchestrator:
         # Track processed files for cleanup
         processed_files = []
 
-        # Process each reference channel
+        # Process each reference channel grouped by variable sites
         for channel in reference_channels:
-            patterns = wavelength_patterns_z[channel]
+            patterns = wavelength_patterns[channel]
 
             # Apply tile processing
             tile_files = self.process_tiles(
@@ -200,9 +200,22 @@ class PipelineOrchestrator:
         if composite_files:
             logger.info("Cleaning up processed tiles after reference composition")
             self.fs_manager.cleanup_processed_files(processed_files, composite_files)
+#
+#        # Flatten Z-stacks if needed
+#        flatten_patterns = self._create_flatten_patterns(patterns, include_channel=False)
+        patterns_chan = self.microscope_handler.parser.auto_detect_patterns(
+            dirs['processed'],
+            well_filter=[well],
+            variable_components=['z_index']
+        )[well]
 
-        # Flatten Z-stacks if needed
-        flatten_patterns = self._create_flatten_patterns(patterns, include_channel=False)
+        flatten_patterns = []
+        for patterns in patterns_chan.values():
+            flatten_patterns.extend(patterns)
+
+
+
+
         flatten_method = self.config.reference_flatten
         flattened_files = self.flatten_zstacks(dirs['processed'],dirs['processed'],flatten_patterns,method=flatten_method)
 
@@ -275,21 +288,58 @@ class PipelineOrchestrator:
             list: Paths to created images
         """
         output_files = []
-
+        
+        # Determine processing functions for this channel
+        processing_funcs = None
+        if hasattr(self.config, 'reference_processing') and self.config.reference_processing:
+            if callable(self.config.reference_processing) or isinstance(self.config.reference_processing, list):
+                # If reference_processing is a function or list of functions, apply to all channels
+                processing_funcs = self.config.reference_processing
+            elif isinstance(self.config.reference_processing, dict) and channel in self.config.reference_processing:
+                # If reference_processing is a dict, get functions for this channel
+                processing_funcs = self.config.reference_processing[channel]
+    
+        # Convert single function to list for consistent handling
+        if callable(processing_funcs):
+            processing_funcs = [processing_funcs]
+        
+        # Group files by Z-plane for stack processing
+        files_by_z_plane = {}
+        
         for pattern in patterns:
             matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-            images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
+            
+            # Group files by Z-plane
+            for filename in matching_files:
+                metadata = self.microscope_handler.parser.parse_filename(filename)
+                if not metadata:
+                    continue
+                    
+                z_plane = metadata.get('z_index', 1)  # Default to 1 if no z-index
+                well = metadata.get('well')
+                
+                # Create a key for this Z-plane, well, and channel
+                z_key = (well, z_plane)
+                
+                if z_key not in files_by_z_plane:
+                    files_by_z_plane[z_key] = []
+                    
+                files_by_z_plane[z_key].append(filename)
+        
+        # Process each Z-plane stack
+        for (well, z_plane), filenames in files_by_z_plane.items():
+            # Load all images for this Z-plane
+            images = [self.fs_manager.load_image(input_dir / filename) for filename in filenames]
             images = [img for img in images if img is not None]
-            # Apply preprocessing if specified
-            preprocess_func = None
-            if hasattr(self.config, 'preprocessing_funcs') and self.config.preprocessing_funcs:
-                preprocess_func = self.config.preprocessing_funcs.get(channel)
 
-            if preprocess_func and images:
-                images = self.image_preprocessor.apply_function_to_stack(images, preprocess_func)
+            # Apply stack processing functions if specified
+            if processing_funcs and images:
+                for func in processing_funcs:
+                    images = self.image_preprocessor.apply_function_to_stack(images, func)
 
-            for image, matching_file in zip (images, matching_files):
-                output_path = output_dir / matching_file
+            # Save processed images
+            for image, filename in zip(images, filenames):
+                output_path = output_dir / filename
                 self.fs_manager.save_image(output_path, image)
                 output_files.append(output_path)
 
