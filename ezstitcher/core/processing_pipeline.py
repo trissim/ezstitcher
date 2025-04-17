@@ -100,8 +100,16 @@ class PipelineOrchestrator:
             dirs = self._setup_directories(plate_path, input_dir)
 
             # Get patterns by well
-            patterns_by_well = self._detect_patterns(dirs['input'], self.config.well_filter, 'site')
-            patterns_by_well_z = self._detect_patterns(dirs['input'], self.config.well_filter, 'z_index')
+            patterns_by_well = self.microscope_handler.auto_detect_patterns(
+                dirs['input'],
+                well_filter=self.config.well_filter,
+                variable_components=['site']
+            )
+            patterns_by_well_z = self.microscope_handler.auto_detect_patterns(
+                dirs['input'],
+                well_filter=self.config.well_filter,
+                variable_components=['z_index']
+            )
             # Well filter is already applied in auto_detect_patterns
 
             # Process each well
@@ -190,7 +198,8 @@ class PipelineOrchestrator:
 
         # Clean up processed tiles after composition
         if composite_files:
-            self._cleanup_processed_files("reference composition", processed_files, composite_files)
+            logger.info("Cleaning up processed tiles after reference composition")
+            self.fs_manager.cleanup_processed_files(processed_files, composite_files)
 
         # Flatten Z-stacks if needed
         flatten_patterns = self._create_flatten_patterns(patterns, include_channel=False)
@@ -198,7 +207,8 @@ class PipelineOrchestrator:
         flattened_files = self.flatten_zstacks(dirs['processed'],dirs['processed'],flatten_patterns,method=flatten_method)
 
         if flattened_files:
-            self._cleanup_processed_files("reference flattening", composite_files, flattened_files)
+            logger.info("Cleaning up processed tiles after reference flattening")
+            self.fs_manager.cleanup_processed_files(composite_files, flattened_files)
 
     def process_final_images(self, well, wavelength_patterns, wavelength_patterns_z, dirs):
         """
@@ -238,7 +248,8 @@ class PipelineOrchestrator:
         flattened_files = self.flatten_zstacks(dirs['post_processed'],dirs['post_processed'],flatten_patterns,method=flatten_method)
 
         if flattened_files:
-            self._cleanup_processed_files("final flattening", processed_files, flattened_files)
+            logger.info("Cleaning up processed tiles after final flattening")
+            self.fs_manager.cleanup_processed_files(processed_files, flattened_files)
 
     def process_tiles(self, input_dir, output_dir, patterns, channel):
         """
@@ -256,7 +267,9 @@ class PipelineOrchestrator:
         output_files = []
 
         for pattern in patterns:
-            matching_files, images = self._load_images_from_pattern(input_dir, pattern)
+            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
+            images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
+            images = [img for img in images if img is not None]
             # Apply preprocessing if specified
             preprocess_func = None
             if hasattr(self.config, 'preprocessing_funcs') and self.config.preprocessing_funcs:
@@ -353,7 +366,9 @@ class PipelineOrchestrator:
         """
         output_files = []
         for pattern in patterns:
-            matching_files, images = self._load_images_from_pattern(input_dir, pattern)
+            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
+            images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
+            images = [img for img in images if img is not None]
 
             # Create a projection from the Z-stack
             if method is not None:
@@ -435,7 +450,7 @@ class PipelineOrchestrator:
         logger.info("Stitching images for well %s", well)
 
         # Get grid dimensions
-        grid_dims = self.get_grid_dimensions(dirs['input'])
+        grid_dims = self.microscope_handler.get_grid_dimensions(dirs['input'])
 
         # Always stitch all available channels
         channels_to_stitch = list(wavelength_patterns.keys())
@@ -498,24 +513,6 @@ class PipelineOrchestrator:
                 override_names=matching_files
             )
 
-    def _detect_patterns(self, input_dir, well_filter=None, variable_component='site'):
-        """
-        Detect patterns in the input directory.
-
-        Args:
-            input_dir: Input directory
-            well_filter: Optional list of wells to include
-            variable_component: Component to vary in the pattern ('site' or 'z_index')
-
-        Returns:
-            dict: Dictionary mapping wells to patterns
-        """
-        return self.microscope_handler.auto_detect_patterns(
-            input_dir,
-            well_filter=well_filter,
-            variable_components=[variable_component]
-        )
-
     def _setup_directories(self, plate_path, input_dir):
         """
         Set up directory structure for processing.
@@ -574,43 +571,3 @@ class PipelineOrchestrator:
 
         return flatten_patterns
 
-    def _cleanup_processed_files(self, operation_name, source_files, target_files):
-        """
-        Clean up processed files after an operation.
-
-        Args:
-            operation_name: Name of the operation for logging
-            source_files: Files to clean up
-            target_files: Files that replaced the source files
-        """
-        logger.info("Cleaning up processed tiles after %s", operation_name)
-        self.fs_manager.cleanup_processed_files(source_files, target_files)
-
-    def _load_images_from_pattern(self, input_dir, pattern):
-        """
-        Load images from a pattern.
-
-        Args:
-            input_dir: Input directory
-            pattern: File pattern
-
-        Returns:
-            tuple: (matching_files, images)
-        """
-        matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-        images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
-        images = [img for img in images if img is not None]
-        return matching_files, images
-
-    def get_grid_dimensions(self, input_dir):
-        """
-        Get grid dimensions for stitching.
-
-        Args:
-            input_dir: Input directory
-
-        Returns:
-            tuple: (grid_size_x, grid_size_y)
-        """
-        # Use the microscope handler to get grid dimensions
-        return self.microscope_handler.get_grid_dimensions(input_dir)
