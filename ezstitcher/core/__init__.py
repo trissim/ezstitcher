@@ -18,7 +18,6 @@ from ezstitcher.core.config import (
     StitcherConfig,
     FocusAnalyzerConfig,
     ImagePreprocessorConfig,
-    ZStackProcessorConfig,
     PlateProcessorConfig,
     PipelineConfig
 )

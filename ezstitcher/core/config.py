@@ -37,62 +37,7 @@ class ImagePreprocessorConfig:
     composite_weights: Optional[Dict[str, float]] = None
 
 
-@dataclass
-class ZStackProcessorConfig:
-    #"""Configuration for Z-stack processing."""
-    #focus_method: str = "combined"  # Method for focus detection
-    #focus_config: Optional[FocusAnalyzerConfig] = None
-    #projection_method: str = "max"  # Method for z-stack projection (max, mean, best_focus, none)
-    """
-    Configuration for the ZStackProcessor class.
-
-    Attributes:
-        z_reference_function: Function that converts a 3D stack to a 2D image.
-            Can be a string name of a standard function or a callable.
-            Standard functions: "max_projection", "mean_projection", "best_focus".
-            Can also be a custom function that takes a Z-stack and returns a 2D image.
-        save_reference: Whether to save the reference image.
-        stitch_all_z_planes: Whether to stitch all Z-planes using reference positions.
-        additional_projections: Types of additional projections to create.
-        focus_method: Focus detection method to use when using best_focus.
-        focus_config: Configuration for the FocusAnalyzer.
-
-        # Deprecated parameters (kept for backward compatibility)
-        reference_method: Deprecated. Use z_reference_function instead.
-        focus_detect: Deprecated. Use z_reference_function="best_focus" instead.
-        stitch_z_reference: Deprecated. Use z_reference_function instead.
-        create_projections: Deprecated. Use save_reference instead.
-        save_projections: Deprecated. Use save_reference instead.
-        projection_types: Deprecated. Use additional_projections instead.
-    """
-
-#    reference_flatten="max"
-#    stitch_flatten=None
-
-    # Configuration for Z-stack processing
-    reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
-    stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
-    save_reference: bool = True
-    additional_projections: Optional[List[str]] = None
-    focus_method: str = "combined"
-    focus_config: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)
-
-    def __post_init__(self):
-        """Validate and normalize configuration after initialization."""
-        # Validate reference_flatten
-        if isinstance(self.reference_flatten, str):
-            valid_methods = ["max_projection", "mean_projection", "best_focus"]
-            if self.reference_flatten not in valid_methods:
-                logger.warning("Invalid reference_flatten method: %s, using max_projection", self.reference_flatten)
-                self.reference_flatten = "max_projection"
-
-        # Validate stitch_flatten
-        if self.stitch_flatten is not None:
-            if isinstance(self.stitch_flatten, str):
-                valid_methods = ["max_projection", "mean_projection", "best_focus"]
-                if self.stitch_flatten not in valid_methods:
-                    logger.warning("Invalid stitch_flatten method: %s, using max_projection", self.stitch_flatten)
-                    self.stitch_flatten = "max_projection"
+# ZStackProcessorConfig has been removed and merged into PipelineConfig
 
 
 @dataclass
@@ -121,7 +66,12 @@ class PipelineConfig:
     stitcher: StitcherConfig = field(default_factory=StitcherConfig)
 
     # Z-stack processing configuration
-    zstack_config: ZStackProcessorConfig = field(default_factory=ZStackProcessorConfig)
+    reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
+    stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
+    save_reference: bool = True
+    additional_projections: Optional[List[str]] = None
+    focus_method: str = "combined"
+    focus_config: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)
 
 
 @dataclass
@@ -156,7 +106,13 @@ class PlateProcessorConfig:
     stitcher: StitcherConfig = field(default_factory=StitcherConfig)
     focus_analyzer: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)
     image_preprocessor: ImagePreprocessorConfig = field(default_factory=ImagePreprocessorConfig)
-    z_stack_processor: ZStackProcessorConfig = field(default_factory=ZStackProcessorConfig)
+
+    # Z-stack processing configuration
+    reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
+    stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
+    save_reference: bool = True
+    additional_projections: Optional[List[str]] = None
+    focus_method: str = "combined"
 
 
 # Legacy configs for backward compatibility
@@ -190,5 +146,7 @@ class FocusConfig:
 class PlateConfig:
     plate_folder: str = ""
     stitching: StitchingConfig = field(default_factory=StitchingConfig)
-    zstack: ZStackProcessorConfig = field(default_factory=ZStackProcessorConfig)
+    # Z-stack configuration now uses the same fields as PipelineConfig
+    reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
+    stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
     focus: FocusConfig = field(default_factory=FocusConfig)
