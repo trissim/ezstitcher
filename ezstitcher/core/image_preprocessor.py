@@ -366,3 +366,51 @@ class ImagePreprocessor:
 
         # Create mean projection
         return np.mean(stack, axis=0).astype(stack[0].dtype)
+
+    def apply_function_to_stack(self, z_stack, func):
+        """
+        Apply a function to a Z-stack, handling both stack and single-image functions.
+
+        Args:
+            z_stack: Z-stack of images
+            func: Function to apply
+
+        Returns:
+            Processed Z-stack
+        """
+        try:
+            # Try to apply to the whole stack
+            result = func(z_stack)
+            if isinstance(result, list) or (isinstance(result, np.ndarray) and result.ndim > 2):
+                return result
+        except Exception:
+            pass
+
+        # Apply to each image individually
+        return [func(img) for img in z_stack]
+
+    def create_projection(self, stack, method="max_projection", focus_analyzer=None):
+        """
+        Create a projection from a stack using the specified method.
+
+        Args:
+            stack (list): List of images
+            method (str): Projection method (max_projection, mean_projection, best_focus)
+            focus_analyzer (FocusAnalyzer, optional): Focus analyzer for best_focus method
+
+        Returns:
+            numpy.ndarray: Projected image
+        """
+        if method == "max_projection":
+            return self.max_projection(stack)
+        elif method == "mean_projection":
+            return self.mean_projection(stack)
+        elif method == "best_focus":
+            if focus_analyzer is None:
+                logger.warning("No focus analyzer provided for best_focus method, using max_projection instead")
+                return self.max_projection(stack)
+            best_idx, _ = focus_analyzer.find_best_focus(stack)
+            return stack[best_idx]
+        else:
+            logger.warning("Unknown projection method: %s, using max_projection", method)
+            return self.max_projection(stack)

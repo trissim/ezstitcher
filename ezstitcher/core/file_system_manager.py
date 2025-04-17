@@ -12,9 +12,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
 import numpy as np
+import shutil
 
 from ezstitcher.core.microscope_interfaces import FilenameParser
 from ezstitcher.core.image_locator import ImageLocator
+from ezstitcher.core.microscope_interfaces import MicroscopeHandler
 
 logger = logging.getLogger(__name__)
 
@@ -136,63 +138,6 @@ class FileSystemManager:
             logger.error(f"Error saving image {file_path}: {e}")
             return False
 
-#    def create_symlinks_from_pattern(self, source_dir: Union[str, Path], pattern: str, target_dir: Union[str, Path]) -> int:
-#        """
-#        Create symlinks in the target directory for all files matching a pattern in the source directory.
-#
-#        This ensures that reference images are always available in the reference directory,
-#        even when no preprocessing or composition is performed.
-#
-#        Args:
-#            source_dir (str or Path): Directory containing source files
-#            pattern (str): Pattern to match with {iii} placeholder for site index
-#            target_dir (str or Path): Directory to create symlinks in
-#
-#        Returns:
-#            int: Number of symlinks created
-#        """
-#        try:
-#            source_dir = Path(source_dir)
-#            target_dir = Path(target_dir)
-#            self.ensure_directory(target_dir)
-#
-#            # Get matching files
-#            matching_files = self.filename_parser.path_list_from_pattern(source_dir, pattern)
-#            if not matching_files:
-#                logger.warning(f"No files found matching pattern {pattern} in {source_dir}")
-#                return 0
-#
-#            # Create symlinks
-#            count = 0
-#            for filename in matching_files:
-#                source_path = source_dir / filename
-#                target_path = target_dir / filename
-#
-#                # Skip if target already exists
-#                if target_path.exists():
-#                    if target_path.is_symlink() and target_path.resolve() == source_path.resolve():
-#                        logger.debug(f"Symlink already exists: {target_path} -> {source_path}")
-#                        count += 1
-#                        continue
-#                    else:
-#                        logger.warning(f"Target file already exists and is not a symlink to source: {target_path}")
-#                        continue
-#
-#                # Create symlink
-#                try:
-#                    target_path.symlink_to(source_path)
-#                    logger.debug(f"Created symlink: {target_path} -> {source_path}")
-#                    count += 1
-#                except Exception as e:
-#                    logger.error(f"Error creating symlink {target_path} -> {source_path}: {e}")
-#
-#            logger.info(f"Created {count} symlinks in {target_dir}")
-#            return count
-#
-#        except Exception as e:
-#            logger.error(f"Error creating symlinks from {source_dir} to {target_dir}: {e}")
-#            return 0
-
     def copy_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
         """
         Copy a file from source to destination, preserving metadata.
@@ -209,7 +154,6 @@ class FileSystemManager:
             bool: True if successful, False otherwise
         """
         try:
-            import shutil
             # Ensure destination directory exists
             directory = Path(dest_path).parent
             directory.mkdir(parents=True, exist_ok=True)
@@ -249,37 +193,6 @@ class FileSystemManager:
         except Exception as e:
             logger.error(f"Error removing directory {directory_path}: {e}")
             return False
-
-#    def find_metadata_file(self, plate_path: Union[str, Path], filename_pattern: str = "*.HTD") -> Optional[Path]:
-#        """
-#        Find a metadata file in a plate folder.
-#
-#        Args:
-#            plate_path (str or Path): Path to the plate folder
-#            filename_pattern (str): Glob pattern for the metadata file
-#
-#        Returns:
-#            Path or None: Path to the metadata file, or None if not found
-#        """
-#        plate_path = Path(plate_path)
-#
-#        # Look for files matching the pattern in the plate directory
-#        matching_files = list(plate_path.glob(filename_pattern))
-#        if matching_files:
-#            # If there are multiple files, try to find one with 'plate' in the name
-#            for file_path in matching_files:
-#                if 'plate' in file_path.name.lower():
-#                    return file_path
-#            # Otherwise, return the first one
-#            return matching_files[0]
-#
-#        # Check parent directory if not found
-#        parent_matching_files = list(plate_path.parent.glob(filename_pattern))
-#        if parent_matching_files:
-#            return parent_matching_files[0]
-#
-#        return None
-
 
     def clean_temp_folders(self, parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
         """
@@ -373,7 +286,6 @@ class FileSystemManager:
         Returns:
             FilenameParser or None: The parser to use, or None if detection fails
         """
-        from ezstitcher.core.microscope_interfaces import MicroscopeHandler
 
         # Use the configured parser if available
         if self.filename_parser is not None:
@@ -471,77 +383,81 @@ class FileSystemManager:
 
         return rename_map
 
+    def detect_zstack_folders(self, plate_folder, pattern=None):
+        """
+        Detect Z-stack folders in a plate folder.
 
-        def mirror_directory_structure(self, source_dir: Union[str, Path], base_output_dir: Union[str, Path]) -> Path:
-            """
-            Mirror the directory structure from source_dir to base_output_dir and copy non-image files.
+        Args:
+            plate_folder (str or Path): Path to the plate folder
+            pattern (str or Pattern, optional): Regex pattern to match Z-stack folders
 
-            This method recursively creates a directory structure in base_output_dir that mirrors the structure
-            in source_dir. It also copies all non-image files (HTD, XML, etc.) to the mirrored directory.
+        Returns:
+            tuple: (has_zstack, z_folders) where z_folders is a list of (z_index, folder_path) tuples
+        """
 
-            Args:
-                source_dir (str or Path): Source directory to mirror
-                base_output_dir (str or Path): Base output directory where the mirrored structure will be created
+        plate_path = ImageLocator.find_image_directory(Path(plate_folder))
 
-            Returns:
-                Path: Path to the mirrored directory
-            """
-            source_dir = Path(source_dir)
-            base_output_dir = Path(base_output_dir)
+        # Use ImageLocator to find Z-stack directories
+        z_folders = ImageLocator.find_z_stack_dirs(
+            plate_path,
+            pattern=pattern or r'ZStep_\d+',
+            recursive=False  # Only look in the immediate directory
+        )
 
-            # Ensure base output directory exists
-            self.ensure_directory(base_output_dir)
+        return bool(z_folders), z_folders
 
-            # Walk through the source directory structure
-            for root, dirs, files in os.walk(source_dir):
-                # Get relative path from source_dir
-                rel_path = Path(root).relative_to(source_dir)
+    def organize_zstack_folders(self, plate_folder, filename_parser=None):
+        """
+        Organize Z-stack folders by moving files to the plate folder with proper naming.
 
-                # Create directories
-                for dir_name in dirs:
-                    # Skip directories that might contain image files but don't need structure mirroring
-                    if dir_name.lower() in ['thumbnails', 'thumb', 'thumbnail']:
-                        continue
-                    self.ensure_directory(base_output_dir / rel_path / dir_name)
+        Args:
+            plate_folder (str or Path): Path to the plate folder
+            filename_parser (FilenameParser, optional): Parser for microscopy filenames
 
-                # Copy non-image files
-                for file_name in files:
-                    if not any(file_name.lower().endswith(ext) for ext in ['.tif', '.tiff', '.jpg', '.jpeg', '.png']):
-                        source_file = Path(root) / file_name
-                        target_file = base_output_dir / rel_path / file_name
-                        logger.info(f"Copying non-image file: {file_name}")
-                        self.copy_file(source_file, target_file)
+        Returns:
+            bool: True if Z-stack was organized, False otherwise
+        """
+        # Auto-detect the parser if it's not provided
+        if filename_parser is None:
+            handler = MicroscopeHandler(plate_folder=plate_folder, microscope_type='auto')
+            filename_parser = handler.parser
+            logger.info("Auto-detected parser for plate folder")
 
-            # Return the base output directory
-            return base_output_dir
+        has_zstack_folders, z_folders = self.detect_zstack_folders(plate_folder)
+        if not has_zstack_folders:
+            return False
 
-        # _copy_non_image_files method has been merged into mirror_directory_structure
+        plate_path = ImageLocator.find_image_directory(plate_folder)
 
-        def move_file(self, source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
-            """
-            Move a file from source to destination.
+        # Process each Z-stack folder
+        for z_index, z_folder in z_folders:
+            # Get all image files in this folder
+            image_files = self.list_image_files(z_folder)
 
-            Ensures the destination directory exists and handles errors.
+            for img_file in image_files:
+                # Parse the filename
+                metadata = filename_parser.parse_filename(str(img_file))
+                if not metadata:
+                    continue
 
-            Args:
-                source_path (str or Path): Source file path.
-                dest_path (str or Path): Destination file path.
+                # Construct new filename with Z-index
+                new_name = filename_parser.construct_filename(
+                    well=metadata['well'],
+                    site=metadata['site'],
+                    channel=metadata['channel'],
+                    z_index=z_index,
+                    extension=metadata['extension']
+                )
 
-            Returns:
-                bool: True if successful, False otherwise.
-            """
-            try:
-                import shutil
-                dest_dir = Path(dest_path).parent
-                self.ensure_directory(dest_dir) # Ensure destination directory exists
+                # Copy file to plate folder
+                new_path = plate_path / new_name
+                self.copy_file(img_file, new_path)
 
-                shutil.move(str(source_path), str(dest_path))
-                logger.debug(f"Moved file from {source_path} to {dest_path}")
-                return True
-            except Exception as e:
-                logger.error(f"Error moving file from {source_path} to {dest_path}: {e}")
-                return False
-            return all_success
+        # Remove Z-stack folders
+        for _, z_folder in z_folders:
+            self.remove_directory(z_folder)
+
+        return True
 
     def cleanup_processed_files(self, processed_files, output_files):
         """
@@ -570,9 +486,9 @@ class FileSystemManager:
                     path.unlink()
                     removed_count += 1
             except Exception as e:
-                logger.warning(f"Failed to remove processed file {file_path}: {e}")
+                logger.warning("Failed to remove processed file %s: %s", file_path, e)
 
         if removed_count > 0:
-            logger.info(f"Cleaned up {removed_count} processed files")
+            logger.info("Cleaned up %d processed files", removed_count)
 
         return removed_count

@@ -6,7 +6,6 @@ This module contains dataclasses for configuration of different components.
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union, Callable, Any, Tuple
-from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -70,13 +69,13 @@ class ZStackProcessorConfig:
 #    reference_flatten="max"
 #    stitch_flatten=None
 
-    """Configuration for Z-stack processing."""
+    # Configuration for Z-stack processing
     reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
     stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
     save_reference: bool = True
     additional_projections: Optional[List[str]] = None
     focus_method: str = "combined"
-    focus_config: FocusAnalyzerConfig = field(default_factory=lambda: FocusAnalyzerConfig())
+    focus_config: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)
 
     def __post_init__(self):
         """Validate and normalize configuration after initialization."""
@@ -84,7 +83,7 @@ class ZStackProcessorConfig:
         if isinstance(self.reference_flatten, str):
             valid_methods = ["max_projection", "mean_projection", "best_focus"]
             if self.reference_flatten not in valid_methods:
-                logger.warning(f"Invalid reference_flatten method: {self.reference_flatten}, using max_projection")
+                logger.warning("Invalid reference_flatten method: %s, using max_projection", self.reference_flatten)
                 self.reference_flatten = "max_projection"
 
         # Validate stitch_flatten
@@ -92,7 +91,7 @@ class ZStackProcessorConfig:
             if isinstance(self.stitch_flatten, str):
                 valid_methods = ["max_projection", "mean_projection", "best_focus"]
                 if self.stitch_flatten not in valid_methods:
-                    logger.warning(f"Invalid stitch_flatten method: {self.stitch_flatten}, using max_projection")
+                    logger.warning("Invalid stitch_flatten method: %s, using max_projection", self.stitch_flatten)
                     self.stitch_flatten = "max_projection"
 
 
