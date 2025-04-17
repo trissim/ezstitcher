@@ -18,7 +18,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8, <=3.11.9",
+    python_requires=">=3.8, <3.12",
     install_requires=[
         "numpy>=1.20.0",
         "scikit-image>=0.18.0",
@@ -28,6 +28,8 @@ setup(
         "tifffile>=2021.1.1",
         "ashlar>=1.14.0",
         "opencv-python>=4.5.0",
+        "pydantic>=2.0.0",
+        "PyYAML>=6.0",
     ],
     entry_points={
         "console_scripts": [

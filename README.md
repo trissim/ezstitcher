@@ -1,298 +1,217 @@
 # EZStitcher
 
-An easy-to-use microscopy image stitching and processing tool for high-content imaging applications.
+A modern, object-oriented microscopy image stitching and processing toolkit for high-content imaging applications, with comprehensive support for ImageXpress and Opera Phenix microscopes.
 
-## Features
+[![Documentation Status](https://readthedocs.org/projects/ezstitcher/badge/?version=latest)](https://ezstitcher.readthedocs.io/en/latest/?badge=latest)
 
-- Microscopy image processing with various filters (blur, edge detection, tophat)
-- Histogram matching and normalization for consistent imaging
-- Image stitching with subpixel precision
-- Enhanced Z-stack handling with advanced focus detection
-- 3D projections for Z-stack visualization (maximum, mean, etc.)
-- Automatic best-focus plane detection across Z-stacks
-- Support for multi-channel fluorescence microscopy
-- Well and pattern detection for plate-based experiments
-- Automatic metadata extraction from TIFF files
-- Synthetic microscopy data generation for testing
-- Comprehensive test suite with code coverage analysis
-- No dependency on imagecodecs (uses uncompressed TIFF)
+## Overview
+
+EZStitcher provides a robust framework for processing and stitching microscopy images, with special emphasis on handling multi-channel fluorescence data and Z-stacks. The library features a clean, modular architecture that makes it easy to extend and customize for specific research needs.
+
+## Key Features
+
+### Core Capabilities
+- **High-precision image stitching** with subpixel alignment
+- **Multi-channel support** for fluorescence microscopy
+- **Automatic microscope type detection** for seamless workflow
+- **Comprehensive Z-stack handling** with multiple processing options
+- **Modular pipeline architecture** for customizable workflows
+
+### Z-Stack Processing
+- Advanced focus detection algorithms
+- Multiple projection methods (max, mean, standard deviation)
+- Per-plane Z-stack stitching with consistent alignment
+- Custom projection function support
+
+### Microscope Support
+- **ImageXpress**: Full support with HTD metadata parsing
+- **Opera Phenix**: Full support with XML metadata parsing
+- Extensible architecture for adding new microscope types
+
+### Architecture
+- Clean object-oriented design with clear separation of concerns
+- Composable pipeline components for flexible workflows
+- Comprehensive configuration system with sensible defaults
+- Robust error handling and logging
 
 ## Installation
 
 ### Requirements
 
-- **Python 3.11.9** (recommended for best compatibility with all dependencies)
-- Git
+- **Python 3.11.9** (recommended for best compatibility)
+- Core dependencies: numpy, scikit-image, scipy, pandas, tifffile, ashlar, opencv-python
 
-### Linux/macOS
+### Quick Install
 
 ```bash
 # Clone the repository
 git clone https://github.com/trissim/ezstitcher.git
 cd ezstitcher
 
-# Create and activate a virtual environment with Python 3.11.9
-python3.11 -m venv .venv
-source .venv/bin/activate
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate     # Windows
 
 # Install the package in development mode
 pip install -e .
 ```
 
-### Windows
+For detailed installation instructions, including troubleshooting common issues, see the [Installation Guide](docs/installation.md).
 
-```powershell
-# Clone the repository
-git clone https://github.com/trissim/ezstitcher.git
-cd ezstitcher
+## Usage Examples
 
-# Create and activate a virtual environment with Python 3.11.9
-py -3.11 -m venv .venv
-.venv\Scripts\activate
-
-# Install the package in development mode
-pip install -e .
-```
-
-### Python Version Note
-
-Python 3.11.9 is recommended because it provides the best compatibility with all required dependencies.
-
-## Command Line Usage
-
-```bash
-# Process a plate folder
-ezstitcher /path/to/plate_folder --reference-channels 1 2 --tile-overlap 10
-
-# Process a plate folder with Z-stacks
-ezstitcher /path/to/plate_folder --focus-detect --focus-method combined
-
-# Create Z-stack projections
-ezstitcher /path/to/plate_folder --create-projections --projection-types max,mean,std
-
-# Full Z-stack workflow with best focus detection and stitching
-ezstitcher /path/to/plate_folder --focus-detect --create-projections --stitch-z-reference best_focus
-
-# Process specific wells
-ezstitcher /path/to/plate_folder --wells A01 B02 C03
-
-# Generate synthetic test data
-generate-synthetic-data --output-dir test_data --grid-size 3 3 --wavelengths 2 --z-stack-levels 3
-
-# Run tests with coverage analysis
-python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
-python -m coverage html
-```
-
-## Python API Usage
-
-### Comprehensive Plate Processing
+### Quick Start
 
 ```python
-from ezstitcher.core.stitcher import process_plate_folder
-from ezstitcher.core.image_process import process_bf
+# Simple function-based API for common tasks
+from ezstitcher.core.main import process_plate
 
-# Process a single plate folder with all features
-process_plate_folder(
-    'path/to/plate_folder',
-    reference_channels=["1", "2"],
-    composite_weights={"1": 0.1, "2": 0.9},
-    preprocessing_funcs={"1": process_bf},
-    tile_overlap=10,
-    max_shift=50,
-    focus_detect=True,                # Enable best focus detection for Z-stacks
-    focus_method="combined",          # Use combined focus metrics
-    create_projections=True,          # Create Z-stack projections
-    projection_types=["max", "mean"], # Types of projections to create
-    stitch_z_reference="best_focus"   # Use best focus images for stitching
+# Process a plate folder with automatic microscope detection
+process_plate('path/to/plate_folder', reference_channels=["1"])
+```
+
+### Object-Oriented Pipeline
+
+```python
+from ezstitcher.core.config import PipelineConfig, StitcherConfig
+from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+
+# Create configuration
+config = PipelineConfig(
+    reference_channels=["1", "2"],  # Use channels 1 and 2 as reference
+    well_filter=["A01", "B02"],    # Only process these wells
+    stitcher=StitcherConfig(
+        tile_overlap=10.0,         # 10% overlap between tiles
+        max_shift=50               # Maximum shift in pixels
+    )
 )
+
+# Create and run the pipeline
+pipeline = PipelineOrchestrator(config)
+pipeline.run("path/to/plate_folder")
 ```
 
-### Basic Stitching (No Z-stacks)
+### Z-Stack Processing
 
 ```python
-from ezstitcher.core.stitcher import process_plate_folder
+from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
+from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
-# Process a plate folder without Z-stack handling
-process_plate_folder(
-    'path/to/plate_folder',
+# Configure Z-stack processing
+config = PipelineConfig(
     reference_channels=["1"],
-    tile_overlap=10,
-    max_shift=50
+    reference_flatten="max",       # Use max projection for reference
+    stitch_flatten="best_focus",   # Use best focus for final images
+    focus_config=FocusAnalyzerConfig(
+        method="combined",         # Combined focus metrics
+        roi=(100, 100, 200, 200)  # Optional ROI for focus detection
+    )
 )
+
+# Create and run the pipeline
+pipeline = PipelineOrchestrator(config)
+pipeline.run("path/to/plate_folder")
 ```
 
-### Multi-Channel Reference Stitching
+### Custom Image Preprocessing
 
 ```python
-from ezstitcher.core.stitcher import process_plate_folder
+import numpy as np
+from ezstitcher.core.config import PipelineConfig
+from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
-# Process using multiple reference channels with custom weights
-process_plate_folder(
-    'path/to/plate_folder',
-    reference_channels=["1", "2"],
-    composite_weights={"1": 0.3, "2": 0.7},
-    tile_overlap=10
+# Define custom preprocessing functions
+def enhance_contrast(image):
+    """Enhance contrast using percentile normalization."""
+    p_low, p_high = np.percentile(image, (2, 98))
+    return np.clip((image - p_low) * (65535 / (p_high - p_low)), 0, 65535).astype(np.uint16)
+
+# Configure with custom preprocessing
+config = PipelineConfig(
+    reference_channels=["1"],
+    preprocessing_funcs={"1": enhance_contrast}
 )
+
+# Create and run the pipeline
+pipeline = PipelineOrchestrator(config)
+pipeline.run("path/to/plate_folder")
 ```
 
-## Z-Stack Processing Features
+For more examples, including command-line usage and advanced configurations, see the [Examples](docs/examples.md) documentation.
 
-EZStitcher includes comprehensive support for processing Z-stack microscopy images:
+## Architecture
 
-### 1. Z-Stack Organization
+EZStitcher is built on a modular, object-oriented architecture that separates concerns and enables flexible workflows.
 
-Automatically detects and organizes Z-stack data from both:
-- Folder-based organization (`ZStep_1`, `ZStep_2`, etc.)
-- Filename-based organization with `_z001`, `_z002` suffixes
+### Core Components
 
-### 2. Best Focus Detection
+<img src="docs/images/architecture.png" alt="EZStitcher Architecture" width="600"/>
 
-Multiple algorithms for identifying the best focused plane in a Z-stack:
-- Combined focus measure (weighted combination of multiple metrics)
-- Normalized variance
-- Laplacian energy (edge detection based)
-- Tenengrad variance (gradient-based)
-- FFT-based focus measures
+- **PipelineOrchestrator**: Central coordinator that manages the entire processing workflow
+- **MicroscopeHandler**: Handles microscope-specific functionality through composition
+- **Stitcher**: Performs image stitching with subpixel precision
+- **FocusAnalyzer**: Provides multiple focus detection algorithms for Z-stacks
+- **ImagePreprocessor**: Handles image normalization, filtering, and compositing
+- **FileSystemManager**: Manages file operations and directory structure
+- **ImageLocator**: Locates and organizes images in various directory structures
 
-### 3. 3D Projections
+### Configuration System
 
-Create various projection types from Z-stacks:
-- Maximum intensity projection
-- Mean intensity projection
-- Minimum intensity projection
-- Standard deviation projection
-- Sum projection
+Each component has a corresponding configuration class that encapsulates its settings:
 
-### 4. Z-Aware Stitching
+```python
+from ezstitcher.core.config import PipelineConfig
 
-Stitch microscopy tiles with Z-awareness:
-- Use best focused planes for alignment references
-- Create consistent composite images from different wavelengths
-- Generate positions from reference Z-planes
+# Create a configuration with sensible defaults
+config = PipelineConfig()
 
-## Testing
+# Override specific settings
+config.reference_channels = ["1", "2"]
+config.well_filter = ["A01", "B02"]
+```
+
+### Microscope Support
+
+The architecture includes a plugin system for different microscope types:
+
+- **FilenameParser**: Interface for parsing microscope-specific filenames
+- **MetadataHandler**: Interface for extracting metadata from microscope files
+- **MicroscopeHandler**: Composition-based handler that delegates to specific implementations
+
+New microscope types can be added by implementing these interfaces.
+
+## Development
 
 ### Running Tests
 
-EZStitcher includes a comprehensive test suite that verifies all core functionality. Here's how to run the tests:
+```bash
+# Run all tests with pytest
+python -m pytest
 
-1. **Setup your environment**:
+# Run tests with coverage report
+python -m pytest --cov=ezstitcher --cov-report=html
+
+# Run specific test modules
+python -m pytest tests/integration/test_pipeline_orchestrator.py
+```
+
+### Contributing
+
+Contributions are welcome! See the [Contributing Guide](docs/contributing.md) for details on how to contribute to EZStitcher.
+
+### Documentation
+
+The documentation is built with Sphinx and hosted on Read the Docs. To build the documentation locally:
 
 ```bash
-# Clone the repository
-git clone https://github.com/trissim/ezstitcher.git
-cd ezstitcher
-
-# Create and activate a virtual environment with Python 3.11.9
-python3.11 -m venv .venv
-source .venv/bin/activate  # On Windows, use: .venv\Scripts\activate
-
-# Install the package in development mode
-pip install -e .
+cd docs
+pip install -r requirements.txt
+make html
 ```
 
-2. **Run the tests**:
-
-```bash
-# Make sure PYTHONPATH is empty to avoid conflicts
-PYTHONPATH="" python -m unittest tests/test_synthetic_workflow.py
-```
-
-3. **Run with code coverage**:
-
-```bash
-# Install coverage package
-pip install coverage
-
-# Run tests with coverage analysis
-PYTHONPATH="" python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
-
-# Generate HTML report
-python -m coverage html
-
-# View the report in your browser
-open htmlcov/index.html  # On Linux, use: xdg-open htmlcov/index.html
-```
-
-### Synthetic Data Generation
-
-EZStitcher includes a synthetic microscopy data generator for testing purposes:
-
-```python
-from utils.generate_synthetic_data import SyntheticMicroscopyGenerator
-
-# Create a generator for synthetic microscopy data
-generator = SyntheticMicroscopyGenerator(
-    output_dir="synthetic_data",
-    grid_size=(3, 3),           # 3x3 grid (9 tiles)
-    image_size=(1024, 1024),    # Image dimensions
-    tile_size=(512, 512),       # Tile dimensions
-    overlap_percent=10,         # Tile overlap
-    stage_error_px=5,           # Simulated stage positioning error
-    wavelengths=3,              # Number of wavelengths/channels
-    z_stack_levels=5,           # Number of Z-stack levels
-    num_cells=200,              # Number of synthetic cells
-    random_seed=42              # For reproducibility
-)
-
-# Generate the dataset
-generator.generate_dataset()
-```
-
-This will create a synthetic microscopy dataset with:
-- Multiple wavelengths/channels
-- Z-stacks with varying focus levels
-- Overlapping tiles with realistic stage positioning errors
-- Proper folder structure and file naming conventions
-- All images saved without compression
-
-### What the Tests Cover
-
-The comprehensive test suite tests all core functionality:
-
-- **Z-stack detection and organization**: Tests the ability to detect and organize Z-stack data
-- **Best focus selection**: Tests the algorithms for finding the best focused plane in a Z-stack
-- **Projection creation**: Tests the creation of various projection types (max, mean, etc.)
-- **Stitching**: Tests the stitching functionality with various reference methods
-- **Multi-channel processing**: Tests handling of multiple wavelengths and composite creation
-
-### Code Coverage Analysis
-
-The code coverage analysis helps identify which parts of the code are well-tested and which need more coverage:
-
-```bash
-python -m coverage run --source=ezstitcher -m unittest tests/test_synthetic_workflow.py
-python -m coverage html
-```
-
-This will:
-- Run the tests with coverage analysis
-- Generate an HTML report in the `htmlcov` directory
-- Show which parts of the code are well-tested
-- Identify areas that need more test coverage
-
-## Package Structure
-
-- `ezstitcher/core/image_process.py`: Core image processing functions
-- `ezstitcher/core/stitcher.py`: Main stitching pipeline with comprehensive `process_plate_folder`
-- `ezstitcher/core/z_stack_handler.py`: Z-stack organization and processing
-- `ezstitcher/core/focus_detect.py`: Focus quality detection algorithms
-- `utils/generate_synthetic_data.py`: Synthetic microscopy data generator
-- `tests/test_synthetic_workflow.py`: Comprehensive test suite
-
-## Requirements
-
-- Python 3.8 - 3.11.9 (3.11.9 recommended)
-- numpy
-- scikit-image
-- scipy
-- pandas
-- tifffile
-- ashlar
-- opencv-python
-- matplotlib (for visualization)
-- coverage (for test coverage analysis)
+Then open `docs/_build/html/index.html` in your browser.
 
 ## License
 

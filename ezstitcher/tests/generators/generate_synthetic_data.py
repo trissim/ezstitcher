@@ -9,9 +9,10 @@ This script generates synthetic microscopy images with the following features:
 - Proper tiling with configurable overlap
 - Realistic stage positioning errors
 - HTD file generation for metadata
+- Automatic image size calculation based on grid and tile parameters
 
 Usage:
-    python generate_synthetic_data.py output_dir --grid-size 3 3 --wavelengths 2 --z-stack 3
+    python generate_synthetic_data.py output_dir --grid-size 3 3 --wavelengths 2 --z-stack 3 --auto-image-size
 """
 
 import os
@@ -34,11 +35,11 @@ class SyntheticMicroscopyGenerator:
                  image_size=(1024, 1024),
                  tile_size=(512, 512),
                  overlap_percent=10,
-                 stage_error_px=5,
+                 stage_error_px=2,
                  wavelengths=2,
                  z_stack_levels=1,
-                 z_step_size=1.0,
-                 num_cells=100,
+                 z_step_size=1,
+                 num_cells=50,
                  cell_size_range=(10, 30),
                  cell_eccentricity_range=(0.1, 0.5),
                  cell_intensity_range=(5000, 20000),
@@ -50,6 +51,7 @@ class SyntheticMicroscopyGenerator:
                  wavelength_backgrounds=None,  # Background intensities for each wavelength
                  wells=['A01'],  # List of wells to generate
                  format='ImageXpress',  # Format of the filenames ('ImageXpress' or 'OperaPhenix')
+                 auto_image_size=True,  # Automatically calculate image size based on grid and tile size
                  random_seed=None):
         """
         Initialize the synthetic microscopy generator.
@@ -95,14 +97,23 @@ class SyntheticMicroscopyGenerator:
                 Example: {1: 20000, 2: 10000}
             wavelength_backgrounds: Dictionary mapping wavelength indices to background intensities
                 Example: {1: 800, 2: 400}
+            wells: List of well IDs to generate (e.g., ['A01', 'A02'])
+            format: Format of the filenames ('ImageXpress' or 'OperaPhenix')
+            auto_image_size: If True, automatically calculate image size based on grid and tile parameters
             random_seed: Random seed for reproducibility
         """
         self.output_dir = Path(output_dir)
         self.grid_size = grid_size
-        self.image_size = image_size
         self.tile_size = tile_size
         self.overlap_percent = overlap_percent
         self.stage_error_px = stage_error_px
+
+        # Calculate image size if auto_image_size is True
+        if auto_image_size:
+            self.image_size = self._calculate_image_size(grid_size, tile_size, overlap_percent, stage_error_px)
+            print(f"Auto-calculated image size: {self.image_size[0]}x{self.image_size[1]}")
+        else:
+            self.image_size = image_size
         self.wavelengths = wavelengths
         self.z_stack_levels = z_stack_levels
         self.z_step_size = z_step_size
@@ -359,8 +370,7 @@ class SyntheticMicroscopyGenerator:
             # More blur for Z levels further from center
             # Scale blur by z_step_size to create more realistic Z-stack effect
             # z_step_size controls the amount of blur between Z-steps
-            # Reduce blur by at least 4-fold
-            blur_sigma = (self.z_step_size / 4.0) * (1.0 + 2.0 * (1.0 - z_factor))
+            blur_sigma = (self.z_step_size/500) * (1.0 + 2.0 * (1.0 - z_factor))
             print(f"  Z-level {z_level}: blur_sigma={blur_sigma:.2f} (z_factor={z_factor:.2f}, z_step_size={self.z_step_size})")
             image = filters.gaussian(image, sigma=blur_sigma, preserve_range=True)
 
@@ -462,6 +472,13 @@ class SyntheticMicroscopyGenerator:
             col = int(well[1:3])
             well_indices.append((row, col))
 
+        # Calculate pixel size in meters (for ImageResolutionX/Y)
+        # Default is 0.65 µm, but we'll use a more realistic value for Opera Phenix
+        pixel_size_meters = 1.1867525298988041E-06  # ~1.19 µm
+
+        # Calculate Z-step size in meters
+        z_step_size_meters = self.z_step_size * 1e-6  # Convert from µm to m
+
         # Start building the XML content
         xml_content = f"""<?xml version="1.0" encoding="utf-8"?>
 <EvaluationInputData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="1" xmlns="http://www.perkinelmer.com/PEHH/HarmonyV6">
@@ -501,31 +518,117 @@ class SyntheticMicroscopyGenerator:
   <Images>
     <Map>
       <Entry ChannelID="1">
+        <ChannelName>HOECHST 33342</ChannelName>
+        <ImageType>Signal</ImageType>
+        <AcquisitionType>NonConfocal</AcquisitionType>
+        <IlluminationType>Epifluorescence</IlluminationType>
+        <ChannelType>Fluorescence</ChannelType>
+        <ImageResolutionX Unit="m">{}</ImageResolutionX>
+        <ImageResolutionY Unit="m">{}</ImageResolutionY>
+        <ImageSizeX>{}</ImageSizeX>
+        <ImageSizeY>{}</ImageSizeY>
+        <BinningX>2</BinningX>
+        <BinningY>2</BinningY>
+        <MaxIntensity>65536</MaxIntensity>
+        <CameraType>AndorZylaCam</CameraType>
+        <MainExcitationWavelength Unit="nm">375</MainExcitationWavelength>
+        <MainEmissionWavelength Unit="nm">456</MainEmissionWavelength>
         <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
         <ObjectiveNA Unit="">0.3</ObjectiveNA>
         <ExposureTime Unit="s">0.03</ExposureTime>
         <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
         <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
-      </Entry>"""
+      </Entry>""".format(pixel_size_meters, pixel_size_meters, self.image_size[0], self.image_size[1])
 
         # Add entries for each channel
+        channel_names = ["Calcein", "Alexa 647", "FITC", "TRITC", "Cy5"]
+        excitation_wavelengths = [488, 647, 488, 561, 647]
+        emission_wavelengths = [525, 665, 525, 590, 665]
+        exposure_times = [0.05, 0.1, 0.05, 0.08, 0.1]
+
         for channel in range(2, self.wavelengths + 1):
+            channel_idx = min(channel - 2, len(channel_names) - 1)  # Ensure we don't go out of bounds
             xml_content += f"""
       <Entry ChannelID="{channel}">
+        <ChannelName>{channel_names[channel_idx]}</ChannelName>
+        <ImageType>Signal</ImageType>
+        <AcquisitionType>NonConfocal</AcquisitionType>
+        <IlluminationType>Epifluorescence</IlluminationType>
+        <ChannelType>Fluorescence</ChannelType>
+        <ImageResolutionX Unit="m">{pixel_size_meters}</ImageResolutionX>
+        <ImageResolutionY Unit="m">{pixel_size_meters}</ImageResolutionY>
+        <ImageSizeX>{self.image_size[0]}</ImageSizeX>
+        <ImageSizeY>{self.image_size[1]}</ImageSizeY>
+        <BinningX>2</BinningX>
+        <BinningY>2</BinningY>
+        <MaxIntensity>65536</MaxIntensity>
+        <CameraType>AndorZylaCam</CameraType>
+        <MainExcitationWavelength Unit="nm">{excitation_wavelengths[channel_idx]}</MainExcitationWavelength>
+        <MainEmissionWavelength Unit="nm">{emission_wavelengths[channel_idx]}</MainEmissionWavelength>
         <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
         <ObjectiveNA Unit="">0.3</ObjectiveNA>
-        <ExposureTime Unit="s">0.05</ExposureTime>
+        <ExposureTime Unit="s">{exposure_times[channel_idx]}</ExposureTime>
         <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
         <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
       </Entry>"""
 
-        # Close the XML
-        xml_content += """
+        # Add image information section
+        xml_content += f"""
     </Map>
     <PixelSizeCalibration>
-      <PixelSize Unit="µm">0.65</PixelSize>
+      <PixelSize Unit="µm">{pixel_size_meters * 1e6:.4f}</PixelSize>
       <MagnificationRatio>1.0</MagnificationRatio>
-    </PixelSizeCalibration>
+    </PixelSizeCalibration>"""
+
+        # Add detailed image information for each image
+        for row, col in well_indices:
+            for site in range(1, self.grid_size[0] * self.grid_size[1] + 1):
+                # Calculate position for this site
+                site_row = (site - 1) // self.grid_size[1]
+                site_col = (site - 1) % self.grid_size[1]
+
+                # Calculate position in meters (typical Opera Phenix values)
+                # These are arbitrary values for demonstration
+                pos_x = 0.000576762 + site_col * 0.001  # Arbitrary X position
+                pos_y = 0.000576762 + site_row * 0.001  # Arbitrary Y position
+
+                for z in range(1, self.z_stack_levels + 1):
+                    # Calculate Z position based on Z level
+                    pos_z = 0.0001 + (z - 1) * z_step_size_meters
+                    abs_pos_z = 0.135809004 + (z - 1) * z_step_size_meters  # Arbitrary base Z position
+
+                    for channel in range(1, self.wavelengths + 1):
+                        # Create image ID
+                        image_id = f"{row:02d}{col:02d}K1F{site}P{z}R{channel}"
+
+                        # Create URL (filename)
+                        url = f"r{row:02d}c{col:02d}f{site}p{z:02d}-ch{channel}sk1fk1fl1.tiff"
+
+                        # Add image element
+                        xml_content += f"""
+    <Image Version="1">
+      <id>{image_id}</id>
+      <State>Ok</State>
+      <URL>{url}</URL>
+      <Row>{row}</Row>
+      <Col>{col}</Col>
+      <FieldID>{site}</FieldID>
+      <PlaneID>{z}</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>{channel}</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">{pos_x}</PositionX>
+      <PositionY Unit="m">{pos_y}</PositionY>
+      <PositionZ Unit="m">{pos_z}</PositionZ>
+      <AbsPositionZ Unit="m">{abs_pos_z}</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>{datetime.now().isoformat()}-04:00</AbsTime>
+    </Image>"""
+
+        # Close the XML
+        xml_content += """
   </Images>
 </EvaluationInputData>"""
 
@@ -534,6 +637,34 @@ class SyntheticMicroscopyGenerator:
             f.write(xml_content)
 
         return index_xml_path
+
+    def _calculate_image_size(self, grid_size, tile_size, overlap_percent, stage_error_px):
+        """
+        Calculate the appropriate image size based on grid dimensions, tile size, and overlap.
+
+        Args:
+            grid_size: Tuple of (rows, cols) for the grid of tiles
+            tile_size: Size of each tile (width, height)
+            overlap_percent: Percentage of overlap between tiles
+            stage_error_px: Random error in stage positioning (pixels)
+
+        Returns:
+            tuple: (width, height) of the calculated image size
+        """
+        # Calculate effective step size with overlap
+        step_x = int(tile_size[0] * (1 - overlap_percent / 100))
+        step_y = int(tile_size[1] * (1 - overlap_percent / 100))
+
+        # Calculate minimum required size
+        min_width = step_x * (grid_size[1] - 1) + tile_size[0]
+        min_height = step_y * (grid_size[0] - 1) + tile_size[1]
+
+        # Add margin for stage positioning errors
+        margin = stage_error_px * 2
+        width = min_width + margin
+        height = min_height + margin
+
+        return (width, height)
 
     def generate_dataset(self):
         """Generate the complete dataset."""
@@ -583,19 +714,30 @@ class SyntheticMicroscopyGenerator:
                     site_positions[site_index] = (x_pos, y_pos)
                     site_index += 1
 
-            # For multiple Z-stack levels, create proper ZStep folders
+            # For multiple Z-stack levels
             if self.z_stack_levels > 1:
-                # Make sure all ZStep folders are created first
-                for z in range(self.z_stack_levels):
-                    z_level = z + 1  # 1-based Z level index
-                    zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
-                    zstep_dir.mkdir(exist_ok=True)
-                    print(f"Created ZStep folder: {zstep_dir}")
+                # Handle differently based on format
+                if self.format == 'ImageXpress':
+                    # For ImageXpress, create ZStep folders
+                    # Make sure all ZStep folders are created first
+                    for z in range(self.z_stack_levels):
+                        z_level = z + 1  # 1-based Z level index
+                        zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
+                        zstep_dir.mkdir(exist_ok=True)
+                        print(f"Created ZStep folder: {zstep_dir}")
+                else:  # OperaPhenix
+                    # Opera Phenix doesn't use ZStep folders - all images go directly in the Images folder
+                    print(f"Opera Phenix format: all Z-stack images will be placed directly in the Images folder")
 
                 # Now generate images for each Z-level
                 for z in range(self.z_stack_levels):
                     z_level = z + 1  # 1-based Z level index
-                    zstep_dir = self.timepoint_dir / f"ZStep_{z_level}"
+
+                    # For ImageXpress, use ZStep folders; for Opera Phenix, use the Images folder directly
+                    if self.format == 'ImageXpress':
+                        target_dir = self.timepoint_dir / f"ZStep_{z_level}"
+                    else:  # OperaPhenix
+                        target_dir = self.timepoint_dir  # This is already set to self.images_dir for Opera Phenix
 
                     # Generate images for each wavelength at this Z level
                     for w in range(self.wavelengths):
@@ -620,23 +762,23 @@ class SyntheticMicroscopyGenerator:
 
                                 # Create filename based on format
                                 if self.format == 'ImageXpress':
-                                    # ImageXpress format: WellID_sXXX_wY_zZZZ.tif
-                                    # Create filename without Z-index and without zero-padding site indices
+                                    # ImageXpress format: WellID_sXXX_wY.tif (Z-level is indicated by the ZStep folder)
+                                    # Create filename without zero-padding site indices
                                     # This tests the padding functionality in the stitcher
-                                    filename = f"{well}_s{site_index}_w{wavelength}_z{z_level}.tif"
+                                    filename = f"{well}_s{site_index}_w{wavelength}.tif"
                                 else:  # OperaPhenix
                                     # Opera Phenix format: rXXcYYfZZZpWW-chVskNfkNflN.tiff
                                     # Extract row and column from well ID (e.g., 'A01' -> row=1, col=1)
                                     row = ord(well[0]) - ord('A') + 1
                                     col = int(well[1:3])
                                     filename = f"r{row:02d}c{col:02d}f{site_index}p{z_level:02d}-ch{wavelength}sk1fk1fl1.tiff"
-                                filepath = zstep_dir / filename
+                                filepath = target_dir / filename
 
                                 # Save image without compression
                                 tifffile.imwrite(filepath, tile, compression=None)
 
                                 # Print progress with full path for debugging
-                                print(f"  Saved tile: {zstep_dir.name}/{filename} (position: {x_pos}, {y_pos})")
+                                print(f"  Saved tile: {target_dir.name}/{filename} (position: {x_pos}, {y_pos})")
                                 print(f"  Full path: {filepath.resolve()}")
                                 site_index += 1
             else:
@@ -708,6 +850,8 @@ def main():
     parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
     parser.add_argument("--format", type=str, choices=['ImageXpress', 'OperaPhenix'], default='ImageXpress',
                       help="Format of the filenames (ImageXpress or OperaPhenix)")
+    parser.add_argument("--auto-image-size", action="store_true",
+                      help="Automatically calculate image size based on grid and tile parameters")
 
     # Add wavelength-specific parameter groups
     wavelength_group = parser.add_argument_group('wavelength-specific',
@@ -798,6 +942,7 @@ def main():
         noise_level=args.noise,
         wavelength_params=wavelength_params,
         format=args.format,
+        auto_image_size=args.auto_image_size,
         random_seed=args.seed
     )
 

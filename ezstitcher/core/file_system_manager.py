@@ -1,0 +1,493 @@
+"""
+File system manager for ezstitcher.
+
+This module provides a class for managing file system operations.
+"""
+
+import os
+import re
+import logging
+import warnings
+from pathlib import Path
+from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
+import tifffile
+import numpy as np
+import shutil
+
+from ezstitcher.core.microscope_interfaces import FilenameParser
+from ezstitcher.core.image_locator import ImageLocator
+from ezstitcher.core.microscope_interfaces import MicroscopeHandler
+
+logger = logging.getLogger(__name__)
+
+
+class FileSystemManager:
+    """
+    Manages file system operations for ezstitcher.
+    Abstracts away direct file system interactions for improved testability.
+    """
+
+    default_extensions = ['.tif', '.TIF', '.tiff', '.TIFF',
+                          '.jpg', '.JPG', '.jpeg', '.JPEG',
+                          '.png', '.PNG']
+
+    @staticmethod
+    def ensure_directory(directory: Union[str, Path]) -> Path:
+        """
+        Ensure a directory exists, creating it if necessary.
+
+        Args:
+            directory (str or Path): Directory path to ensure exists
+
+        Returns:
+            Path: Path object for the directory
+        """
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    @staticmethod
+    def list_image_files(directory: Union[str, Path],
+                         extensions: Optional[List[str]] = None,
+                         recursive: bool = False, # Add recursive argument
+                         flatten: bool = False    # Add flatten argument
+                         ) -> List[Path]:
+        """
+        List all image files in a directory with specified extensions.
+
+        Args:
+            directory (str or Path): Directory to search
+            extensions (list): List of file extensions to include
+            recursive (bool): Whether to search recursively
+            flatten (bool): Whether to flatten Z-stack directories (implies recursive)
+
+        Returns:
+            list: List of Path objects for image files
+        """
+        if extensions is None:
+            extensions = FileSystemManager.default_extensions
+
+        # Use ImageLocator to find images, passing through arguments
+        # Pass recursive and flatten arguments here
+        return ImageLocator.find_images_in_directory(directory, extensions, recursive=recursive)
+
+    # Removed path_list_from_pattern - use pattern_matcher.path_list_from_pattern directly
+
+    @staticmethod
+    def load_image(file_path: Union[str, Path]) -> Optional[np.ndarray]:
+        """
+        Load an image and ensure it's 2D grayscale.
+
+        Args:
+            file_path (str or Path): Path to the image file
+
+        Returns:
+            numpy.ndarray: 2D grayscale image or None if loading fails
+        """
+        try:
+            img = tifffile.imread(str(file_path))
+
+            # Convert to 2D grayscale if needed
+            if img.ndim == 3:
+                # Check if it's a channel-first format (C, H, W)
+                if img.shape[0] <= 4:  # Assuming max 4 channels (RGBA)
+                    # Convert channel-first to 2D by taking mean across channels
+                    img = np.mean(img, axis=0).astype(img.dtype)
+                # Check if it's a channel-last format (H, W, C)
+                elif img.shape[2] <= 4:  # Assuming max 4 channels (RGBA)
+                    # Convert channel-last to 2D by taking mean across channels
+                    img = np.mean(img, axis=2).astype(img.dtype)
+                else:
+                    # If it's a 3D image with a different structure, use the first slice
+                    img = img[0].astype(img.dtype)
+
+            return img
+        except Exception as e:
+            logger.error(f"Error loading image {file_path}: {e}")
+            return None
+
+    @staticmethod
+    def save_image(file_path: Union[str, Path], image: np.ndarray,
+                  compression: Optional[str] = None) -> bool:
+        """
+        Save an image to disk.
+
+        Args:
+            file_path (str or Path): Path to save the image
+            image (numpy.ndarray): Image to save
+            compression (str or None): Compression method
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Ensure directory exists
+            directory = Path(file_path).parent
+            directory.mkdir(parents=True, exist_ok=True)
+
+            # Save image
+            tifffile.imwrite(str(file_path), image, compression=compression)
+            return True
+        except Exception as e:
+            logger.error(f"Error saving image {file_path}: {e}")
+            return False
+
+    @staticmethod
+    def copy_file(source_path: Union[str, Path], dest_path: Union[str, Path]) -> bool:
+        """
+        Copy a file from source to destination, preserving metadata.
+
+        This method abstracts the file copying operation, ensuring that the destination
+        directory exists and handling any errors that might occur. It preserves file
+        metadata such as timestamps and permissions.
+
+        Args:
+            source_path (str or Path): Source file path
+            dest_path (str or Path): Destination file path
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Ensure destination directory exists
+            directory = Path(dest_path).parent
+            directory.mkdir(parents=True, exist_ok=True)
+
+            # Copy file with metadata
+            shutil.copy2(source_path, dest_path)
+            return True
+        except Exception as e:
+            logger.error(f"Error copying file from {source_path} to {dest_path}: {e}")
+            return False
+
+    @staticmethod
+    def remove_directory(directory_path: Union[str, Path], recursive: bool = True) -> bool:
+        """
+        Remove a directory and optionally all its contents.
+
+        This method abstracts directory removal operations, handling both recursive
+        and non-recursive removal. It provides error handling and logging for
+        directory removal operations.
+
+        Args:
+            directory_path (str or Path): Path to the directory to remove
+            recursive (bool): Whether to remove the directory recursively
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            import shutil
+            directory_path = Path(directory_path)
+
+            if recursive:
+                shutil.rmtree(directory_path)
+            else:
+                directory_path.rmdir()
+
+            return True
+        except Exception as e:
+            logger.error(f"Error removing directory {directory_path}: {e}")
+            return False
+
+    @staticmethod
+    def clean_temp_folders(parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
+        """
+        Clean up temporary folders created during processing.
+
+        Args:
+            parent_dir (str or Path): Parent directory
+            base_name (str): Base name of the plate folder
+            keep_suffixes (list, optional): List of suffixes to keep
+        """
+        parent_dir = Path(parent_dir)
+        if keep_suffixes is None:
+            keep_suffixes = ['_stitched', '_positions']
+
+        # Find all folders with the base name and a suffix
+        for item in parent_dir.iterdir():
+            if item.is_dir() and item.name.startswith(base_name) and item.name != base_name:
+                # Check if the suffix should be kept
+                suffix = item.name[len(base_name):]
+                if suffix not in keep_suffixes:
+                    logger.info(f"Removing temporary folder: {item}")
+                    import shutil
+                    shutil.rmtree(item)
+
+    @staticmethod
+    def create_output_directories(plate_path, suffixes):
+        """
+        Create output directories for a plate.
+
+        Args:
+            plate_path (str): Path to plate folder
+            suffixes (dict): Dictionary mapping directory types to suffixes
+
+        Returns:
+            dict: Dictionary mapping directory types to Path objects
+        """
+        parent_dir = Path(plate_path).parent
+        plate_name = Path(plate_path).name
+        #parent_dir = Path(parent_dir)
+        dirs = {}
+
+        # Create directories for each suffix
+        for dir_type, suffix in suffixes.items():
+            dir_path = parent_dir / f"{plate_name}{suffix}"
+            FileSystemManager.ensure_directory(dir_path)
+            dirs[dir_type] = dir_path
+
+        return dirs
+
+    @staticmethod
+    def find_file_recursive(directory: Union[str, Path], filename: str) -> Optional[Path]:
+        """
+        Recursively search for a file by name in a directory and its subdirectories.
+        Returns the first instance found.
+
+        Args:
+            directory (str or Path): Directory to search in
+            filename (str): Name of the file to find
+
+        Returns:
+            Path or None: Path to the first instance of the file, or None if not found
+        """
+        try:
+            directory = Path(directory)
+
+            # Check if the file exists in the current directory
+            file_path = directory / filename
+            if file_path.exists() and file_path.is_file():
+                logger.debug(f"Found file {filename} in {directory}")
+                return file_path
+
+            # Recursively search in subdirectories
+            for item in directory.iterdir():
+                if item.is_dir():
+                    result = FileSystemManager.find_file_recursive(item, filename)
+                    if result is not None:
+                        return result
+
+            # File not found in this directory or its subdirectories
+            return None
+        except Exception as e:
+            logger.error(f"Error searching for file {filename} in {directory}: {e}")
+            return None
+
+    @staticmethod
+    def _detect_parser(directory: Union[str, Path]) -> Optional[FilenameParser]:
+        """
+        Get the configured parser or detect one from files in the directory.
+
+        Args:
+            directory (str or Path): Directory containing files to analyze
+
+        Returns:
+            FilenameParser or None: The parser to use, or None if detection fails
+        """
+
+
+        # Otherwise, create a MicroscopeHandler with auto-detection
+        try:
+            directory = Path(directory)
+            handler = MicroscopeHandler(plate_folder=directory, microscope_type='auto')
+            if handler.parser:
+                logger.info(f"Auto-detected parser for files in {directory}")
+                return handler.parser
+            else:
+                logger.warning(f"Could not detect parser for files in {directory}")
+                return None
+        except Exception as e:
+            logger.error(f"Error detecting parser for files in {directory}: {e}")
+            return None
+
+    @staticmethod
+    def rename_files_with_consistent_padding(directory, parser=None, width=3, force_suffixes=False):
+        """
+        Rename files in a directory to have consistent site number and Z-index padding.
+        Optionally force the addition of missing optional suffixes (site, channel, z-index).
+
+        Args:
+            directory (str or Path): Directory containing files to rename
+            parser (FilenameParser, optional): Parser to use for filename parsing and padding
+            width (int, optional): Width to pad site numbers to
+            force_suffixes (bool, optional): If True, add missing optional suffixes with default values
+
+        Returns:
+            dict: Dictionary mapping original filenames to new filenames
+        """
+        from ezstitcher.core.image_locator import ImageLocator
+
+        directory = Path(directory)
+
+        # Use provided parser or detect one
+        if parser is None:
+            parser = FileSystemManager._detect_parser(directory)
+            if parser is None:
+                return {}  # No parser available
+
+        # Use ImageLocator to find all image files
+        image_files = ImageLocator.find_images_in_directory(directory, recursive=False)
+
+        # Map original filenames to reconstructed filenames
+        rename_map = {}
+        for file_path in image_files:
+            original_name = file_path.name
+
+            # Parse the filename components
+            metadata = parser.parse_filename(original_name)
+            if not metadata:
+                continue  # Skip files that can't be parsed
+
+            # Reconstruct the filename with proper padding
+            # If force_suffixes is True, add default values for missing components
+            if force_suffixes:
+                # Default values for missing components
+                site = metadata['site'] or 1
+                channel = metadata['channel'] or 1
+                z_index = metadata['z_index'] or 1
+            else:
+                # Use existing values or None
+                site = metadata.get('site')
+                channel = metadata.get('channel')
+                z_index = metadata.get('z_index')
+
+            # Reconstruct the filename with proper padding
+            new_name = parser.construct_filename(
+                well=metadata['well'],
+                site=site,
+                channel=channel,
+                z_index=z_index,
+                extension=metadata['extension'],
+                site_padding=width,
+                z_padding=width
+            )
+
+            # Add to rename map if different
+            if original_name != new_name:
+                rename_map[original_name] = new_name
+
+        # Perform the renaming
+        for original_name, new_name in rename_map.items():
+            original_path = directory / original_name
+            new_path = directory / new_name
+
+            try:
+                original_path.rename(new_path)
+                logger.debug(f"Renamed {original_path} to {new_path}")
+            except Exception as e:
+                logger.error(f"Error renaming {original_path} to {new_path}: {e}")
+
+        return rename_map
+
+    @staticmethod
+    def detect_zstack_folders(plate_folder, pattern=None):
+        """
+        Detect Z-stack folders in a plate folder.
+
+        Args:
+            plate_folder (str or Path): Path to the plate folder
+            pattern (str or Pattern, optional): Regex pattern to match Z-stack folders
+
+        Returns:
+            tuple: (has_zstack, z_folders) where z_folders is a list of (z_index, folder_path) tuples
+        """
+
+        plate_path = ImageLocator.find_image_directory(Path(plate_folder))
+
+        # Use ImageLocator to find Z-stack directories
+        z_folders = ImageLocator.find_z_stack_dirs(
+            plate_path,
+            pattern=pattern or r'ZStep_\d+',
+            recursive=False  # Only look in the immediate directory
+        )
+
+        return bool(z_folders), z_folders
+
+    @staticmethod
+    def organize_zstack_folders(plate_folder, filename_parser=None):
+        """
+        Organize Z-stack folders by moving files to the plate folder with proper naming.
+
+        Args:
+            plate_folder (str or Path): Path to the plate folder
+            filename_parser (FilenameParser, optional): Parser for microscopy filenames
+
+        Returns:
+            bool: True if Z-stack was organized, False otherwise
+        """
+        # Auto-detect the parser if it's not provided
+        if filename_parser is None:
+            filename_parser = FileSystemManager._detect_parser(plate_folder)
+            logger.info("Auto-detected parser for plate folder")
+
+        has_zstack_folders, z_folders = FileSystemManager.detect_zstack_folders(plate_folder)
+        if not has_zstack_folders:
+            return False
+
+        plate_path = ImageLocator.find_image_directory(plate_folder)
+
+        # Process each Z-stack folder
+        for z_index, z_folder in z_folders:
+            # Get all image files in this folder
+            image_files = FileSystemManager.list_image_files(z_folder)
+
+            for img_file in image_files:
+                # Parse the filename
+                metadata = filename_parser.parse_filename(str(img_file))
+                if not metadata:
+                    continue
+
+                # Construct new filename with Z-index
+                new_name = filename_parser.construct_filename(
+                    well=metadata['well'],
+                    site=metadata['site'],
+                    channel=metadata['channel'],
+                    z_index=z_index,
+                    extension=metadata['extension']
+                )
+
+                # Copy file to plate folder
+                new_path = plate_path / new_name
+                FileSystemManager.copy_file(img_file, new_path)
+
+        # Remove Z-stack folders
+        for _, z_folder in z_folders:
+            FileSystemManager.remove_directory(z_folder)
+
+        return True
+
+    @staticmethod
+    def cleanup_processed_files(processed_files, output_files):
+        """
+        Clean up processed files after they've been used to create output files.
+
+        Args:
+            processed_files (set or list): Set or list of file paths to clean up
+            output_files (list): List of output file paths to preserve
+
+        Returns:
+            int: Number of files successfully removed
+        """
+        removed_count = 0
+
+        # Convert to sets for efficient operations
+        processed_set = set(processed_files)
+        output_set = set(output_files)
+
+        # Only remove files that are in processed_files but not in output_files
+        files_to_remove = processed_set - output_set
+
+        for file_path in files_to_remove:
+            try:
+                path = Path(file_path)
+                if path.exists():
+                    path.unlink()
+                    removed_count += 1
+            except Exception as e:
+                logger.warning("Failed to remove processed file %s: %s", file_path, e)
+
+        if removed_count > 0:
+            logger.info("Cleaned up %d processed files", removed_count)
+
+        return removed_count
