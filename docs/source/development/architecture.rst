@@ -1,17 +1,17 @@
 Architecture Overview
-====================
+=====================
 
 EZStitcher is built on a modular, object-oriented architecture that separates concerns and enables flexible workflows.
 
 Core Components
--------------
+---------------
 
 .. image:: ../images/architecture.png
    :alt: EZStitcher Architecture
    :width: 600px
 
 PipelineOrchestrator
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 The central coordinator that manages the entire processing workflow. It:
 
@@ -21,7 +21,7 @@ The central coordinator that manages the entire processing workflow. It:
 - Coordinates the processing of reference and final images
 
 MicroscopeHandler
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 Handles microscope-specific functionality through composition. It:
 
@@ -31,7 +31,7 @@ Handles microscope-specific functionality through composition. It:
 - Provides a unified interface for different microscope types
 
 Stitcher
-^^^^^^
+^^^^^^^^
 
 Performs image stitching with subpixel precision. It:
 
@@ -41,7 +41,7 @@ Performs image stitching with subpixel precision. It:
 - Supports different stitching strategies
 
 FocusAnalyzer
-^^^^^^^^^^^
+^^^^^^^^^^^^^
 
 Provides multiple focus detection algorithms for Z-stacks. It:
 
@@ -51,7 +51,7 @@ Provides multiple focus detection algorithms for Z-stacks. It:
 - Combines multiple metrics for robust focus detection
 
 ImagePreprocessor
-^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 Handles image normalization, filtering, and compositing. It:
 
@@ -61,7 +61,7 @@ Handles image normalization, filtering, and compositing. It:
 - Generates projections from Z-stacks
 
 FileSystemManager
-^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 Manages file operations and directory structure. It:
 
@@ -71,7 +71,7 @@ Manages file operations and directory structure. It:
 - Organizes Z-stack folders
 
 ImageLocator
-^^^^^^^^^^
+^^^^^^^^^^^^
 
 Locates and organizes images in various directory structures. It:
 
@@ -81,7 +81,7 @@ Locates and organizes images in various directory structures. It:
 - Determines the main image directory
 
 Design Principles
---------------
+-----------------
 
 EZStitcher follows these design principles:
 
@@ -94,7 +94,7 @@ EZStitcher follows these design principles:
 7. **Sensible Defaults**: Components have sensible default configurations
 
 Data Flow
--------
+---------
 
 The data flow through the pipeline is as follows:
 
@@ -107,7 +107,7 @@ The data flow through the pipeline is as follows:
 7. **Output**: Stitched images
 
 Directory Structure
-----------------
+-------------------
 
 The directory structure of the EZStitcher codebase is as follows:
 
@@ -133,7 +133,7 @@ The directory structure of the EZStitcher codebase is as follows:
     └── __main__.py            # Command-line entry point
 
 Extension Points
--------------
+----------------
 
 EZStitcher is designed to be extended in several ways:
 

@@ -203,9 +203,8 @@ class PipelineOrchestrator:
         if composite_files:
             logger.info("Cleaning up processed tiles after reference composition")
             self.fs_manager.cleanup_processed_files(processed_files, composite_files)
-#
-#        # Flatten Z-stacks if needed
-#        flatten_patterns = self._create_flatten_patterns(patterns, include_channel=False)
+
+        # Flatten Z-stacks if needed
         patterns_chan = self.microscope_handler.parser.auto_detect_patterns(
             dirs['processed'],
             well_filter=[well],
@@ -215,9 +214,6 @@ class PipelineOrchestrator:
         flatten_patterns = []
         for patterns in patterns_chan.values():
             flatten_patterns.extend(patterns)
-
-
-
 
         flatten_method = self.config.reference_flatten
         flattened_files = self.flatten_zstacks(dirs['processed'],dirs['processed'],flatten_patterns,method=flatten_method)
@@ -254,7 +250,8 @@ class PipelineOrchestrator:
                 dirs['input'],
                 dirs['post_processed'],
                 patterns,
-                channel
+                channel,
+                pre=False
             )
             processed_files.extend(tile_files)
 
@@ -277,7 +274,7 @@ class PipelineOrchestrator:
             logger.info("Cleaning up processed tiles after final flattening")
             self.fs_manager.cleanup_processed_files(processed_files, flattened_files)
 
-    def process_tiles(self, input_dir, output_dir, patterns, channel):
+    def process_tiles(self, input_dir, output_dir, patterns, channel,pre=True):
         """
         Unified processing using zstack_processor.
 
@@ -292,19 +289,31 @@ class PipelineOrchestrator:
         """
         output_files = []
 
+
         # Determine processing functions for this channel
         processing_funcs = None
-        if hasattr(self.config, 'reference_processing') and self.config.reference_processing:
-            if callable(self.config.reference_processing) or isinstance(self.config.reference_processing, list):
-                # If reference_processing is a function or list of functions, apply to all channels
-                processing_funcs = self.config.reference_processing
-            elif isinstance(self.config.reference_processing, dict) and channel in self.config.reference_processing:
-                # If reference_processing is a dict, get functions for this channel
-                processing_funcs = self.config.reference_processing[channel]
+        if pre:
+            if hasattr(self.config, 'reference_processing') and self.config.reference_processing:
+                if callable(self.config.reference_processing) or isinstance(self.config.reference_processing, list):
+                    # If reference_processing is a function or list of functions, apply to all channels
+                    processing_funcs = self.config.reference_processing
+                elif isinstance(self.config.reference_processing, dict) and channel in self.config.reference_processing:
+                    # If reference_processing is a dict, get functions for this channel
+                    processing_funcs = self.config.reference_processing[channel]
+        else:
+            if hasattr(self.config, 'final_processing') and self.config.final_processing:
+                if callable(self.config.final_processing) or isinstance(self.config.final_processing, list):
+                    # If reference_processing is a function or list of functions, apply to all channels
+                    processing_funcs = self.config.final_processing
+                elif isinstance(self.config.final_processing, dict) and channel in self.config.final_processing:
+                    # If reference_processing is a dict, get functions for this channel
+                    processing_funcs = self.config.final_processing[channel]
 
         # Convert single function to list for consistent handling
         if callable(processing_funcs):
             processing_funcs = [processing_funcs]
+
+
 
         # Group files by Z-plane for stack processing
         files_by_z_plane = {}

@@ -415,6 +415,15 @@ def test_all_channels_stitched(flat_plate_dir):
     stitched_files = find_image_files(stitched_dir)
     assert len(stitched_files) > 0, "No stitched files created"
 
+def calcein_process(stack):
+    """Apply tophat filter to Calcein images."""
+    return [ImagePreprocessor.tophat(img) for img in stack]
+
+def dapi_process(stack):
+    """Apply tophat filter to DAPI images."""
+    stack = ImagePreprocessor.stack_percentile_normalize(stack,low_percentile=0.1,high_percentile=99.9)
+    return [ImagePreprocessor.tophat(img) for img in stack]
+
 def test_mixed_preprocessing_functions(zstack_plate_dir):
     """Test that both single-image and stack-processing functions can be used."""
     # Create pipeline configuration with both types of preprocessing functions
@@ -425,15 +434,11 @@ def test_mixed_preprocessing_functions(zstack_plate_dir):
         # Channel 1 uses a single-image function
         # Channel 2 uses a stack-processing function
         reference_processing={
-            "1": funcs,
-            "2": funcs,
-        },
-        final_processing={
-            "1": funcs,  # Single-image function
-            "2": funcs,  # Stack-processing function
+            "1": calcein_process,
+            "2": dapi_process,
         },
         reference_flatten="max_projection",
-        stitch_flatten="max_projection",
+        #stitch_flatten="max_projection",
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,

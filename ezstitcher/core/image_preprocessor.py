@@ -447,25 +447,33 @@ class ImagePreprocessor:
 
     @staticmethod
     def tophat(image, selem_radius=50, downsample_factor=4):
+        # Store original data type
+        input_dtype = image.dtype
+        
         # 1) Downsample
         #    For grayscale images: trans.resize with anti_aliasing=True
         image_small = trans.resize(image,
                                    (image.shape[0]//downsample_factor,
                                     image.shape[1]//downsample_factor),
                                    anti_aliasing=True, preserve_range=True)
-
+    
         # 2) Build structuring element for the smaller image
         selem_small = morph.disk(selem_radius // downsample_factor)
-
+    
         # 3) White top-hat on the smaller image
         tophat_small = morph.white_tophat(image_small, selem_small)
-
+    
         # 4) Upscale background to original size
         background_small = image_small - tophat_small
         background_large = trans.resize(background_small,
                                         image.shape,
                                         anti_aliasing=False,
                                         preserve_range=True)
-
-        # 5) Subtract background
-        result = image - background_large
+    
+        # 5) Subtract background and clip negative values
+        result = np.maximum(image - background_large, 0)
+        
+        # 6) Convert back to original data type
+        result = result.astype(input_dtype)
+        
+        return result

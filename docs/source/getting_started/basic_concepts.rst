@@ -1,10 +1,10 @@
 Basic Concepts
-=============
+==============
 
 This page explains the basic concepts of microscopy image stitching and how EZStitcher handles them.
 
 Microscopy Image Stitching Overview
-----------------------------------
+---------------------------------
 
 Microscopy image stitching is the process of combining multiple overlapping images (tiles) into a single larger image. This is necessary because:
 
@@ -20,7 +20,7 @@ EZStitcher addresses these challenges by:
 - Handling multi-channel fluorescence and Z-stacks
 
 Plate-Based Experiments
-----------------------
+-----------------------
 
 In high-content screening, samples are typically organized in plates:
 
@@ -38,7 +38,7 @@ Key concepts:
 EZStitcher processes images on a per-well basis, stitching together all sites within each well.
 
 Multi-Channel Fluorescence
-------------------------
+--------------------------
 
 Fluorescence microscopy captures images at different wavelengths to visualize different structures:
 
@@ -59,7 +59,7 @@ EZStitcher can:
 - Use one channel as a reference for stitching all channels
 
 Z-Stacks
--------
+--------
 
 Z-stacks are 3D image stacks captured at different focal planes:
 
@@ -82,7 +82,7 @@ EZStitcher provides several options for handling Z-stacks:
 - Per-plane stitching
 
 Tiled Images
------------
+------------
 
 Tiled images are multiple overlapping images that cover a larger area:
 
@@ -105,12 +105,12 @@ EZStitcher handles tiled images by:
 4. Assembling the final stitched image
 
 Supported Microscope Formats
---------------------------
+----------------------------
 
 EZStitcher supports multiple microscope formats:
 
 ImageXpress
-~~~~~~~~~~
+~~~~~~~~~~~
 
 - **File Naming**: ``A01_s1_w1.tif`` (Well A01, Site 1, Channel 1)
 - **Directory Structure**:
@@ -156,7 +156,7 @@ ImageXpress
       └── ...
 
 Opera Phenix
-~~~~~~~~~~~
+~~~~~~~~~~~~
 
 - **File Naming**: ``0101CH1F1P1R1.tiff`` (Well A01, Channel 1, Field 1, Plane 1, Round 1)
 - **Directory Structure**:
@@ -173,6 +173,6 @@ Opera Phenix
       └── ...
 
 Auto-Detection
-~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 EZStitcher can automatically detect the microscope type based on the file naming and directory structure. This makes it easy to use without having to specify the microscope type explicitly.

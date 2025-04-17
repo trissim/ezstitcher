@@ -1,10 +1,10 @@
 Advanced Configuration
-=====================
+======================
 
 This example demonstrates advanced configuration options in EZStitcher.
 
 Custom Configuration Files
------------------------
+--------------------------
 
 You can create and save custom configurations:
 
@@ -41,7 +41,7 @@ You can create and save custom configurations:
         loaded_config = PipelineConfig(**config_dict)
 
 Configuration Inheritance
-----------------------
+-------------------------
 
 You can create derived configurations that inherit from a base configuration:
 
@@ -71,7 +71,7 @@ You can create derived configurations that inherit from a base configuration:
     pipeline.run("path/to/plate_folder")
 
 Dynamic Configuration
-------------------
+---------------------
 
 You can dynamically create configurations based on image properties:
 
@@ -134,7 +134,7 @@ You can dynamically create configurations based on image properties:
     pipeline.run("path/to/plate_folder")
 
 Configuration Presets
-------------------
+---------------------
 
 You can create configuration presets for common use cases:
 
@@ -196,7 +196,7 @@ You can create configuration presets for common use cases:
     pipeline.run("path/to/plate_folder")
 
 Command Line Configuration
------------------------
+--------------------------
 
 You can use the command line to specify configuration options:
 

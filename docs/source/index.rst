@@ -1,5 +1,5 @@
 Welcome to EZStitcher's Documentation
-==================================
+===================================
 
 EZStitcher is a Python package for stitching microscopy images with support for Z-stacks, multi-channel fluorescence, and advanced focus detection.
 
@@ -8,7 +8,7 @@ EZStitcher is a Python package for stitching microscopy images with support for 
    :alt: EZStitcher Logo
 
 Key Features
------------
+------------
 
 - **Multi-channel fluorescence support**: Process and stitch multiple fluorescence channels
 - **Z-stack handling**: Process 3D image stacks with various projection methods
@@ -45,52 +45,30 @@ Key Features
    :caption: API Reference
 
    api/index
-   api/processing_pipeline
-   api/stitcher
-   api/focus_analyzer
-   api/image_preprocessor
-   api/file_system_manager
-   api/image_locator
-   api/microscope_interfaces
-   api/config
-   api/microscopes
 
 .. toctree::
    :maxdepth: 2
    :caption: Examples
 
-   examples/basic_stitching
-   examples/zstack_processing
-   examples/custom_preprocessing
-   examples/custom_focus_detection
-   examples/advanced_configuration
-   examples/opera_phenix
-   examples/imagexpress
+   examples/index
 
 .. toctree::
    :maxdepth: 2
    :caption: Development
 
-   development/architecture
-   development/contributing
-   development/testing
-   development/release_process
+   development/index
 
 .. toctree::
    :maxdepth: 2
    :caption: Troubleshooting
 
-   troubleshooting/common_issues
-   troubleshooting/error_messages
-   troubleshooting/performance
+   troubleshooting/index
 
 .. toctree::
    :maxdepth: 2
    :caption: Appendices
 
-   appendices/glossary
-   appendices/references
-   appendices/changelog
+   appendices/index
 
 Indices and tables
 ==================

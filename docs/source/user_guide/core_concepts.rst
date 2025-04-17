@@ -4,7 +4,7 @@ Core Concepts
 This page explains the core concepts of EZStitcher's architecture and workflow.
 
 Pipeline Architecture
--------------------
+---------------------
 
 EZStitcher uses a modular pipeline architecture with several key components:
 
@@ -25,7 +25,7 @@ Key components:
 These components work together to process microscopy images in a flexible and extensible way.
 
 Processing Workflow
------------------
+-------------------
 
 The processing workflow follows a clear, linear flow:
 
@@ -61,7 +61,7 @@ The processing workflow follows a clear, linear flow:
 This workflow is implemented in the ``PipelineOrchestrator`` class, which coordinates all the components.
 
 Input/Output Organization
------------------------
+-------------------------
 
 EZStitcher organizes input and output files in a specific way:
 
@@ -87,7 +87,7 @@ Each output directory serves a specific purpose:
 - **stitched**: Contains final stitched images
 
 Microscope Handlers
------------------
+-------------------
 
 Microscope handlers are responsible for handling microscope-specific functionality:
 
@@ -108,12 +108,12 @@ EZStitcher includes handlers for:
 The microscope handler is automatically created based on the detected microscope type.
 
 File Naming Conventions
----------------------
+-----------------------
 
 EZStitcher uses specific file naming conventions:
 
 ImageXpress
-~~~~~~~~~~
+~~~~~~~~~~~
 
 .. code-block:: text
 
@@ -124,7 +124,7 @@ ImageXpress
 - **w1**: Channel identifier (wavelength 1)
 
 Opera Phenix
-~~~~~~~~~~~
+~~~~~~~~~~~~
 
 .. code-block:: text
 

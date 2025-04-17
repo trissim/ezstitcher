@@ -1,12 +1,12 @@
 Microscope Interfaces
-===================
+=====================
 
 .. module:: ezstitcher.core.microscope_interfaces
 
 This module provides abstract base classes for handling microscope-specific functionality, including filename parsing and metadata handling.
 
 MicroscopeHandler
----------------
+-----------------
 
 .. py:class:: MicroscopeHandler(plate_folder=None, parser=None, metadata_handler=None, microscope_type='auto')
 
@@ -113,7 +113,7 @@ MicroscopeHandler
       :rtype: float or None
 
 FilenameParser
-------------
+--------------
 
 .. py:class:: FilenameParser
    :noindex:
@@ -213,7 +213,7 @@ FilenameParser
       :rtype: dict
 
 MetadataHandler
--------------
+---------------
 
 .. py:class:: MetadataHandler
    :noindex:
