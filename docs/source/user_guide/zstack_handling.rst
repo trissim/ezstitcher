@@ -54,9 +54,9 @@ Opera Phenix Z-stacks are identified by the plane identifier (P) in the filename
 
     plate_folder/
     ├── Images/
-    │   ├── 0101CH1F1P1R1.tiff  # Well A01, Channel 1, Field 1, Plane 1, Round 1
-    │   ├── 0101CH1F1P2R1.tiff  # Well A01, Channel 1, Field 1, Plane 2, Round 1
-    │   ├── 0101CH1F1P3R1.tiff  # Well A01, Channel 1, Field 1, Plane 3, Round 1
+    │   ├── r01c01f001p01-ch1sk1fk1fl1.tiff  # Well A01, Channel 1, Field 1, Plane 1
+    │   ├── r01c01f001p02-ch1sk1fk1fl1.tiff  # Well A01, Channel 1, Field 1, Plane 2
+    │   ├── r01c01f001p03-ch1sk1fk1fl1.tiff  # Well A01, Channel 1, Field 1, Plane 3
     │   └── ...
     └── ...
 

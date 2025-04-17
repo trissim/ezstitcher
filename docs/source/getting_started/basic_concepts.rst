@@ -158,16 +158,16 @@ ImageXpress
 Opera Phenix
 ~~~~~~~~~~~~
 
-- **File Naming**: ``0101CH1F1P1R1.tiff`` (Well A01, Channel 1, Field 1, Plane 1, Round 1)
+- **File Naming**: ``r01c01f001p01-ch1sk1fk1fl1.tiff`` (Well A01, Channel 1, Field 1, Plane 1)
 - **Directory Structure**:
 
   .. code-block:: text
 
       plate_folder/
       ├── Images/
-      │   ├── 0101CH1F1P1R1.tiff
-      │   ├── 0101CH1F1P2R1.tiff
-      │   ├── 0101CH1F2P1R1.tiff
+      │   ├── r01c01f001p01-ch1sk1fk1fl1.tiff
+      │   ├── r01c01f001p02-ch1sk1fk1fl1.tiff
+      │   ├── r01c01f002p01-ch1sk1fk1fl1.tiff
       │   └── ...
       ├── Index.xml
       └── ...

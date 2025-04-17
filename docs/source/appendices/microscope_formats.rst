@@ -178,7 +178,7 @@ Comparison of Microscope Formats
      - .tiff
    * - Well Format
      - A01, B02, etc.
-     - 0101, 0202, etc.
+     - r01c01, r02c02, etc.
    * - Channel Identifier
      - w1, w2, etc.
      - K1, K2, etc.

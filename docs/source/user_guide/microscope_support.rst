@@ -124,9 +124,9 @@ File Naming
 
 .. code-block:: text
 
-    0101CH1F1P1R1.tiff
+    r01c01f001p01-ch1sk1fk1fl1.tiff
 
-- **0101**: Well identifier (row 01, column 01, equivalent to A01)
+- **r01c01**: Well identifier (row 01, column 01, equivalent to A01)
 - **CH1**: Channel identifier (channel 1)
 - **F1**: Field identifier (field 1)
 - **P1**: Plane identifier (plane 1)
@@ -139,9 +139,9 @@ Directory Structure
 
     plate_folder/
     ├── Images/
-    │   ├── 0101CH1F1P1R1.tiff
-    │   ├── 0101CH1F1P2R1.tiff
-    │   ├── 0101CH1F2P1R1.tiff
+    │   ├── r01c01f001p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f001p02-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f002p01-ch1sk1fk1fl1.tiff
     │   └── ...
     ├── Index.xml
     └── ...
@@ -165,8 +165,8 @@ Opera Phenix metadata is stored in XML files (Index.xml):
         </Plate>
       </Plates>
       <Images>
-        <Image id="0101CH1F1P1R1">
-          <URL>Images/0101CH1F1P1R1.tiff</URL>
+        <Image id="r01c01f001p01-ch1sk1fk1fl1">
+          <URL>Images/r01c01f001p01-ch1sk1fk1fl1.tiff</URL>
           <ChannelID>1</ChannelID>
           <FieldID>1</FieldID>
           <PlaneID>1</PlaneID>

@@ -144,7 +144,7 @@ Well Identifiers
 ~~~~~~~~~~~~~~
 
 - **ImageXpress**: A01, A02, B01, B02, etc.
-- **Opera Phenix**: 0101 (A01), 0102 (A02), 0201 (B01), 0202 (B02), etc. (row and column as 2-digit numbers)
+- **Opera Phenix**: r01c01 (A01), r01c02 (A02), r02c01 (B01), r02c02 (B02), etc. (row and column as 2-digit numbers)
 
 Site Identifiers
 ~~~~~~~~~~~~~~
@@ -238,8 +238,8 @@ Index.xml files contain metadata for Opera Phenix acquisitions:
         </Plate>
       </Plates>
       <Images>
-        <Image id="0101CH1F1P1R1">
-          <URL>Images/0101CH1F1P1R1.tiff</URL>
+        <Image id="r01c01f001p01-ch1sk1fk1fl1">
+          <URL>Images/r01c01f001p01-ch1sk1fk1fl1.tiff</URL>
           <ChannelID>1</ChannelID>
           <FieldID>1</FieldID>
           <PlaneID>1</PlaneID>
