@@ -123,7 +123,6 @@ class PipelineOrchestrator:
             # Well filter is already applied in auto_detect_patterns
 
             # Process each well
-            #for well, wavelength_patterns in patterns_by_well.items():
             for well in patterns_by_well.keys():
                 wavelength_patterns = patterns_by_well[well]
                 wavelength_patterns_z = patterns_by_well_z[well]
@@ -528,11 +527,8 @@ class PipelineOrchestrator:
                 site_padding=DEFAULT_PADDING,
                 z_padding=DEFAULT_PADDING
             )
-            # Example: A01_s{iii}_w1.tif -> _w1.tif
-            #suffix = pattern.replace(f"{well}_s{{iii}}", "")
 
             # Create output filename based on the pattern
-            #output_filename = f"{well}{suffix}"
             output_path = dirs['stitched'] / output_filename
             logger.info(f"Stitching pattern {pattern} to {output_path}")
 

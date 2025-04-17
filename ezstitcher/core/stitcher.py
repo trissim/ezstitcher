@@ -51,19 +51,13 @@ class Stitcher:
         """
         all_files = self.filename_parser.path_list_from_pattern(image_dir, image_pattern)
         if len(all_files) != len(positions):
-            logger.warning(
-                f"Number of matched files ({len(all_files)}) != number of positions ({len(positions)}). "
-                f"Adjusting grid size to match file count."
-            )
+            raise ValueError(f"File/position count mismatch: {len(all_files)}≠{len(positions)}")
 
-        # Adjust grid size if needed
+        # Check if grid size matches the number of files
         total_grid_size = grid_size_x * grid_size_y
-        if total_grid_size < len(all_files):
-            # If grid is too small, increase it to fit all files
-            new_size = int(np.ceil(np.sqrt(len(all_files))))
-            logger.warning(f"Grid size {grid_size_x}x{grid_size_y} is too small for {len(all_files)} files. "
-                          f"Adjusting to {new_size}x{new_size}.")
-            grid_size_x = grid_size_y = new_size
+        if total_grid_size != len(all_files):
+            # Raise an error if the grid size doesn't match the number of files
+            raise ValueError(f"Grid size mismatch: {grid_size_x}×{grid_size_y}≠{len(all_files)}")
 
         # Generate a list of (x, y) grid positions following a raster pattern
         positions_grid = [(x, y) for y in range(grid_size_y) for x in range(grid_size_x)]
@@ -159,9 +153,8 @@ class Stitcher:
             files = self.filename_parser.path_list_from_pattern(image_dir, image_pattern)
 
 
-            if len(files) < grid_size_x * grid_size_y:
-                logger.error(f"Not enough files for grid size {grid_size_x}x{grid_size_y}. Found {len(files)} files.")
-                return False
+            if len(files) != grid_size_x * grid_size_y:
+                raise ValueError(f"Grid size mismatch: {grid_size_x}×{grid_size_y}≠{len(files)}")
 
             # Create a FileSeriesReader for the images
             fs_reader = fileseries.FileSeriesReader(
@@ -208,11 +201,11 @@ class Stitcher:
             # Save to CSV
             self.save_positions_df(positions_df, positions_path)
 
-            logger.info(f"Saved positions to {positions_path}")
+            logger.info("Saved positions to %s", positions_path)
             return True
 
         except Exception as e:
-            logger.error(f"Error in generate_positions_ashlar: {e}")
+            logger.error("Error in generate_positions_ashlar: %s", e)
             return False
 
     @staticmethod
@@ -300,8 +293,7 @@ class Stitcher:
             # Override filenames if provided
             if override_names is not None:
                 if len(override_names) != len(pos_entries):
-                    logger.error("Number of override_names (%d) doesn't match positions (%d)", len(override_names), len(pos_entries))
-                    return False
+                    raise ValueError(f"Override names/positions mismatch: {len(override_names)}≠{len(pos_entries)}")
 
                 pos_entries = [(override_names[i], x, y) for i, (_, x, y) in enumerate(pos_entries)]
 
