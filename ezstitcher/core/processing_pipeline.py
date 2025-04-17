@@ -1,5 +1,4 @@
 import logging
-import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple, Callable
 
@@ -9,10 +8,10 @@ from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.microscope_interfaces import MicroscopeHandler, create_microscope_handler
+from ezstitcher.core.image_locator import ImageLocator
 
 # Default padding width for consistent file naming
 DEFAULT_PADDING = 3
-from ezstitcher.core.image_locator import ImageLocator
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -57,7 +56,7 @@ class PipelineOrchestrator:
         """
         # Find the image directory
         image_dir = ImageLocator.find_image_directory(plate_path)
-        logger.info(f"Found image directory: {image_dir}")
+        logger.info("Found image directory: %s", image_dir)
 
         # Rename files with consistent padding and force missing suffixes
         self.fs_manager.rename_files_with_consistent_padding(
@@ -98,28 +97,11 @@ class PipelineOrchestrator:
             input_dir = self._prepare_images(plate_path)
 
             # Create directory structure
-            dirs = {
-                'input': input_dir,
-                'processed': plate_path.parent / f"{plate_path.name}{self.config.processed_dir_suffix}",
-                'post_processed': plate_path.parent / f"{plate_path.name}{self.config.post_processed_dir_suffix}",
-                'positions': plate_path.parent / f"{plate_path.name}{self.config.positions_dir_suffix}",
-                'stitched': plate_path.parent / f"{plate_path.name}{self.config.stitched_dir_suffix}"
-            }
-
-            for dir_path in dirs.values():
-                self.fs_manager.ensure_directory(dir_path)
+            dirs = self._setup_directories(plate_path, input_dir)
 
             # Get patterns by well
-            patterns_by_well = self.microscope_handler.auto_detect_patterns(
-                dirs['input'],
-                well_filter=self.config.well_filter,
-                variable_components=['site']
-            )
-            patterns_by_well_z = self.microscope_handler.auto_detect_patterns(
-                dirs['input'],
-                well_filter=self.config.well_filter,
-                variable_components=['z_index']
-            )
+            patterns_by_well = self._detect_patterns(dirs['input'], self.config.well_filter, 'site')
+            patterns_by_well_z = self._detect_patterns(dirs['input'], self.config.well_filter, 'z_index')
             # Well filter is already applied in auto_detect_patterns
 
             # Process each well
@@ -130,8 +112,14 @@ class PipelineOrchestrator:
 
             return True
 
+        except ValueError as e:
+            logger.error("Pipeline failed due to invalid value: %s", str(e), exc_info=True)
+            return False
+        except FileNotFoundError as e:
+            logger.error("Pipeline failed due to missing file: %s", str(e), exc_info=True)
+            return False
         except Exception as e:
-            logger.error(f"Pipeline failed: {str(e)}", exc_info=True)
+            logger.error("Pipeline failed with unexpected error: %s", str(e), exc_info=True)
             return False
 
     def process_well(self, well, wavelength_patterns, wavelength_patterns_z, dirs):
@@ -141,10 +129,10 @@ class PipelineOrchestrator:
         Args:
             well: Well identifier
             wavelength_patterns: Dictionary mapping wavelengths to varying site patterns
-            wavelength_patterns: Dictionary mapping wavelengths to varying z_index patterns
+            wavelength_patterns_z: Dictionary mapping wavelengths to varying z_index patterns
             dirs: Dictionary of directories
         """
-        logger.info(f"Processing well {well}")
+        logger.info("Processing well %s", well)
 
         # 1. Process reference images (for position generation)
         self.process_reference_images(well, wavelength_patterns, wavelength_patterns_z, dirs)
@@ -168,7 +156,7 @@ class PipelineOrchestrator:
             wavelength_patterns_z: Dictionary mapping wavelengths to patterns grouped by variable z_index
             dirs: Dictionary of directories
         """
-        logger.info(f"Processing reference images for well {well}")
+        logger.info("Processing reference images for well %s", well)
 
         # Determine which channels to use as reference
         reference_channels = [ch for ch in self.config.reference_channels if ch in wavelength_patterns]
@@ -202,28 +190,15 @@ class PipelineOrchestrator:
 
         # Clean up processed tiles after composition
         if composite_files:
-            logger.info(f"Cleaning up processed tiles after reference composition")
-            self.fs_manager.cleanup_processed_files(processed_files, composite_files)
+            self._cleanup_processed_files("reference composition", processed_files, composite_files)
 
         # Flatten Z-stacks if needed
-        flatten_patterns = []
-        for pattern in patterns:
-            sample = pattern.replace('{iii}', '001')
-            meta = self.microscope_handler.parser.parse_filename(sample)
-            flatten_patterns.append(self.microscope_handler.parser.construct_filename(
-                well=meta['well'],
-                site=meta['site'],
-                z_index='{iii}',
-                extension='.tif',
-                site_padding=DEFAULT_PADDING,  # Use consistent padding
-                z_padding=DEFAULT_PADDING      # Use consistent padding
-            ))
+        flatten_patterns = self._create_flatten_patterns(patterns, include_channel=False)
         flatten_method = self.config.reference_flatten
         flattened_files = self.flatten_zstacks(dirs['processed'],dirs['processed'],flatten_patterns,method=flatten_method)
 
         if flattened_files:
-            logger.info(f"Cleaning up processed tiles after reference composition")
-            self.fs_manager.cleanup_processed_files(composite_files, flattened_files)
+            self._cleanup_processed_files("reference flattening", composite_files, flattened_files)
 
     def process_final_images(self, well, wavelength_patterns, wavelength_patterns_z, dirs):
         """
@@ -235,11 +210,11 @@ class PipelineOrchestrator:
             wavelength_patterns_z: Dictionary mapping wavelengths to patterns grouped by variable z_index
             dirs: Dictionary of directories
         """
-        logger.info(f"Processing final images for well {well}")
+        logger.info("Processing final images for well %s", well)
 
         # Always process all available channels for final stitching
         channels_to_process = list(wavelength_patterns.keys())
-        logger.info(f"Processing all {len(channels_to_process)} available channels for well {well}")
+        logger.info("Processing all %d available channels for well %s", len(channels_to_process), well)
 
         # Track processed files for cleanup
         processed_files = []
@@ -257,26 +232,13 @@ class PipelineOrchestrator:
             )
             processed_files.extend(tile_files)
 
-        flatten_patterns = []
-        for pattern in patterns:
-            sample = pattern.replace('{iii}', '001')
-            meta = self.microscope_handler.parser.parse_filename(sample)
-            flatten_patterns.append(self.microscope_handler.parser.construct_filename(
-                well=meta['well'],
-                site=meta['site'],
-                channel=meta['channel'],
-                z_index='{iii}',
-                extension='.tif',
-                site_padding=DEFAULT_PADDING,
-                z_padding=DEFAULT_PADDING
-            ))
+        flatten_patterns = self._create_flatten_patterns(patterns, include_channel=True)
 
         flatten_method = self.config.stitch_flatten
         flattened_files = self.flatten_zstacks(dirs['post_processed'],dirs['post_processed'],flatten_patterns,method=flatten_method)
 
         if flattened_files:
-            logger.info(f"Cleaning up processed tiles after reference composition")
-            self.fs_manager.cleanup_processed_files(processed_files, flattened_files)
+            self._cleanup_processed_files("final flattening", processed_files, flattened_files)
 
     def process_tiles(self, input_dir, output_dir, patterns, channel):
         """
@@ -285,7 +247,7 @@ class PipelineOrchestrator:
         Args:
             input_dir: Input directory
             output_dir: Output directory
-            pattern: List of file pattern
+            patterns: List of file patterns
             channel: Channel identifier
 
         Returns:
@@ -294,9 +256,7 @@ class PipelineOrchestrator:
         output_files = []
 
         for pattern in patterns:
-            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-            images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
-            images = [img for img in images if img is not None]
+            matching_files, images = self._load_images_from_pattern(input_dir, pattern)
             # Apply preprocessing if specified
             preprocess_func = None
             if hasattr(self.config, 'preprocessing_funcs') and self.config.preprocessing_funcs:
@@ -385,16 +345,15 @@ class PipelineOrchestrator:
         Args:
             input_dir: Input directory
             output_dir: Output directory
-            pattern: List of file pattern
+            patterns: List of file patterns
+            method: Method to use for flattening ('max', 'mean', etc.)
 
         Returns:
             list: Paths to created images
         """
         output_files = []
         for pattern in patterns:
-            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-            images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
-            images = [img for img in images if img is not None]
+            matching_files, images = self._load_images_from_pattern(input_dir, pattern)
 
             # Create a projection from the Z-stack
             if method is not None:
@@ -423,7 +382,6 @@ class PipelineOrchestrator:
 
         return output_files
 
-
     def generate_positions(self, well, dirs):
         """
         Generate stitching positions for a well.
@@ -435,7 +393,7 @@ class PipelineOrchestrator:
         Returns:
             Path to positions file
         """
-        logger.info(f"Generating positions for well {well}")
+        logger.info("Generating positions for well %s", well)
 
         # Ensure positions directory exists
         self.fs_manager.ensure_directory(dirs['positions'])
@@ -474,14 +432,14 @@ class PipelineOrchestrator:
             dirs: Dictionary of directories
             positions_file: Path to positions file
         """
-        logger.info(f"Stitching images for well {well}")
+        logger.info("Stitching images for well %s", well)
 
         # Get grid dimensions
         grid_dims = self.get_grid_dimensions(dirs['input'])
 
         # Always stitch all available channels
         channels_to_stitch = list(wavelength_patterns.keys())
-        logger.info(f"Stitching all {len(channels_to_stitch)} available channels for well {well}")
+        logger.info("Stitching all %d available channels for well %s", len(channels_to_stitch), well)
 
         # Add composite if needed
         if len(channels_to_stitch) > 1 and self.config.final_composite_weights:
@@ -495,7 +453,7 @@ class PipelineOrchestrator:
         )
 
         if not patterns_by_well or well not in patterns_by_well:
-            logger.warning(f"No patterns found for well {well} in {dirs['post_processed']}")
+            logger.warning("No patterns found for well %s in %s", well, dirs['post_processed'])
             return
 
         # Get all patterns for this well and flatten them into a single list
@@ -504,7 +462,7 @@ class PipelineOrchestrator:
         for patterns in patterns_by_channel.values():
             all_patterns.extend(patterns)
 
-        logger.info(f"Found {len(all_patterns)} patterns for well {well}")
+        logger.info("Found %d patterns for well %s", len(all_patterns), well)
 
         # Stitch each pattern
         for pattern in all_patterns:
@@ -512,7 +470,7 @@ class PipelineOrchestrator:
             matching_files = self.microscope_handler.parser.path_list_from_pattern(dirs['post_processed'], pattern)
 
             if not matching_files:
-                logger.warning(f"No files found for pattern {pattern}")
+                logger.warning("No files found for pattern %s", pattern)
                 continue
 
             # Extract pattern suffix to determine output filename
@@ -530,7 +488,7 @@ class PipelineOrchestrator:
 
             # Create output filename based on the pattern
             output_path = dirs['stitched'] / output_filename
-            logger.info(f"Stitching pattern {pattern} to {output_path}")
+            logger.info("Stitching pattern %s to %s", pattern, output_path)
 
             # Assemble the stitched image
             self.stitcher.assemble_image(
@@ -540,22 +498,109 @@ class PipelineOrchestrator:
                 override_names=matching_files
             )
 
-    def check_for_zstack(self, input_dir, pattern):
+    def _detect_patterns(self, input_dir, well_filter=None, variable_component='site'):
         """
-        Check if a pattern contains Z-stacks.
+        Detect patterns in the input directory.
+
+        Args:
+            input_dir: Input directory
+            well_filter: Optional list of wells to include
+            variable_component: Component to vary in the pattern ('site' or 'z_index')
+
+        Returns:
+            dict: Dictionary mapping wells to patterns
+        """
+        return self.microscope_handler.auto_detect_patterns(
+            input_dir,
+            well_filter=well_filter,
+            variable_components=[variable_component]
+        )
+
+    def _setup_directories(self, plate_path, input_dir):
+        """
+        Set up directory structure for processing.
+
+        Args:
+            plate_path: Path to the plate folder
+            input_dir: Path to the input directory
+
+        Returns:
+            dict: Dictionary of directories
+        """
+        dirs = {
+            'input': input_dir,
+            'processed': plate_path.parent / f"{plate_path.name}{self.config.processed_dir_suffix}",
+            'post_processed': plate_path.parent / f"{plate_path.name}{self.config.post_processed_dir_suffix}",
+            'positions': plate_path.parent / f"{plate_path.name}{self.config.positions_dir_suffix}",
+            'stitched': plate_path.parent / f"{plate_path.name}{self.config.stitched_dir_suffix}"
+        }
+
+        for dir_path in dirs.values():
+            self.fs_manager.ensure_directory(dir_path)
+
+        return dirs
+
+    def _create_flatten_patterns(self, patterns, include_channel=False):
+        """
+        Create patterns for flattening Z-stacks.
+
+        Args:
+            patterns: List of patterns to process
+            include_channel: Whether to include channel in the output pattern
+
+        Returns:
+            list: List of patterns for flattening
+        """
+        flatten_patterns = []
+        for pattern in patterns:
+            sample = pattern.replace('{iii}', '001')
+            meta = self.microscope_handler.parser.parse_filename(sample)
+
+            kwargs = {
+                'well': meta['well'],
+                'site': meta['site'],
+                'z_index': '{iii}',
+                'extension': '.tif',
+                'site_padding': DEFAULT_PADDING,
+                'z_padding': DEFAULT_PADDING
+            }
+
+            if include_channel and 'channel' in meta:
+                kwargs['channel'] = meta['channel']
+
+            flatten_patterns.append(
+                self.microscope_handler.parser.construct_filename(**kwargs)
+            )
+
+        return flatten_patterns
+
+    def _cleanup_processed_files(self, operation_name, source_files, target_files):
+        """
+        Clean up processed files after an operation.
+
+        Args:
+            operation_name: Name of the operation for logging
+            source_files: Files to clean up
+            target_files: Files that replaced the source files
+        """
+        logger.info("Cleaning up processed tiles after %s", operation_name)
+        self.fs_manager.cleanup_processed_files(source_files, target_files)
+
+    def _load_images_from_pattern(self, input_dir, pattern):
+        """
+        Load images from a pattern.
 
         Args:
             input_dir: Input directory
             pattern: File pattern
 
         Returns:
-            bool: True if Z-stacks are present, False otherwise
+            tuple: (matching_files, images)
         """
-        # Check if the directory has any Z-stack folders
-        has_zstack, _ = self.fs_manager.detect_zstack_folders(input_dir)
-        return has_zstack
-
-
+        matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
+        images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
+        images = [img for img in images if img is not None]
+        return matching_files, images
 
     def get_grid_dimensions(self, input_dir):
         """

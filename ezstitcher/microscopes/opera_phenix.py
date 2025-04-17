@@ -108,13 +108,6 @@ class OperaPhenixFilenameParser(FilenameParser):
         else:
             raise ValueError(f"Invalid well format: {well}. Expected format: 'R01C03'")
 
-#        elif re.match(r"[A-Z]\d{2}", well):
-#            # Convert ImageXpress format (e.g., 'A01') to row and column
-#            row_letter = well[0]
-#            col = int(well[1:3])
-#            # Convert row letter to number (A -> 1, B -> 2, etc.)
-#            row = ord(row_letter) - 64  # ASCII: 'A' = 65
-#
         # Default Z-index to 1 if not provided
         z_index = 1 if z_index is None else z_index
         channel = 1 if channel is None else channel
