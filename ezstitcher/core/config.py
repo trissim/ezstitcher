@@ -49,6 +49,9 @@ class PipelineConfig:
     positions_dir_suffix: str = "_positions"
     stitched_dir_suffix: str = "_stitched"
 
+    cleanup_processed: bool = True
+    cleanup_post_processed: bool = True
+
     # Well filtering
     well_filter: Optional[List[str]] = None
 

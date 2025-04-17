@@ -191,6 +191,43 @@ class FileSystemManager:
             return False
 
     @staticmethod
+    def empty_directory(directory_path: Union[str, Path]) -> bool:
+        """
+        Empty a directory by recursively deleting all its contents.
+        
+        This method removes all files and subdirectories within the specified directory
+        but preserves the directory itself. It provides error handling and logging for
+        directory emptying operations.
+        
+        Args:
+            directory_path (str or Path): Path to the directory to empty
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            directory_path = Path(directory_path)
+            
+            if not directory_path.exists() or not directory_path.is_dir():
+                logger.error(f"Cannot empty {directory_path}: Not a valid directory")
+                return False
+                
+            # Iterate through all entries in the directory
+            for item in directory_path.iterdir():
+                if item.is_file() or item.is_symlink():
+                    # Remove files and symlinks
+                    item.unlink()
+                elif item.is_dir():
+                    # Recursively remove subdirectories
+                    import shutil
+                    shutil.rmtree(item)
+                    
+            return True
+        except Exception as e:
+            logger.error(f"Error emptying directory {directory_path}: {e}")
+            return False
+
+    @staticmethod
     def clean_temp_folders(parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
         """
         Clean up temporary folders created during processing.

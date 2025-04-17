@@ -1,5 +1,5 @@
 Welcome to EZStitcher's Documentation
-===================================
+=====================================
 
 EZStitcher is a Python package for stitching microscopy images with support for Z-stacks, multi-channel fluorescence, and advanced focus detection.
 

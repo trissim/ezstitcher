@@ -4,7 +4,7 @@ Basic Concepts
 This page explains the basic concepts of microscopy image stitching and how EZStitcher handles them.
 
 Microscopy Image Stitching Overview
----------------------------------
+-----------------------------------
 
 Microscopy image stitching is the process of combining multiple overlapping images (tiles) into a single larger image. This is necessary because:
 

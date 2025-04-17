@@ -118,6 +118,10 @@ class PipelineOrchestrator:
                     wavelength_patterns = patterns_by_well[well]
                     wavelength_patterns_z = patterns_by_well_z[well]
                     self.process_well(well, wavelength_patterns, wavelength_patterns_z, dirs)
+                    if self.config.cleanup_processed:
+                        self.fs_manager.empty_directory(dirs['processed'])
+                    if self.config.cleanup_post_processed:
+                        self.fs_manager.empty_directory(dirs['post_processed'])
                 else:
                     logger.warning("Well %s found in site patterns but not in z-index patterns. Skipping.", well)
 
