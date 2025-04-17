@@ -82,7 +82,7 @@ class OperaPhenixFilenameParser(FilenameParser):
 
     def construct_filename(self, well: str, site: Optional[Union[int, str]] = None, channel: Optional[int] = None,
                           z_index: Optional[Union[int, str]] = None, extension: str = '.tiff',
-                          site_padding: int = 3, z_padding: int = 2) -> str:
+                          site_padding: int = 3, z_padding: int = 3) -> str:
         """
         Construct an Opera Phenix filename from components.
 
@@ -93,7 +93,7 @@ class OperaPhenixFilenameParser(FilenameParser):
             z_index: Z-index/plane (int) or placeholder string
             extension (str, optional): File extension
             site_padding (int, optional): Width to pad site numbers to (default: 3)
-            z_padding (int, optional): Width to pad Z-index numbers to (default: 2)
+            z_padding (int, optional): Width to pad Z-index numbers to (default: 3)
 
         Returns:
             str: Constructed filename

@@ -9,6 +9,9 @@ from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.microscope_interfaces import MicroscopeHandler, create_microscope_handler
+
+# Default padding width for consistent file naming
+DEFAULT_PADDING = 3
 from ezstitcher.core.image_locator import ImageLocator
 
 # Set up logger
@@ -60,7 +63,7 @@ class PipelineOrchestrator:
         self.fs_manager.rename_files_with_consistent_padding(
             image_dir,
             parser=self.microscope_handler,
-            width=3,  # Default padding width
+            width=DEFAULT_PADDING,  # Use consistent padding width
             force_suffixes=True  # Force missing suffixes to be added
         )
 
@@ -208,10 +211,14 @@ class PipelineOrchestrator:
         for pattern in patterns:
             sample = pattern.replace('{iii}', '001')
             meta = self.microscope_handler.parser.parse_filename(sample)
-            flatten_patterns.append(self.microscope_handler.parser.construct_filename(well=meta['well'],
-                                                                     site=meta['site'],
-                                                                     z_index='{iii}',
-                                                                     extension='.tif'))
+            flatten_patterns.append(self.microscope_handler.parser.construct_filename(
+                well=meta['well'],
+                site=meta['site'],
+                z_index='{iii}',
+                extension='.tif',
+                site_padding=DEFAULT_PADDING,  # Use consistent padding
+                z_padding=DEFAULT_PADDING      # Use consistent padding
+            ))
         flatten_method = self.config.reference_flatten
         flattened_files = self.flatten_zstacks(dirs['processed'],dirs['processed'],flatten_patterns,method=flatten_method)
 
@@ -255,11 +262,15 @@ class PipelineOrchestrator:
         for pattern in patterns:
             sample = pattern.replace('{iii}', '001')
             meta = self.microscope_handler.parser.parse_filename(sample)
-            flatten_patterns.append(self.microscope_handler.parser.construct_filename(well=meta['well'],
-                                                                     site=meta['site'],
-                                                                     channel=meta['channel'],
-                                                                     z_index='{iii}',
-                                                                     extension='.tif'))
+            flatten_patterns.append(self.microscope_handler.parser.construct_filename(
+                well=meta['well'],
+                site=meta['site'],
+                channel=meta['channel'],
+                z_index='{iii}',
+                extension='.tif',
+                site_padding=DEFAULT_PADDING,
+                z_padding=DEFAULT_PADDING
+            ))
 
         flatten_method = self.config.stitch_flatten
         flattened_files = self.flatten_zstacks(dirs['post_processed'],dirs['post_processed'],flatten_patterns,method=flatten_method)
@@ -349,7 +360,9 @@ class PipelineOrchestrator:
                 well=well,
                 site=site,
                 z_index=z_index,
-                extension='.tif'
+                extension='.tif',
+                site_padding=DEFAULT_PADDING,
+                z_padding=DEFAULT_PADDING
             )
 
             # Save image based on available channels
@@ -395,7 +408,14 @@ class PipelineOrchestrator:
                 # Get the output filename
                 pattern_with_site = pattern.replace('{iii}', '001')
                 metadata = self.microscope_handler.parser.parse_filename(pattern_with_site)
-                fname = self.microscope_handler.parser.construct_filename(well=metadata['well'], site=metadata['site'], channel=metadata['channel'], extension='.tif')
+                fname = self.microscope_handler.parser.construct_filename(
+                    well=metadata['well'],
+                    site=metadata['site'],
+                    channel=metadata['channel'],
+                    extension='.tif',
+                    site_padding=DEFAULT_PADDING,  # Use consistent padding
+                    z_padding=DEFAULT_PADDING      # Use consistent padding
+                )
 
                 # Save the projected image
                 output_path = output_dir / fname
@@ -426,7 +446,13 @@ class PipelineOrchestrator:
 
         # Use standardized reference pattern (without channel information)
         # After processing, all images are saved with well_s### format
-        reference_pattern = self.microscope_handler.parser.construct_filename(well=well, site="{iii}", extension='.tif')
+        reference_pattern = self.microscope_handler.parser.construct_filename(
+            well=well,
+            site="{iii}",
+            extension='.tif',
+            site_padding=DEFAULT_PADDING,
+            z_padding=DEFAULT_PADDING
+        )
 
         # Generate positions
         self.stitcher.generate_positions(
@@ -493,11 +519,15 @@ class PipelineOrchestrator:
             # Extract pattern suffix to determine output filename
             parsable = pattern.replace('{iii}','001')
             metadata = self.microscope_handler.parser.parse_filename(parsable)
-            output_filename = self.microscope_handler.parser.construct_filename(well=metadata['well'],
-                                                                                site=metadata['site'],
-                                                                                channel=metadata['channel'],
-                                                                                z_index=metadata['z_index'],
-                                                                                extension='.tif')
+            output_filename = self.microscope_handler.parser.construct_filename(
+                well=metadata['well'],
+                site=metadata['site'],
+                channel=metadata['channel'],
+                z_index=metadata['z_index'],
+                extension='.tif',
+                site_padding=DEFAULT_PADDING,
+                z_padding=DEFAULT_PADDING
+            )
             # Example: A01_s{iii}_w1.tif -> _w1.tif
             #suffix = pattern.replace(f"{well}_s{{iii}}", "")
 
