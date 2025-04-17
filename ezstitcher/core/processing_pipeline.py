@@ -3,8 +3,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple, Callable
 
-from ezstitcher.core.config import StitcherConfig, PipelineConfig
-from ezstitcher.core.zstack_processor import ZStackProcessor, ZStackProcessorConfig
+from ezstitcher.core.config import StitcherConfig, PipelineConfig, FocusAnalyzerConfig
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
@@ -34,7 +33,11 @@ class PipelineOrchestrator:
         self.config = config
         self.fs_manager = FileSystemManager()
         self.image_preprocessor = ImagePreprocessor()
-        self.zstack_processor = ZStackProcessor(config.zstack_config)
+
+        # Initialize focus analyzer directly
+        focus_config = config.zstack_config.focus_config or FocusAnalyzerConfig(method=config.zstack_config.focus_method)
+        self.focus_analyzer = FocusAnalyzer(focus_config)
+
         self.microscope_handler = None
         self.stitcher = None
 
@@ -62,10 +65,10 @@ class PipelineOrchestrator:
         )
 
         # Detect and organize Z-stack folders
-        has_zstack_folders, _ = self.zstack_processor.detect_zstack_folders(image_dir)
+        has_zstack_folders, _ = self.fs_manager.detect_zstack_folders(image_dir)
         if has_zstack_folders:
-            logger.info(f"Organizing Z-stack folders in {image_dir}")
-            self.zstack_processor.organize_zstack_folders(image_dir)
+            logger.info("Organizing Z-stack folders in %s", image_dir)
+            self.fs_manager.organize_zstack_folders(image_dir, filename_parser=self.microscope_handler)
 
         # Return the image directory (which may have changed if Z-stack folders were organized)
         return ImageLocator.find_image_directory(plate_path)
@@ -282,7 +285,7 @@ class PipelineOrchestrator:
                 preprocess_func = self.config.preprocessing_funcs.get(channel)
 
             if preprocess_func and images:
-                images = self.apply_function_to_stack(images, preprocess_func)
+                images = self.image_preprocessor.apply_function_to_stack(images, preprocess_func)
 
             for image, matching_file in zip (images, matching_files):
                 output_path = output_dir / matching_file
@@ -374,8 +377,12 @@ class PipelineOrchestrator:
             images = [img for img in images if img is not None]
 
             # Create a projection from the Z-stack
-            if not method is None:
-                projected_image = self.zstack_processor.create_projection(images,method=method)
+            if method is not None:
+                projected_image = self.image_preprocessor.create_projection(
+                    images,
+                    method=method,
+                    focus_analyzer=self.focus_analyzer
+                )
 
                 # Get the output filename
                 pattern_with_site = pattern.replace('{iii}', '001')
@@ -506,32 +513,11 @@ class PipelineOrchestrator:
         Returns:
             bool: True if Z-stacks are present, False otherwise
         """
-        # ZStackProcessor.detect_zstack_images doesn't accept a pattern parameter
-        # We'll just check if the directory has any Z-stack images
-        has_zstack, _ = self.zstack_processor.detect_zstack_images(input_dir)
+        # Check if the directory has any Z-stack folders
+        has_zstack, _ = self.fs_manager.detect_zstack_folders(input_dir)
         return has_zstack
 
-    def apply_function_to_stack(self, z_stack, func):
-        """
-        Apply a function to a Z-stack, handling both stack and single-image functions.
 
-        Args:
-            z_stack: Z-stack of images
-            func: Function to apply
-
-        Returns:
-            Processed Z-stack
-        """
-        try:
-            # Try to apply to the whole stack
-            result = func(z_stack)
-            if isinstance(result, list) or (isinstance(result, np.ndarray) and result.ndim > 2):
-                return result
-        except:
-            pass
-
-        # Apply to each image individually
-        return [func(img) for img in z_stack]
 
     def get_grid_dimensions(self, input_dir):
         """

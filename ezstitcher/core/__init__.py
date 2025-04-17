@@ -9,7 +9,6 @@ This module provides the core functionality for the ezstitcher package.
 # Import classes for instance-based API
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
-from ezstitcher.core.zstack_processor import ZStackProcessor
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.processing_pipeline import PipelineOrchestrator

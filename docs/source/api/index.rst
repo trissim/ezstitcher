@@ -10,11 +10,9 @@ This section provides detailed API documentation for EZStitcher.
    config
    plate_processor
    stitcher
-   zstack_processor
    focus_analyzer
    image_preprocessor
    file_system_manager
    directory_manager
    filename_parser
-   csv_handler
    pattern_matcher

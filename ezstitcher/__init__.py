@@ -13,7 +13,6 @@ __version__ = "0.1.0"
 from ezstitcher.core import (
     ImagePreprocessor,
     FocusAnalyzer,
-    ZStackProcessor,
     Stitcher,
     PipelineOrchestrator
 )
