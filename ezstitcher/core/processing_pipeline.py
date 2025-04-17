@@ -114,9 +114,12 @@ class PipelineOrchestrator:
 
             # Process each well
             for well in patterns_by_well.keys():
-                wavelength_patterns = patterns_by_well[well]
-                wavelength_patterns_z = patterns_by_well_z[well]
-                self.process_well(well, wavelength_patterns, wavelength_patterns_z, dirs)
+                if well in patterns_by_well_z:
+                    wavelength_patterns = patterns_by_well[well]
+                    wavelength_patterns_z = patterns_by_well_z[well]
+                    self.process_well(well, wavelength_patterns, wavelength_patterns_z, dirs)
+                else:
+                    logger.warning("Well %s found in site patterns but not in z-index patterns. Skipping.", well)
 
             return True
 
@@ -288,7 +291,7 @@ class PipelineOrchestrator:
             list: Paths to created images
         """
         output_files = []
-        
+
         # Determine processing functions for this channel
         processing_funcs = None
         if hasattr(self.config, 'reference_processing') and self.config.reference_processing:
@@ -298,34 +301,34 @@ class PipelineOrchestrator:
             elif isinstance(self.config.reference_processing, dict) and channel in self.config.reference_processing:
                 # If reference_processing is a dict, get functions for this channel
                 processing_funcs = self.config.reference_processing[channel]
-    
+
         # Convert single function to list for consistent handling
         if callable(processing_funcs):
             processing_funcs = [processing_funcs]
-        
+
         # Group files by Z-plane for stack processing
         files_by_z_plane = {}
-        
+
         for pattern in patterns:
             matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-            
+
             # Group files by Z-plane
             for filename in matching_files:
                 metadata = self.microscope_handler.parser.parse_filename(filename)
                 if not metadata:
                     continue
-                    
+
                 z_plane = metadata.get('z_index', 1)  # Default to 1 if no z-index
                 well = metadata.get('well')
-                
+
                 # Create a key for this Z-plane, well, and channel
                 z_key = (well, z_plane)
-                
+
                 if z_key not in files_by_z_plane:
                     files_by_z_plane[z_key] = []
-                    
+
                 files_by_z_plane[z_key].append(filename)
-        
+
         # Process each Z-plane stack
         for (well, z_plane), filenames in files_by_z_plane.items():
             # Load all images for this Z-plane

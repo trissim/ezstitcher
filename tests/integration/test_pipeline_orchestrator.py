@@ -39,7 +39,7 @@ MICROSCOPE_CONFIGS = {
     "OperaPhenix": {
         "format": "OperaPhenix",
         "test_dir_name": "opera_phenix_pipeline",
-        "microscope_type": "OperaPhenix",  # Explicitly specify type
+        "microscope_type": "auto",  # Explicitly specify type
         "auto_image_size": True,
     }
 }
@@ -51,6 +51,7 @@ syn_data_params = {
     "overlap_percent": 10,
     "wavelengths": 2,
     "cell_size_range": (3, 6),
+    "wells": ['A01', 'B02'],
     "wells": ['A01', 'B02'],
 }
 
@@ -177,15 +178,7 @@ def zstack_plate_dir(test_function_dir, microscope_config, test_params):
     return plate_dir
 
 # Define preprocessing functions for testing
-def enhance_contrast(img):
-    """Simple contrast enhancement for testing."""
-    p_low, p_high = np.percentile(img, (2, 98))
-    return np.clip((img - p_low) * (65535 / (p_high - p_low)), 0, 65535).astype(np.uint16)
 
-def background_subtract(img):
-    """Simple background subtraction for testing."""
-    background = np.percentile(img, 10)
-    return np.clip(img - background, 0, 65535).astype(np.uint16)
 
 # Import the ImagePreprocessor for stack functions
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
@@ -194,9 +187,11 @@ from ezstitcher.core.image_preprocessor import ImagePreprocessor
 _image_preprocessor = ImagePreprocessor()
 
 # Define a wrapper function for stack_equalize_histogram
-def stack_equalize_histogram(stack):
+def normalize(stack):
     """Apply true histogram equalization to an entire stack."""
-    return _image_preprocessor.stack_equalize_histogram(stack)
+    return _image_preprocessor.stack_percentile_normalize(stack,low_percentile=0.1, high_percentile=99.99)
+
+funcs = [normalize]
 
 def test_flat_plate_minimal(flat_plate_dir):
     """Test processing a flat plate with minimal configuration."""
@@ -359,11 +354,11 @@ def test_preprocessing_functions(flat_plate_dir):
     # Create pipeline configuration
     config = PipelineConfig(
         reference_channels=["1"],
-        reference_preprocessing={
-            "1": enhance_contrast
+        reference_processing={
+            "1": funcs
         },
-        final_preprocessing={
-            "1": background_subtract
+        final_processing={
+            "1": funcs
         },
         stitcher=StitcherConfig(
             tile_overlap=10.0,
@@ -423,17 +418,19 @@ def test_all_channels_stitched(flat_plate_dir):
 def test_mixed_preprocessing_functions(zstack_plate_dir):
     """Test that both single-image and stack-processing functions can be used."""
     # Create pipeline configuration with both types of preprocessing functions
+
+
     config = PipelineConfig(
         reference_channels=["1", "2"],
         # Channel 1 uses a single-image function
         # Channel 2 uses a stack-processing function
-        reference_preprocessing={
-            "1": background_subtract,  # Single-image function
-            "2": stack_equalize_histogram  # Stack-processing function
+        reference_processing={
+            "1": funcs,
+            "2": funcs,
         },
-        final_preprocessing={
-            "1": background_subtract,  # Single-image function
-            "2": stack_equalize_histogram  # Stack-processing function
+        final_processing={
+            "1": funcs,  # Single-image function
+            "2": funcs,  # Stack-processing function
         },
         reference_flatten="max_projection",
         stitch_flatten="max_projection",
