@@ -28,22 +28,19 @@ def find_image_files(directory: Union[str, Path], pattern: str = "*") -> List[Pa
         image_files.extend(list(directory.glob(f"{pattern}{ext}")))
     return sorted(image_files)
 
-cleanup = False
 # Define microscope configurations
 MICROSCOPE_CONFIGS = {
     "ImageXpress": {
         "format": "ImageXpress",
         "test_dir_name": "imagexpress_pipeline",
         "microscope_type": "auto",  # Use auto-detection
-        "auto_image_size": True,
-        'cleanup_dirs' : cleanup
+        "auto_image_size": True
     },
     "OperaPhenix": {
         "format": "OperaPhenix",
         "test_dir_name": "opera_phenix_pipeline",
         "microscope_type": "auto",  # Explicitly specify type
-        "auto_image_size": True,
-        'cleanup_dirs' : cleanup,
+        "auto_image_size": True
     }
 }
 
