@@ -90,24 +90,36 @@ class FilenameParser(ABC):
         if "{series}" in pattern:
             pattern = pattern.replace("{series}", "{iii}")
 
-        # If the pattern doesn't contain a placeholder, use exact matching
-        if self.PLACEHOLDER_PATTERN not in pattern:
-            matching_files = []
-            for file_path in directory.glob('*'):
-                if file_path.is_file() and file_path.name == pattern:
-                    matching_files.append(file_path.name)
-            return matching_files
+        # Parse the pattern to extract expected components
+        pattern_metadata = self.parse_filename(pattern)
+        if not pattern_metadata:
+            logger.warning(f"Could not parse pattern: {pattern}")
+            return []
 
-        # Convert pattern to regex
-        # Replace {iii} with (\d+) to match any number of digits (padded or not)
-        regex_pattern = pattern.replace(self.PLACEHOLDER_PATTERN, '(\\d+)')
-        logger.debug("Regex pattern: %s", regex_pattern)
-        regex = re.compile(regex_pattern)
-
-        # Find all matching files
+        # Find all files in the directory
         matching_files = []
         for file_path in directory.glob('*'):
-            if file_path.is_file() and regex.match(file_path.name):
+            if not file_path.is_file():
+                continue
+
+            # Parse the filename to extract its components
+            file_metadata = self.parse_filename(file_path.name)
+            if not file_metadata:
+                continue
+
+            # Check if all non-None components in the pattern match the file
+            is_match = True
+            for key, value in pattern_metadata.items():
+                # Skip components that are None in the pattern (placeholders)
+                if value is None:
+                    continue
+
+                # Check if the component exists in the file metadata and matches
+                if key not in file_metadata or file_metadata[key] != value:
+                    is_match = False
+                    break
+
+            if is_match:
                 matching_files.append(file_path.name)
 
         # Log debug information
@@ -169,17 +181,8 @@ class FilenameParser(ABC):
 
         return grouped_patterns
 
-    # The following methods are kept as aliases for backward compatibility
-    def group_patterns_by_channel(self, patterns):
-        """Group patterns by channel (alias for group_patterns_by_component)."""
-        return self.group_patterns_by_component(patterns, component='channel')
-
-    def group_patterns_by_z_index(self, patterns):
-        """Group patterns by z_index (alias for group_patterns_by_component)."""
-        return self.group_patterns_by_component(patterns, component='z_index')
-
     def auto_detect_patterns(self, folder_path, well_filter=None, extensions=None,
-                           group_by='channel', variable_components=None, flat=False):
+                           group_by=None, variable_components=None, flat=False):
         """
         Automatically detect image patterns in a folder.
 
@@ -187,13 +190,13 @@ class FilenameParser(ABC):
             folder_path (str or Path): Path to the folder
             well_filter (list): Optional list of wells to include
             extensions (list): Optional list of file extensions to include
-            group_by (str): Component to group patterns by (e.g., 'channel', 'z_index', 'well')
-                            If None and flat=False, defaults to 'channel'
+            group_by (str, optional): Component to group patterns by (e.g., 'channel', 'z_index', 'well')
+                                      If None, returns a flat list of patterns per well
             variable_components (list): List of components to make variable (e.g., ['site', 'z_index'])
-            flat (bool): If True, returns a flat list of patterns per well instead of grouping
+            flat (bool): Deprecated. Use group_by=None instead.
 
         Returns:
-            dict: Dictionary mapping wells to patterns (either grouped by component or flat)
+            dict: Dictionary mapping wells to patterns (either grouped by component or flat list)
         """
         # Set default variable components if not provided
         if variable_components is None:
@@ -212,11 +215,10 @@ class FilenameParser(ABC):
             patterns = self._generate_patterns_for_files(files, variable_components)
 
             # Return patterns based on requested format
-            if flat:
+            if flat or group_by is None:
                 result[well] = patterns
             else:
-                group_component = group_by or 'channel'
-                result[well] = self.group_patterns_by_component(patterns, component=group_component)
+                result[well] = self.group_patterns_by_component(patterns, component=group_by)
 
         return result
 

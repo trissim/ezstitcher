@@ -177,8 +177,6 @@ def zstack_plate_dir(test_function_dir, microscope_config, test_params):
     # Always return the plate directory - let the core library handle the directory structure
     return plate_dir
 
-# Define preprocessing functions for testing
-
 
 # Import the ImagePreprocessor for stack functions
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
@@ -191,7 +189,6 @@ def normalize(stack):
     """Apply true histogram equalization to an entire stack."""
     return _image_preprocessor.stack_percentile_normalize(stack,low_percentile=0.1, high_percentile=99.99)
 
-funcs = [normalize]
 
 @pytest.fixture
 def base_pipeline_config():
@@ -305,10 +302,8 @@ def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config):
     config = create_config(
         base_pipeline_config,
         reference_channels=["1", "2"],
-        reference_composite_weights={
-            "1": 0.7,
-            "2": 0.3
-        }
+        reference_composite_weights=[0.7, 0.3]  # "1": 0.7, "2": 0.3
+        
     )
 
     # Create and run pipeline
@@ -358,14 +353,13 @@ def test_best_focus_reference(zstack_plate_dir, base_pipeline_config):
 def test_preprocessing_functions(flat_plate_dir, base_pipeline_config):
     """Test processing a flat plate with preprocessing functions."""
     # Create pipeline configuration based on the base config
+
+    funcs = [normalize]
     config = create_config(
         base_pipeline_config,
         reference_processing={
             "1": funcs
         },
-        final_processing={
-            "1": funcs
-        }
     )
 
     # Create and run pipeline
