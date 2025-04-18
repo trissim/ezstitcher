@@ -1,0 +1,1426 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EvaluationInputData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="1" xmlns="http://www.perkinelmer.com/PEHH/HarmonyV6">
+  <User>Synthetic</User>
+  <InstrumentType>Phenix</InstrumentType>
+  <Plates>
+    <Plate>
+      <PlateID>flat_plate</PlateID>
+      <MeasurementID>bac121f6-5e71-4174-83b4-abc5134de00f</MeasurementID>
+      <MeasurementStartTime>2025-04-18T15:36:25.316097-04:00</MeasurementStartTime>
+      <n>flat_plate</n>
+      <PlateTypeName>96well</PlateTypeName>
+      <PlateRows>8</PlateRows>
+      <PlateColumns>12</PlateColumns>
+      <Well id="0101" />
+      <Well id="0202" />
+    </Plate>
+  </Plates>
+  <Wells>
+    <Well>
+      <id>0101</id>
+      <Row>1</Row>
+      <Col>1</Col>
+      <Image id="0101K1F1P1R1" />
+      <Image id="0101K1F1P1R2" />
+      <Image id="0101K1F2P1R1" />
+      <Image id="0101K1F2P1R2" />
+      <Image id="0101K1F3P1R1" />
+      <Image id="0101K1F3P1R2" />
+      <Image id="0101K1F4P1R1" />
+      <Image id="0101K1F4P1R2" />
+      <Image id="0101K1F5P1R1" />
+      <Image id="0101K1F5P1R2" />
+      <Image id="0101K1F6P1R1" />
+      <Image id="0101K1F6P1R2" />
+      <Image id="0101K1F7P1R1" />
+      <Image id="0101K1F7P1R2" />
+      <Image id="0101K1F8P1R1" />
+      <Image id="0101K1F8P1R2" />
+      <Image id="0101K1F9P1R1" />
+      <Image id="0101K1F9P1R2" />
+      <Image id="0101K1F10P1R1" />
+      <Image id="0101K1F10P1R2" />
+      <Image id="0101K1F11P1R1" />
+      <Image id="0101K1F11P1R2" />
+      <Image id="0101K1F12P1R1" />
+      <Image id="0101K1F12P1R2" />
+      <Image id="0101K1F13P1R1" />
+      <Image id="0101K1F13P1R2" />
+      <Image id="0101K1F14P1R1" />
+      <Image id="0101K1F14P1R2" />
+      <Image id="0101K1F15P1R1" />
+      <Image id="0101K1F15P1R2" />
+      <Image id="0101K1F16P1R1" />
+      <Image id="0101K1F16P1R2" />
+    </Well>
+    <Well>
+      <id>0202</id>
+      <Row>2</Row>
+      <Col>2</Col>
+      <Image id="0202K1F1P1R1" />
+      <Image id="0202K1F1P1R2" />
+      <Image id="0202K1F2P1R1" />
+      <Image id="0202K1F2P1R2" />
+      <Image id="0202K1F3P1R1" />
+      <Image id="0202K1F3P1R2" />
+      <Image id="0202K1F4P1R1" />
+      <Image id="0202K1F4P1R2" />
+      <Image id="0202K1F5P1R1" />
+      <Image id="0202K1F5P1R2" />
+      <Image id="0202K1F6P1R1" />
+      <Image id="0202K1F6P1R2" />
+      <Image id="0202K1F7P1R1" />
+      <Image id="0202K1F7P1R2" />
+      <Image id="0202K1F8P1R1" />
+      <Image id="0202K1F8P1R2" />
+      <Image id="0202K1F9P1R1" />
+      <Image id="0202K1F9P1R2" />
+      <Image id="0202K1F10P1R1" />
+      <Image id="0202K1F10P1R2" />
+      <Image id="0202K1F11P1R1" />
+      <Image id="0202K1F11P1R2" />
+      <Image id="0202K1F12P1R1" />
+      <Image id="0202K1F12P1R2" />
+      <Image id="0202K1F13P1R1" />
+      <Image id="0202K1F13P1R2" />
+      <Image id="0202K1F14P1R1" />
+      <Image id="0202K1F14P1R2" />
+      <Image id="0202K1F15P1R1" />
+      <Image id="0202K1F15P1R2" />
+      <Image id="0202K1F16P1R1" />
+      <Image id="0202K1F16P1R2" />
+    </Well>
+  </Wells>
+  <Images>
+    <Map>
+      <Entry ChannelID="1">
+        <ChannelName>HOECHST 33342</ChannelName>
+        <ImageType>Signal</ImageType>
+        <AcquisitionType>NonConfocal</AcquisitionType>
+        <IlluminationType>Epifluorescence</IlluminationType>
+        <ChannelType>Fluorescence</ChannelType>
+        <ImageResolutionX Unit="m">1.186752529898804e-06</ImageResolutionX>
+        <ImageResolutionY Unit="m">1.186752529898804e-06</ImageResolutionY>
+        <ImageSizeX>239</ImageSizeX>
+        <ImageSizeY>239</ImageSizeY>
+        <BinningX>2</BinningX>
+        <BinningY>2</BinningY>
+        <MaxIntensity>65536</MaxIntensity>
+        <CameraType>AndorZylaCam</CameraType>
+        <MainExcitationWavelength Unit="nm">375</MainExcitationWavelength>
+        <MainEmissionWavelength Unit="nm">456</MainEmissionWavelength>
+        <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
+        <ObjectiveNA Unit="">0.3</ObjectiveNA>
+        <ExposureTime Unit="s">0.03</ExposureTime>
+        <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
+        <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
+      </Entry>
+      <Entry ChannelID="2">
+        <ChannelName>Calcein</ChannelName>
+        <ImageType>Signal</ImageType>
+        <AcquisitionType>NonConfocal</AcquisitionType>
+        <IlluminationType>Epifluorescence</IlluminationType>
+        <ChannelType>Fluorescence</ChannelType>
+        <ImageResolutionX Unit="m">1.186752529898804e-06</ImageResolutionX>
+        <ImageResolutionY Unit="m">1.186752529898804e-06</ImageResolutionY>
+        <ImageSizeX>239</ImageSizeX>
+        <ImageSizeY>239</ImageSizeY>
+        <BinningX>2</BinningX>
+        <BinningY>2</BinningY>
+        <MaxIntensity>65536</MaxIntensity>
+        <CameraType>AndorZylaCam</CameraType>
+        <MainExcitationWavelength Unit="nm">488</MainExcitationWavelength>
+        <MainEmissionWavelength Unit="nm">525</MainEmissionWavelength>
+        <ObjectiveMagnification Unit="">10</ObjectiveMagnification>
+        <ObjectiveNA Unit="">0.3</ObjectiveNA>
+        <ExposureTime Unit="s">0.05</ExposureTime>
+        <OrientationMatrix>[[1.009457,0,0,34.3],[0,-1.009457,0,-15.1],[0,0,1.33,-6.014]]</OrientationMatrix>
+        <CropArea>[[0,0],[2160,2160],[2160,2160]]</CropArea>
+      </Entry>
+    </Map>
+    <PixelSizeCalibration>
+      <PixelSize Unit="µm">1.1868</PixelSize>
+      <MagnificationRatio>1.0</MagnificationRatio>
+    </PixelSizeCalibration>
+    <Image Version="1">
+      <id>0101K1F1P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f1p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>1</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316249-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F1P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f1p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>1</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316257-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F2P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f2p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>2</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316265-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F2P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f2p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>2</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316272-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F3P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f3p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>3</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316280-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F3P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f3p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>3</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316286-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F4P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f4p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>4</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316294-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F4P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f4p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>4</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316301-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F5P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f5p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>5</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316309-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F5P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f5p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>5</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316315-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F6P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f6p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>6</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316323-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F6P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f6p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>6</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316329-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F7P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f7p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>7</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316337-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F7P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f7p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>7</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316345-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F8P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f8p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>8</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316352-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F8P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f8p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>8</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316361-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F9P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f9p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>9</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316368-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F9P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f9p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>9</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316375-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F10P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f10p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>10</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316382-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F10P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f10p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>10</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316389-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F11P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f11p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>11</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316396-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F11P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f11p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>11</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316403-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F12P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f12p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>12</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316410-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F12P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f12p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>12</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316417-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F13P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f13p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>13</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316424-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F13P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f13p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>13</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316431-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F14P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f14p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>14</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316438-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F14P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f14p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>14</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316445-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F15P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f15p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>15</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316452-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F15P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f15p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>15</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316458-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F16P1R1</id>
+      <State>Ok</State>
+      <URL>r01c01f16p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>16</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316466-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0101K1F16P1R2</id>
+      <State>Ok</State>
+      <URL>r01c01f16p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>1</Row>
+      <Col>1</Col>
+      <FieldID>16</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316472-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F1P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f1p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>1</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316480-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F1P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f1p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>1</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316487-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F2P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f2p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>2</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316494-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F2P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f2p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>2</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316501-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F3P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f3p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>3</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316508-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F3P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f3p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>3</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316515-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F4P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f4p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>4</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316522-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F4P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f4p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>4</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.000576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316531-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F5P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f5p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>5</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316542-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F5P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f5p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>5</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316549-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F6P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f6p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>6</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316556-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F6P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f6p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>6</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316563-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F7P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f7p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>7</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316570-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F7P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f7p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>7</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316577-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F8P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f8p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>8</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316584-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F8P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f8p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>8</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.001576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316591-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F9P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f9p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>9</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316601-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F9P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f9p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>9</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316608-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F10P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f10p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>10</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316616-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F10P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f10p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>10</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316625-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F11P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f11p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>11</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316633-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F11P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f11p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>11</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316639-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F12P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f12p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>12</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316647-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F12P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f12p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>12</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.002576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316662-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F13P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f13p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>13</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316669-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F13P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f13p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>13</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.000576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316676-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F14P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f14p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>14</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316683-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F14P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f14p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>14</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.001576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316690-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F15P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f15p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>15</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316697-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F15P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f15p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>15</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.002576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316704-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F16P1R1</id>
+      <State>Ok</State>
+      <URL>r02c02f16p01-ch1sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>16</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>1</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316711-04:00</AbsTime>
+    </Image>
+    <Image Version="1">
+      <id>0202K1F16P1R2</id>
+      <State>Ok</State>
+      <URL>r02c02f16p01-ch2sk1fk1fl1.tiff</URL>
+      <Row>2</Row>
+      <Col>2</Col>
+      <FieldID>16</FieldID>
+      <PlaneID>1</PlaneID>
+      <TimepointID>1</TimepointID>
+      <SequenceID>1</SequenceID>
+      <GroupID>1</GroupID>
+      <ChannelID>2</ChannelID>
+      <FlimID>1</FlimID>
+      <PositionX Unit="m">0.003576762</PositionX>
+      <PositionY Unit="m">0.003576762</PositionY>
+      <PositionZ Unit="m">0.0001</PositionZ>
+      <AbsPositionZ Unit="m">0.135809004</AbsPositionZ>
+      <MeasurementTimeOffset Unit="s">0</MeasurementTimeOffset>
+      <AbsTime>2025-04-18T15:36:25.316718-04:00</AbsTime>
+    </Image>
+  </Images>
+</EvaluationInputData>
