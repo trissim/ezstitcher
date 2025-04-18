@@ -227,7 +227,6 @@ class PipelineOrchestrator:
                 dirs['input'],
                 dirs['processed'],
                 patterns,
-                channel,
                 processing_funcs
             )
             processed_files.extend(tile_files)
@@ -297,7 +296,6 @@ class PipelineOrchestrator:
                 dirs['input'],
                 dirs['post_processed'],
                 patterns,
-                channel,
                 processing_funcs
             )
             processed_files.extend(tile_files)
@@ -319,7 +317,7 @@ class PipelineOrchestrator:
             logger.info("Cleaning up processed tiles after final flattening")
             self.fs_manager.cleanup_processed_files(processed_files, flattened_files)
 
-    def process_tiles(self, input_dir, output_dir, patterns, channel, processing_funcs=None):
+    def process_tiles(self, input_dir, output_dir, patterns,processing_funcs=None):
         """
         Unified processing using zstack_processor.
 
@@ -327,7 +325,6 @@ class PipelineOrchestrator:
             input_dir: Input directory
             output_dir: Output directory
             patterns: List of file patterns
-            channel: Channel identifier
             processing_funcs: Processing functions to apply (optional)
 
         Returns:
