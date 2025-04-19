@@ -191,9 +191,9 @@ def normalize(stack):
 
 
 @pytest.fixture
-def base_pipeline_config():
+def base_pipeline_config(microscope_config):
     """Create a base pipeline configuration with default values."""
-    return PipelineConfig(
+    config = PipelineConfig(
         reference_channels=["1"],
         cleanup_processed=False,
         cleanup_post_processed=False,
@@ -203,6 +203,8 @@ def base_pipeline_config():
             margin_ratio=0.1
         )
     )
+    # We don't need to set workspace_path as it's handled in the PipelineOrchestrator.run method
+    return config
 
 def create_config(base_config, **kwargs):
     """Create a new configuration by overriding base config values.
@@ -236,8 +238,11 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
     assert success, "Flat plate processing failed"
 
     # Check if output directories were created
-    processed_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_processed"
-    stitched_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(flat_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert stitched_dir.exists(), "Stitched directory not created"
@@ -258,8 +263,11 @@ def test_zstack_projection_minimal(zstack_plate_dir, base_pipeline_config):
     assert success, "Z-stack projection processing failed"
 
     # Check if output directories were created
-    processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_processed"
-    stitched_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(zstack_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert stitched_dir.exists(), "Stitched directory not created"
@@ -285,8 +293,11 @@ def test_zstack_per_plane_minimal(zstack_plate_dir, base_pipeline_config):
     assert success, "Z-stack per-plane processing failed"
 
     # Check if output directories were created
-    processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_processed"
-    stitched_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(zstack_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert stitched_dir.exists(), "Stitched directory not created"
@@ -303,7 +314,7 @@ def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config):
         base_pipeline_config,
         reference_channels=["1", "2"],
         reference_composite_weights=[0.7, 0.3]  # "1": 0.7, "2": 0.3
-        
+
     )
 
     # Create and run pipeline
@@ -313,8 +324,11 @@ def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config):
     assert success, "Multi-channel reference processing failed"
 
     # Check if output directories were created
-    processed_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_processed"
-    stitched_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(flat_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert stitched_dir.exists(), "Stitched directory not created"
@@ -340,8 +354,11 @@ def test_best_focus_reference(zstack_plate_dir, base_pipeline_config):
     assert success, "Z-stack best focus reference processing failed"
 
     # Check if output directories were created
-    processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_processed"
-    stitched_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(zstack_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert stitched_dir.exists(), "Stitched directory not created"
@@ -369,9 +386,12 @@ def test_preprocessing_functions(flat_plate_dir, base_pipeline_config):
     assert success, "Processing with preprocessing functions failed"
 
     # Check if output directories were created
-    processed_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_processed"
-    post_processed_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_post_processed"
-    stitched_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(flat_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    post_processed_dir = workspace_path.parent / f"{workspace_path.name}_post_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert post_processed_dir.exists(), "Post-processed directory not created"
@@ -396,7 +416,10 @@ def test_all_channels_stitched(flat_plate_dir, base_pipeline_config):
     assert success, "Processing with all channels failed"
 
     # Check if output directories were created
-    stitched_dir = Path(flat_plate_dir).parent / f"{Path(flat_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(flat_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
     assert stitched_dir.exists(), "Stitched directory not created"
 
     # Check if stitched files were created
@@ -435,9 +458,12 @@ def test_mixed_preprocessing_functions(zstack_plate_dir, base_pipeline_config):
     assert success, "Processing with mixed preprocessing functions failed"
 
     # Check if output directories were created
-    processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_processed"
-    post_processed_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_post_processed"
-    stitched_dir = Path(zstack_plate_dir).parent / f"{Path(zstack_plate_dir).name}_stitched"
+    # Use the plate path to check for output directories
+    plate_path = Path(zstack_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    post_processed_dir = workspace_path.parent / f"{workspace_path.name}_post_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
     assert processed_dir.exists(), "Processed directory not created"
     assert post_processed_dir.exists(), "Post-processed directory not created"

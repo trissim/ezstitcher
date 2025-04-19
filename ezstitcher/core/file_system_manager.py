@@ -6,6 +6,7 @@ This module provides a class for managing file system operations.
 
 import os
 import re
+import sys
 import logging
 import warnings
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
 import numpy as np
 import shutil
+import imagecodecs
 #import imagecodecs  # Import imagecodecs for OperaPhenix TIFF reading
 
 from ezstitcher.core.microscope_interfaces import FilenameParser
@@ -564,3 +566,112 @@ class FileSystemManager:
             logger.info("Cleaned up %d processed files", removed_count)
 
         return removed_count
+
+    #### SMELLY ####
+    #### becoming god class ####
+    @staticmethod
+    def mirror_directory_with_symlinks(source_dir: Union[str, Path],
+                                      target_dir: Union[str, Path],
+                                      recursive: bool = True,
+                                      overwrite: bool = True) -> int:
+        """
+        Mirror a directory structure from source to target and create symlinks to all files.
+        If the target directory exists and overwrite is True, it will be deleted and recreated.
+
+        Args:
+            source_dir (str or Path): Path to the source directory to mirror
+            target_dir (str or Path): Path to the target directory where the mirrored structure will be created
+            recursive (bool, optional): Whether to recursively mirror subdirectories. Defaults to True.
+            overwrite (bool, optional): Whether to overwrite the target directory if it exists. Defaults to True.
+
+        Returns:
+            int: Number of symlinks created
+        """
+        source_dir = Path(source_dir)
+        target_dir = Path(target_dir)
+
+        # Ensure source directory exists
+        if not source_dir.is_dir():
+            logger.error(f"Source directory not found: {source_dir}")
+            return 0
+
+        # If target directory exists and overwrite is True, delete it
+        if target_dir.exists() and overwrite:
+            logger.info(f"Removing existing target directory: {target_dir}")
+            try:
+                # Use a more robust method to delete the directory
+                # First, try to make all files writable
+                for root, dirs, files in os.walk(target_dir, topdown=False):
+                    for name in files:
+                        file_path = os.path.join(root, name)
+                        try:
+                            os.chmod(file_path, 0o777)
+                        except Exception:
+                            pass
+                    for name in dirs:
+                        dir_path = os.path.join(root, name)
+                        try:
+                            os.chmod(dir_path, 0o777)
+                        except Exception:
+                            pass
+
+                # Then remove the directory
+                shutil.rmtree(target_dir)
+            except Exception as e:
+                logger.error(f"Error removing target directory {target_dir}: {e}")
+                logger.info("Continuing without removing the directory...")
+                # Don't return 0, try to continue anyway
+
+        # Create target directory
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Counter for created symlinks
+        symlinks_created = 0
+
+        # Get all items in the source directory
+        try:
+            items = list(source_dir.iterdir())
+            total_items = len(items)
+            print(f"Found {total_items} items in {source_dir}")
+            sys.stdout.flush()
+
+            # Process all items
+            for i, item in enumerate(items):
+                # Log progress every 100 items
+                if i > 0 and i % 100 == 0:
+                    print(f"Processed {i}/{total_items} items ({(i/total_items)*100:.1f}%)")
+                    sys.stdout.flush()
+
+                # Handle subdirectories
+                if item.is_dir() and recursive:
+                    symlinks_created += FileSystemManager.mirror_directory_with_symlinks(
+                        item, target_dir / item.name, recursive, False  # Don't overwrite subdirectories
+                    )
+                    continue
+
+                # Skip non-files
+                if not item.is_file():
+                    continue
+
+                # Create symlink
+                target_path = target_dir / item.name
+
+                try:
+                    # Remove existing symlink if it exists
+                    if target_path.exists():
+                        target_path.unlink()
+
+                    # Create new symlink
+                    os.symlink(item.resolve(), target_path)
+                    symlinks_created += 1
+                except Exception as e:
+                    logger.error(f"Error creating symlink from {item} to {target_path}: {e}")
+
+            print(f"Completed processing all {total_items} items in {source_dir}")
+            sys.stdout.flush()
+        except Exception as e:
+            logger.error(f"Error processing directory {source_dir}: {e}")
+            print(f"Error processing directory {source_dir}: {e}")
+            sys.stdout.flush()
+
+        return symlinks_created

@@ -309,3 +309,105 @@ class OperaPhenixXmlParser:
         """Helper method to get element attribute with namespace."""
         elem = parent_elem.find(f"{self.namespace}{tag_name}")
         return elem.get(attr_name) if elem is not None else None
+
+    def get_field_positions(self) -> Dict[int, Tuple[float, float]]:
+        """
+        Extract field IDs and their X,Y positions from the Index.xml file.
+
+        Returns:
+            dict: Mapping of field IDs to (x, y) position tuples
+        """
+        field_positions = {}
+
+        # Find all Image elements
+        image_elems = self.root.findall(f".//{self.namespace}Image")
+
+        for image in image_elems:
+            # Check if this element has FieldID, PositionX, and PositionY children
+            field_id_elem = image.find(f"{self.namespace}FieldID")
+            pos_x_elem = image.find(f"{self.namespace}PositionX")
+            pos_y_elem = image.find(f"{self.namespace}PositionY")
+
+            if field_id_elem is not None and pos_x_elem is not None and pos_y_elem is not None:
+                try:
+                    field_id = int(field_id_elem.text)
+                    pos_x = float(pos_x_elem.text)
+                    pos_y = float(pos_y_elem.text)
+
+                    # Only add if we don't already have this field ID
+                    if field_id not in field_positions:
+                        field_positions[field_id] = (pos_x, pos_y)
+                except (ValueError, TypeError):
+                    # Skip entries with invalid data
+                    continue
+
+        return field_positions
+
+    def sort_fields_by_position(self, positions: Dict[int, Tuple[float, float]]) -> list:
+        """
+        Sort fields based on their positions in a top-left to bottom-right raster pattern.
+
+        Args:
+            positions: Dictionary mapping field IDs to (x, y) position tuples
+
+        Returns:
+            list: Field IDs sorted in raster scan order
+        """
+        if not positions:
+            return []
+
+        # Get all unique x and y coordinates
+        x_coords = sorted(set(pos[0] for pos in positions.values()))
+        y_coords = sorted(set(pos[1] for pos in positions.values()), reverse=True)  # Reverse to get top row first
+
+        # Create a grid of field IDs
+        grid = {}
+        for field_id, (x, y) in positions.items():
+            # Find the closest x and y coordinates in our sorted lists
+            x_idx = x_coords.index(x)
+            y_idx = y_coords.index(y)  # This will now map top row to index 0
+            grid[(x_idx, y_idx)] = field_id
+
+        # Sort field IDs by row (y) then column (x)
+        # Top row (y_idx=0) will be processed first, then left-to-right within each row
+        sorted_field_ids = []
+        for y_idx in range(len(y_coords)):
+            row_fields = []
+            for x_idx in range(len(x_coords)):
+                if (x_idx, y_idx) in grid:
+                    row_fields.append(grid[(x_idx, y_idx)])
+            sorted_field_ids.extend(row_fields)
+
+        return sorted_field_ids
+
+    def get_field_id_mapping(self) -> Dict[int, int]:
+        """
+        Generate a mapping from original field IDs to new field IDs based on position data.
+
+        Returns:
+            dict: Mapping of original field IDs to new field IDs
+        """
+        # Get field positions
+        field_positions = self.get_field_positions()
+
+        # Sort fields by position
+        sorted_field_ids = self.sort_fields_by_position(field_positions)
+
+        # Create mapping from original to new field IDs
+        return {field_id: i + 1 for i, field_id in enumerate(sorted_field_ids)}
+
+    def remap_field_id(self, field_id: int, mapping: Optional[Dict[int, int]] = None) -> int:
+        """
+        Remap a field ID using the position-based mapping.
+
+        Args:
+            field_id: Original field ID
+            mapping: Mapping to use. If None, generates a new mapping.
+
+        Returns:
+            int: New field ID, or original if not in mapping
+        """
+        if mapping is None:
+            mapping = self.get_field_id_mapping()
+
+        return mapping.get(field_id, field_id)

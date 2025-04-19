@@ -44,6 +44,7 @@ class ImagePreprocessorConfig:
 class PipelineConfig:
     """Configuration for the pipeline orchestrator."""
     # Input/output configuration
+    workspace_path = None
     processed_dir_suffix: str = "_processed"
     post_processed_dir_suffix: str = "_post_processed"
     positions_dir_suffix: str = "_positions"
@@ -76,47 +77,6 @@ class PipelineConfig:
     additional_projections: Optional[List[str]] = None
     focus_method: str = "combined"
     focus_config: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)
-
-
-@dataclass
-class PlateProcessorConfig:
-    """Configuration for the PlateProcessor class."""
-    # Basic parameters
-    reference_channels: List[str] = field(default_factory=lambda: ["1"])
-    well_filter: Optional[List[str]] = None
-    use_reference_positions: bool = False
-
-    # Microscope type - can be 'auto', 'ImageXpress', 'OperaPhenix', etc.
-    microscope_type: str = 'auto'
-
-    # File renaming parameters
-    rename_files: bool = True
-    padding_width: int = 3
-    dry_run: bool = False
-
-    # File system parameters
-    output_dir_suffix: str = "_processed"
-    positions_dir_suffix: str = "_positions"
-    stitched_dir_suffix: str = "_stitched"
-    best_focus_dir_suffix: str = "_best_focus"
-    projections_dir_suffix: str = "_Projections"
-    timepoint_dir_name: str = "TimePoint_1"
-
-    # Preprocessing parameters
-    preprocessing_funcs: Optional[Dict[str, Callable]] = None
-    composite_weights: Optional[Dict[str, float]] = None
-
-    # Nested configurations
-    stitcher: StitcherConfig = field(default_factory=StitcherConfig)
-    focus_analyzer: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)
-    image_preprocessor: ImagePreprocessorConfig = field(default_factory=ImagePreprocessorConfig)
-
-    # Z-stack processing configuration
-    reference_flatten: Union[str, Callable[[List[Any]], Any]] = "max_projection"
-    stitch_flatten: Optional[Union[str, Callable[[List[Any]], Any]]] = None
-    save_reference: bool = True
-    additional_projections: Optional[List[str]] = None
-    focus_method: str = "combined"
 
 
 # Legacy configs for backward compatibility

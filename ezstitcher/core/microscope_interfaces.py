@@ -9,6 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
+from ezstitcher.core.image_locator import ImageLocator
 import re
 
 logger = logging.getLogger(__name__)
@@ -234,19 +235,57 @@ class FilenameParser(ABC):
         Returns:
             dict: Dictionary mapping wells to lists of image files
         """
+        import time
         from collections import defaultdict
         from ezstitcher.core.image_locator import ImageLocator
+
+        start_time = time.time()
+        logger.info("Finding and filtering images in %s", folder_path)
 
         # Find all image files
         folder_path = Path(folder_path)
         extensions = extensions or ['.tif', '.TIF', '.tiff', '.TIFF']
         image_dir = ImageLocator.find_image_directory(folder_path)
         logger.info("Using image directory: %s", image_dir)
-        image_paths = ImageLocator.find_images_in_directory(image_dir, extensions, recursive=True)
+
+        # Check if this is an Opera Phenix dataset by checking for the remap_field_in_filename method
+        is_opera_phenix = hasattr(self, 'remap_field_in_filename')
+
+        # For Opera Phenix, limit the number of files to process
+        if is_opera_phenix:
+            logger.info("Detected Opera Phenix dataset. Using optimized file detection.")
+            # For Opera Phenix, just look at a sample of files
+            image_paths = []
+
+            # Check root directory
+            for ext in extensions:
+                root_images = list(image_dir.glob(f"*{ext}"))[:100]  # Limit to 100 files per extension
+                image_paths.extend(root_images)
+                if len(image_paths) >= 100:
+                    break
+
+            # If no files in root, check immediate subdirectories
+            if not image_paths:
+                for subdir in image_dir.iterdir():
+                    if subdir.is_dir():
+                        for ext in extensions:
+                            subdir_images = list(subdir.glob(f"*{ext}"))[:100]  # Limit to 100 files per subdir/ext
+                            image_paths.extend(subdir_images)
+                            if len(image_paths) >= 100:  # Stop after finding 100 files total
+                                break
+                        if len(image_paths) >= 100:
+                            break
+        else:
+            # For other microscopes, use the standard approach but limit recursion depth
+            image_paths = ImageLocator.find_images_in_directory(image_dir, extensions, recursive=True)
 
         if not image_paths:
             logger.warning("No image files found in %s", folder_path)
             return {}
+
+        logger.info("Found %d image files in %.2f seconds. Grouping by well...",
+                   len(image_paths), time.time() - start_time)
+        group_start = time.time()
 
         # Group files by well
         files_by_well = defaultdict(list)
@@ -260,6 +299,8 @@ class FilenameParser(ABC):
             if not well_filter or any(well.lower() == w.lower() for w in well_filter):
                 files_by_well[well].append(img_path)
 
+        logger.info("Grouped %d files into %d wells in %.2f seconds",
+                   len(image_paths), len(files_by_well), time.time() - group_start)
         return files_by_well
 
     def _generate_patterns_for_files(self, files, variable_components):
@@ -428,7 +469,6 @@ class MicroscopeHandler:
 
         try:
             # Get sample files and test each parser
-            from ezstitcher.core.image_locator import ImageLocator
             sample_files = ImageLocator.find_images_in_directory(self.plate_folder)[:10]
 
             if not sample_files:
@@ -505,6 +545,202 @@ class MicroscopeHandler:
     def get_pixel_size(self, plate_path: Union[str, Path]) -> Optional[float]:
         """Delegate to metadata handler."""
         return self.metadata_handler.get_pixel_size(plate_path)
+
+    def init_workspace(self, plate_path: Union[str, Path], workspace_path: Union[str, Path]) -> int:
+        """Mirror the plate directory and create symlinks to all files.
+
+        For Opera Phenix, also renames symlinks based on field indices from Index.xml.
+
+        Args:
+            plate_path: Path to the source plate directory
+            workspace_path: Path to the target workspace directory
+
+        Returns:
+            int: Number of symlinks created
+        """
+        # Import here to avoid circular imports
+        from ezstitcher.core.file_system_manager import FileSystemManager
+        # Import time for performance logging
+        import time
+        import sys
+
+        plate_path = Path(plate_path)
+        workspace_path = Path(workspace_path)
+        self.plate_folder = workspace_path
+
+        print(f"Starting to mirror directory from {plate_path} to {workspace_path}")
+        start_time = time.time()
+
+        # Create basic directory structure with symlinks
+        print("Creating symlinks...")
+        sys.stdout.flush()  # Force output to be displayed immediately
+        symlink_count = FileSystemManager.mirror_directory_with_symlinks(plate_path, workspace_path)
+
+        print(f"Mirroring completed in {time.time() - start_time:.2f} seconds. Created {symlink_count} symlinks.")
+        sys.stdout.flush()  # Force output to be displayed immediately
+
+        # Check if the parser has a remap_field_in_filename method (Opera Phenix specific)
+        if hasattr(self.parser, 'remap_field_in_filename'):
+            print("Detected Opera Phenix dataset. Checking for metadata file...")
+            sys.stdout.flush()  # Force output to be displayed immediately
+
+            # Find metadata file (Index.xml for Opera Phenix)
+            metadata_file = self.metadata_handler.find_metadata_file(plate_path)
+            if metadata_file and hasattr(self.metadata_handler, 'create_xml_parser'):
+                print(f"Found metadata file: {metadata_file}. Starting field remapping.")
+                sys.stdout.flush()  # Force output to be displayed immediately
+                remap_start_time = time.time()
+
+                # Create XML parser using the metadata file
+                print("Creating XML parser...")
+                sys.stdout.flush()  # Force output to be displayed immediately
+                xml_parser = self.metadata_handler.create_xml_parser(metadata_file)
+
+                # Find image files in the workspace - limit to direct files in the workspace
+                # rather than searching all subdirectories
+                print("Finding image files in workspace...")
+                sys.stdout.flush()  # Force output to be displayed immediately
+
+                # Find all image files in the workspace
+                print("Finding all image files in workspace...")
+                sys.stdout.flush()  # Force output to be displayed immediately
+
+                # First check the root directory
+                image_files = []
+                print("Checking root directory for image files...")
+                sys.stdout.flush()  # Force output to be displayed immediately
+                root_tiff_files = list(workspace_path.glob("*.tiff"))
+                root_tif_files = list(workspace_path.glob("*.tif"))
+                image_files.extend(root_tiff_files)
+                image_files.extend(root_tif_files)
+
+                # If no files found in the root, try one level down (common for Opera Phenix)
+                if not image_files:
+                    print("No image files found in root directory. Checking subdirectories...")
+                    sys.stdout.flush()  # Force output to be displayed immediately
+                    subdirs = list(workspace_path.iterdir())
+                    print(f"Found {len(subdirs)} subdirectories")
+                    sys.stdout.flush()  # Force output to be displayed immediately
+
+                    for i, subdir in enumerate(subdirs):
+                        if subdir.is_dir():
+                            print(f"Checking subdirectory {i+1}/{len(subdirs)}: {subdir.name}")
+                            sys.stdout.flush()  # Force output to be displayed immediately
+                            subdir_tiff_files = list(subdir.glob("*.tiff"))
+                            subdir_tif_files = list(subdir.glob("*.tif"))
+                            image_files.extend(subdir_tiff_files)
+                            image_files.extend(subdir_tif_files)
+                            print(f"Found {len(subdir_tiff_files) + len(subdir_tif_files)} files in {subdir.name}")
+                            sys.stdout.flush()  # Force output to be displayed immediately
+
+                total_files = len(image_files)
+                print(f"Found {total_files} image files. Remapping field IDs...")
+                sys.stdout.flush()  # Force output to be displayed immediately
+
+                # Get field ID mapping
+                print("Getting field ID mapping from XML...")
+                sys.stdout.flush()
+                field_mapping = xml_parser.get_field_id_mapping()
+
+                # Print the first 20 entries of the field mapping
+                print("Field ID mapping (first 20 entries):")
+                sorted_field_ids = sorted(field_mapping.keys())[:20]  # Get first 20 field IDs
+                for field_id in sorted_field_ids:
+                    new_field_id = field_mapping[field_id]
+                    print(f"  Field {field_id:3d} -> {new_field_id:3d}")
+
+                # Print total number of mappings
+                print(f"Total mappings: {len(field_mapping)}")
+                sys.stdout.flush()
+
+                # Remap field IDs in filenames
+                additional_symlinks = 0
+                remapped_files = 0
+                skipped_files = 0
+
+                # Calculate progress reporting interval based on total number of files
+                # For large datasets, report less frequently
+                if total_files > 10000:
+                    report_interval = 1000  # Report every 1000 files for very large datasets
+                elif total_files > 1000:
+                    report_interval = 100   # Report every 100 files for large datasets
+                else:
+                    report_interval = 10    # Report every 10 files for small datasets
+
+                print(f"Starting to process {total_files} files...")
+                sys.stdout.flush()
+
+                # Group files by field ID for more efficient processing
+                files_by_field = {}
+                for image_file in image_files:
+                    metadata = self.parser.parse_filename(image_file.name)
+                    if metadata and 'site' in metadata and metadata['site'] is not None:
+                        field_id = metadata['site']
+                        if field_id not in files_by_field:
+                            files_by_field[field_id] = []
+                        files_by_field[field_id].append(image_file)
+                    else:
+                        skipped_files += 1
+
+                print(f"Grouped files by field ID: {len(files_by_field)} unique field IDs")
+                for field_id, files in files_by_field.items():
+                    print(f"  Field {field_id}: {len(files)} files")
+                if skipped_files > 0:
+                    print(f"  Skipped {skipped_files} files with no field ID")
+                sys.stdout.flush()
+
+                # Process files by field ID
+                processed_files = 0
+                for field_id, field_files in files_by_field.items():
+                    # Get the new field ID from the mapping
+                    new_field_id = field_mapping.get(field_id, field_id)
+
+                    # Process all files for this field ID
+                    for image_file in field_files:
+                        processed_files += 1
+
+                        # Log progress at appropriate intervals
+                        if processed_files > 0 and processed_files % report_interval == 0:
+                            print(f"Processed {processed_files}/{total_files} files ({(processed_files/total_files)*100:.1f}%)")
+                            sys.stdout.flush()  # Force output to be displayed immediately
+
+                        # Always create a new filename with consistent padding, even if the field ID doesn't change
+                        metadata = self.parser.parse_filename(image_file.name)
+                        if metadata:
+                            # Determine the field ID to use (original or remapped)
+                            site_to_use = metadata['site']
+                            if field_id in field_mapping:
+                                site_to_use = field_mapping[field_id]  # Use the remapped field ID
+                                remapped_files += 1
+
+                            # Create a new filename with the appropriate field ID
+                            new_filename = self.parser.construct_filename(
+                                well=metadata['well'],
+                                site=site_to_use,
+                                channel=metadata['channel'],
+                                z_index=metadata['z_index'],
+                                extension=metadata['extension'],
+                                site_padding=3,
+                                z_padding=3
+                            )
+
+                            # Create the symlink if the filename is different
+                            if new_filename != image_file.name:
+                                new_path = image_file.parent / new_filename
+                                if not new_path.exists():
+                                    # Create a new symlink with the remapped filename
+                                    target = image_file.resolve()
+                                    new_path.symlink_to(target)
+                                    additional_symlinks += 1
+
+                symlink_count += additional_symlinks
+                print(f"Field remapping completed in {time.time() - remap_start_time:.2f} seconds.")
+                print(f"Remapped {remapped_files} files, created {additional_symlinks} new symlinks.")
+                sys.stdout.flush()  # Force output to be displayed immediately
+
+        print("Workspace initialization completed successfully.")
+        sys.stdout.flush()  # Force output to be displayed immediately
+        return symlink_count
 
 
 def create_microscope_handler(microscope_type: str = 'auto', **kwargs) -> MicroscopeHandler:

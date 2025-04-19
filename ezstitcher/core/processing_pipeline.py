@@ -52,16 +52,25 @@ class PipelineOrchestrator:
         try:
             # Setup
             plate_path = Path(plate_folder)
+            #plate_path = Path("/home/ts/nvme_usb/Opera/20250407TS-12w_axoTest/20250407TS-12w_axoTest/20250407TS-12w_axoTest__2025-04-07T14_16_59-Measurement_2")
+            # Use workspace_path from config if provided, otherwise create a default path
+            workspace_path = self.config.workspace_path if self.config.workspace_path is not None else plate_path.parent / f"{plate_path.name}_workspace"
+            print("detecting microscope type")
             self.microscope_handler = create_microscope_handler('auto', plate_folder=plate_path)
-            self.config.grid_size = self.microscope_handler.get_grid_dimensions(plate_path)
-            self.config.pixel_size = self.microscope_handler.get_pixel_size(plate_path)
+            print("init workspace " , workspace_path)
+            self.microscope_handler.init_workspace(plate_path, workspace_path)
+            self.config.grid_size = self.microscope_handler.get_grid_dimensions(workspace_path)
+            print("grid size ", self.config.grid_size)
+            self.config.pixel_size = self.microscope_handler.get_pixel_size(workspace_path)
+            print("pixel size ", self.config.pixel_size)
             self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
+            print("preapring images through renaming")
             # Prepare images (pad filenames and organize Z-stack folders)
-            input_dir = self._prepare_images(plate_path)
+            input_dir = self._prepare_images(workspace_path)
 
             # Create directory structure
-            dirs = self._setup_directories(plate_path, input_dir)
+            dirs = self._setup_directories(workspace_path, input_dir)
 
             # Get wells to process
             wells = self._get_wells_to_process(dirs['input'])
@@ -93,13 +102,41 @@ class PipelineOrchestrator:
         Returns:
             list: List of wells to process
         """
+        import time
+        start_time = time.time()
+        logger.info("Finding wells to process in %s", input_dir)
+
         # Auto-detect all wells
         all_wells = set()
 
-        # Find all image files
-        image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
+        # For Opera Phenix, we can optimize by only looking at a sample of files
+        # since all files in a well have the same well ID
+        is_opera_phenix = hasattr(self.microscope_handler.parser, 'remap_field_in_filename')
+
+        # Find image files - for Opera Phenix, limit to non-recursive and sample size
+        if is_opera_phenix:
+            # For Opera Phenix, just look at files in the root directory and immediate subdirectories
+            logger.info("Detected Opera Phenix dataset. Using optimized well detection.")
+            image_paths = []
+
+            # Check root directory
+            root_images = list(Path(input_dir).glob("*.tif*"))[:100]  # Limit to 100 files
+            image_paths.extend(root_images)
+
+            # If no files in root, check immediate subdirectories
+            if not image_paths:
+                for subdir in Path(input_dir).iterdir():
+                    if subdir.is_dir():
+                        subdir_images = list(subdir.glob("*.tif*"))[:100]  # Limit to 100 files per subdir
+                        image_paths.extend(subdir_images)
+                        if len(image_paths) >= 100:  # Stop after finding 100 files total
+                            break
+        else:
+            # For other microscopes, use the standard approach
+            image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
 
         # Extract wells from filenames
+        logger.info("Found %d image files. Extracting well information...", len(image_paths))
         for img_path in image_paths:
             metadata = self.microscope_handler.parse_filename(img_path.name)
             if metadata and 'well' in metadata:
@@ -109,9 +146,12 @@ class PipelineOrchestrator:
         if self.config.well_filter:
             # Convert well filter to lowercase for case-insensitive matching
             well_filter_lower = [w.lower() for w in self.config.well_filter]
-            return [well for well in all_wells if well.lower() in well_filter_lower]
+            wells_to_process = [well for well in all_wells if well.lower() in well_filter_lower]
+        else:
+            wells_to_process = list(all_wells)
 
-        return list(all_wells)
+        logger.info("Found %d wells in %.2f seconds", len(wells_to_process), time.time() - start_time)
+        return wells_to_process
 
     def process_well(self, well, dirs):
         """
@@ -123,6 +163,7 @@ class PipelineOrchestrator:
         """
         logger.info("Processing well %s", well)
 
+        print("pixel size ", self.config.pixel_size)
         # 1. Process reference images (for position generation)
         self.process_reference_images(well, dirs)
 
@@ -467,25 +508,35 @@ class PipelineOrchestrator:
         Returns:
             Path: Path to the image directory
         """
+        import time
+        start_time = time.time()
+
         # Find the image directory
         image_dir = ImageLocator.find_image_directory(plate_path)
         logger.info("Found image directory: %s", image_dir)
 
-        # Rename files with consistent padding and force missing suffixes
+        # Always rename files with consistent padding, even for Opera Phenix datasets
+        logger.info("Renaming files with consistent padding...")
+        rename_start = time.time()
         self.fs_manager.rename_files_with_consistent_padding(
             image_dir,
             parser=self.microscope_handler,
             width=DEFAULT_PADDING,  # Use consistent padding width
             force_suffixes=True  # Force missing suffixes to be added
         )
+        logger.info("Renamed files in %.2f seconds", time.time() - rename_start)
 
         # Detect and organize Z-stack folders
-        has_zstack_folders, _ = self.fs_manager.detect_zstack_folders(image_dir)
+        zstack_start = time.time()
+        has_zstack_folders, z_folders = self.fs_manager.detect_zstack_folders(image_dir)
         if has_zstack_folders:
-            logger.info("Organizing Z-stack folders in %s", image_dir)
+            logger.info("Found %d Z-stack folders in %s", len(z_folders), image_dir)
+            logger.info("Organizing Z-stack folders...")
             self.fs_manager.organize_zstack_folders(image_dir, filename_parser=self.microscope_handler)
+            logger.info("Organized Z-stack folders in %.2f seconds", time.time() - zstack_start)
 
         # Return the image directory (which may have changed if Z-stack folders were organized)
+        logger.info("Image preparation completed in %.2f seconds", time.time() - start_time)
         return ImageLocator.find_image_directory(plate_path)
 
     def generate_positions(self, well, dirs):
@@ -662,7 +713,7 @@ class PipelineOrchestrator:
             if input_dir is output_dir:
                 for filename in matching_files:
                     self.fs_manager.delete_file(output_dir/filename)
-            # save flattened stack as 1 image if function flattens 
+            # save flattened stack as 1 image if function flattens
             if len(images) != len(matching_files):
                 output_path = output_dir / matching_files[0]
                 self.fs_manager.save_image(output_path, images[0])
@@ -671,6 +722,6 @@ class PipelineOrchestrator:
                 for image,file_name in zip(images,matching_files):
                     output_path = output_dir / file_name
                     self.fs_manager.save_image(output_path, image)
-            
+
 
         return output_files

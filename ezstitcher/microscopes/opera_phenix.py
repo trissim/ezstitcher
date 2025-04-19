@@ -138,6 +138,40 @@ class OperaPhenixFilenameParser(FilenameParser):
 
         return f"r{row:02d}c{col:02d}{site_part}{z_part}-ch{channel}sk1fk1fl1{extension}"
 
+    def remap_field_in_filename(self, filename: str, xml_parser: Optional[OperaPhenixXmlParser] = None) -> str:
+        """
+        Remap the field ID in a filename to follow a top-left to bottom-right pattern.
+
+        Args:
+            filename: Original filename
+            xml_parser: Parser with XML data
+
+        Returns:
+            str: New filename with remapped field ID
+        """
+        if xml_parser is None:
+            return filename
+
+        # Parse the filename
+        metadata = self.parse_filename(filename)
+        if not metadata or 'site' not in metadata or metadata['site'] is None:
+            return filename
+
+        # Get the mapping and remap the field ID
+        mapping = xml_parser.get_field_id_mapping()
+        new_field_id = xml_parser.remap_field_id(metadata['site'], mapping)
+
+        # Always create a new filename with the remapped field ID and consistent padding
+        # This ensures all filenames have the same format, even if the field ID didn't change
+        return self.construct_filename(
+            well=metadata['well'],
+            site=new_field_id,
+            channel=metadata['channel'],
+            z_index=metadata['z_index'],
+            extension=metadata['extension'],
+            site_padding=3,
+            z_padding=3
+        )
 
 
 class OperaPhenixMetadataHandler(MetadataHandler):
@@ -174,7 +208,7 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         if index_xml:
             try:
                 # Use the OperaPhenixXmlParser to get the grid size
-                xml_parser = OperaPhenixXmlParser(index_xml)
+                xml_parser = self.create_xml_parser(index_xml)
                 grid_size = xml_parser.get_grid_size()
 
                 if grid_size[0] > 0 and grid_size[1] > 0:
@@ -202,7 +236,7 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         if index_xml:
             try:
                 # Use the OperaPhenixXmlParser to get the pixel size
-                xml_parser = OperaPhenixXmlParser(index_xml)
+                xml_parser = self.create_xml_parser(index_xml)
                 pixel_size = xml_parser.get_pixel_size()
 
                 if pixel_size > 0:
@@ -214,3 +248,15 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         # Default value
         logger.warning("Using default pixel size: 0.65 μm")
         return 0.65  # Default value in micrometers
+
+    def create_xml_parser(self, xml_path: Union[str, Path]):
+        """
+        Create an OperaPhenixXmlParser for the given XML file.
+
+        Args:
+            xml_path: Path to the XML file
+
+        Returns:
+            OperaPhenixXmlParser: Parser for the XML file
+        """
+        return OperaPhenixXmlParser(xml_path)
