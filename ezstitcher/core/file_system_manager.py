@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
 import numpy as np
 import shutil
-import imagecodecs
+#import imagecodecs
 #import imagecodecs  # Import imagecodecs for OperaPhenix TIFF reading
 
 from ezstitcher.core.microscope_interfaces import FilenameParser

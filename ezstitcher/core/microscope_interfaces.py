@@ -256,30 +256,23 @@ class FilenameParser(ABC):
         # Check if this is an Opera Phenix dataset by checking for the remap_field_in_filename method
         is_opera_phenix = hasattr(self, 'remap_field_in_filename')
 
-        # For Opera Phenix, limit the number of files to process
+        # For Opera Phenix, use a more efficient file detection approach
         if is_opera_phenix:
             logger.info("Detected Opera Phenix dataset. Using optimized file detection.")
-            # For Opera Phenix, just look at a sample of files
             image_paths = []
 
-            # Check root directory
+            # Check root directory first
             for ext in extensions:
-                root_images = list(image_dir.glob(f"*{ext}"))[:100]  # Limit to 100 files per extension
+                root_images = list(image_dir.glob(f"*{ext}"))
                 image_paths.extend(root_images)
-                if len(image_paths) >= 100:
-                    break
 
             # If no files in root, check immediate subdirectories
             if not image_paths:
                 for subdir in image_dir.iterdir():
                     if subdir.is_dir():
                         for ext in extensions:
-                            subdir_images = list(subdir.glob(f"*{ext}"))[:100]  # Limit to 100 files per subdir/ext
+                            subdir_images = list(subdir.glob(f"*{ext}"))
                             image_paths.extend(subdir_images)
-                            if len(image_paths) >= 100:  # Stop after finding 100 files total
-                                break
-                        if len(image_paths) >= 100:
-                            break
         else:
             # For other microscopes, use the standard approach but limit recursion depth
             image_paths = ImageLocator.find_images_in_directory(image_dir, extensions, recursive=True)
@@ -666,7 +659,9 @@ class MicroscopeHandler:
 
                 # Create a temporary subfolder for all files that need to be renamed
                 temp_folder_name = f"temp_rename_{uuid.uuid4().hex[:8]}"
-                temp_folder = workspace_path / temp_folder_name
+                image_folder= ImageLocator.find_image_directory(workspace_path)
+                temp_folder = image_folder / temp_folder_name
+                #temp_folder = workspace_path / temp_folder_name
                 temp_folder.mkdir(exist_ok=True)
                 print(f"Created temporary folder: {temp_folder}")
                 sys.stdout.flush()
@@ -738,24 +733,23 @@ class MicroscopeHandler:
                             )
 
                             # Create the symlink if the filename is different
-                            if new_filename != image_file.name:
-                                try:
-                                    # Get the target of the original symlink
-                                    target = image_file.resolve()
+                            try:
+                                # Get the target of the original symlink
+                                #target = image_file.resolve()
 
-                                    # Move the original symlink to the temp folder
-                                    temp_path = temp_folder / image_file.name
-                                    os.rename(str(image_file), str(temp_path))
+                                # Move the original symlink to the temp folder
+                                temp_path = temp_folder / image_file.name
+                                os.rename(str(image_file), str(temp_path))
 
-                                    # Create a new symlink in the temp folder with the new name
-                                    new_temp_path = temp_folder / new_filename
-                                    new_temp_path.symlink_to(target)
+                                ## Create a new symlink in the temp folder with the new name
+                                #new_temp_path = temp_folder / new_filename
+                                #new_temp_path.symlink_to(target)
 
-                                    # Store the mapping for later moving back to original location
-                                    renamed_files[new_filename] = new_temp_path
-                                    additional_symlinks += 1
-                                except Exception as e:
-                                    print(f"Error renaming {image_file.name} to {new_filename}: {e}")
+                                # Store the mapping for later moving back to original location
+                                renamed_files[image_file.name] = temp_path
+                                additional_symlinks += 1
+                            except Exception as e:
+                                print(f"Error renaming {image_file.name} to {new_filename}: {e}")
 
                 symlink_count += additional_symlinks
                 print(f"Field remapping completed in {time.time() - remap_start_time:.2f} seconds.")
@@ -770,7 +764,7 @@ class MicroscopeHandler:
                 for new_filename, temp_path in renamed_files.items():
                     try:
                         # Move the renamed symlink back to the original location
-                        dest_path = workspace_path / new_filename
+                        dest_path = image_folder / new_filename
                         os.rename(str(temp_path), str(dest_path))
                     except Exception as e:
                         print(f"Error moving {temp_path} to {dest_path}: {e}")
