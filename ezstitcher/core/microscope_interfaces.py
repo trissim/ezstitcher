@@ -6,11 +6,16 @@ functionality, including filename parsing and metadata handling.
 """
 
 import logging
+import os
+import re
+import shutil
+import sys
+import time
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
 from ezstitcher.core.image_locator import ImageLocator
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -657,6 +662,14 @@ class MicroscopeHandler:
                 additional_symlinks = 0
                 remapped_files = 0
                 skipped_files = 0
+                renamed_files = {}
+
+                # Create a temporary subfolder for all files that need to be renamed
+                temp_folder_name = f"temp_rename_{uuid.uuid4().hex[:8]}"
+                temp_folder = workspace_path / temp_folder_name
+                temp_folder.mkdir(exist_ok=True)
+                print(f"Created temporary folder: {temp_folder}")
+                sys.stdout.flush()
 
                 # Calculate progress reporting interval based on total number of files
                 # For large datasets, report less frequently
@@ -726,17 +739,56 @@ class MicroscopeHandler:
 
                             # Create the symlink if the filename is different
                             if new_filename != image_file.name:
-                                new_path = image_file.parent / new_filename
-                                if not new_path.exists():
-                                    # Create a new symlink with the remapped filename
+                                try:
+                                    # Get the target of the original symlink
                                     target = image_file.resolve()
-                                    new_path.symlink_to(target)
+
+                                    # Move the original symlink to the temp folder
+                                    temp_path = temp_folder / image_file.name
+                                    os.rename(str(image_file), str(temp_path))
+
+                                    # Create a new symlink in the temp folder with the new name
+                                    new_temp_path = temp_folder / new_filename
+                                    new_temp_path.symlink_to(target)
+
+                                    # Store the mapping for later moving back to original location
+                                    renamed_files[new_filename] = new_temp_path
                                     additional_symlinks += 1
+                                except Exception as e:
+                                    print(f"Error renaming {image_file.name} to {new_filename}: {e}")
 
                 symlink_count += additional_symlinks
                 print(f"Field remapping completed in {time.time() - remap_start_time:.2f} seconds.")
                 print(f"Remapped {remapped_files} files, created {additional_symlinks} new symlinks.")
                 sys.stdout.flush()  # Force output to be displayed immediately
+
+                # Move the renamed symlinks back to the original location
+                print(f"Moving {len(renamed_files)} renamed files back to original location...")
+                sys.stdout.flush()
+                move_start_time = time.time()
+
+                for new_filename, temp_path in renamed_files.items():
+                    try:
+                        # Move the renamed symlink back to the original location
+                        dest_path = workspace_path / new_filename
+                        os.rename(str(temp_path), str(dest_path))
+                    except Exception as e:
+                        print(f"Error moving {temp_path} to {dest_path}: {e}")
+
+                print(f"Moved files back in {time.time() - move_start_time:.2f} seconds.")
+                sys.stdout.flush()
+
+                # Clean up the temporary folder
+                try:
+                    if temp_folder.exists():
+                        # Check if the folder is empty before removing
+                        remaining_files = list(temp_folder.iterdir())
+                        if remaining_files:
+                            print(f"Warning: {len(remaining_files)} files remain in the temporary folder.")
+                            print("These files may have had conflicts during renaming.")
+                        shutil.rmtree(temp_folder)
+                except Exception as e:
+                    print(f"Error removing temporary folder: {e}")
 
         print("Workspace initialization completed successfully.")
         sys.stdout.flush()  # Force output to be displayed immediately
