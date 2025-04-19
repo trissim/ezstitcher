@@ -56,7 +56,14 @@ ENV/
 # Test directories
 # Ignore test data but not test files
 tests/**/tests_data/
+tests/**/test_data/
 tests/**/__pycache__/
+
+# Specific test files to ignore
+*.HTD
+*.xml
+*.csv
+tests/integration/tests_data/
 
 # Documentation build files
 docs/build/
