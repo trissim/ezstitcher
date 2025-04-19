@@ -55,7 +55,7 @@ ENV/
 
 # Test directories
 # Ignore test data but not test files
-tests/**/test_data/
+tests/**/tests_data/
 tests/**/__pycache__/
 
 # Documentation build files

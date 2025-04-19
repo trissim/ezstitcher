@@ -256,7 +256,8 @@ class FilenameParser(ABC):
                 continue
 
             well = metadata['well']
-            if not well_filter or well in well_filter:
+            # Case-insensitive well filtering
+            if not well_filter or any(well.lower() == w.lower() for w in well_filter):
                 files_by_well[well].append(img_path)
 
         return files_by_well

@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Union, Any, Tuple, Pattern
 import tifffile
 import numpy as np
 import shutil
+#import imagecodecs  # Import imagecodecs for OperaPhenix TIFF reading
 
 from ezstitcher.core.microscope_interfaces import FilenameParser
 from ezstitcher.core.image_locator import ImageLocator

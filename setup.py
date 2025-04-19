@@ -26,6 +26,7 @@ setup(
         "pandas>=1.2.0",
         "imageio>=2.9.0",
         "tifffile>=2021.1.1",
+        "imagecodecs>=2021.1.1",  # Required for OperaPhenix TIFF reading
         "ashlar>=1.14.0",
         "opencv-python>=4.5.0",
         "PyYAML>=6.0",

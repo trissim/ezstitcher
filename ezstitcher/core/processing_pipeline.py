@@ -97,7 +97,6 @@ class PipelineOrchestrator:
         all_wells = set()
 
         # Find all image files
-        from ezstitcher.core.image_locator import ImageLocator
         image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
 
         # Extract wells from filenames
@@ -108,7 +107,9 @@ class PipelineOrchestrator:
 
         # Apply well filter if specified
         if self.config.well_filter:
-            return [well for well in all_wells if well in self.config.well_filter]
+            # Convert well filter to lowercase for case-insensitive matching
+            well_filter_lower = [w.lower() for w in self.config.well_filter]
+            return [well for well in all_wells if well.lower() in well_filter_lower]
 
         return list(all_wells)
 
@@ -157,30 +158,10 @@ class PipelineOrchestrator:
             if channel_funcs:
                 processing_funcs[channel] = channel_funcs
 
-        # Process reference images
-        processed_files = self.process_patterns_with_variable_components(
-            input_dir=dirs['input'],
-            output_dir=dirs['processed'],
-            well_filter=[well],
-            variable_components=['site'],
-            group_by='channel',
-            processing_funcs=processing_funcs
-        ).get(well, [])
-
-        # Create composites in one step
-        composite_files = self.process_patterns_with_variable_components(
-            input_dir=dirs['processed'],
-            output_dir=dirs['processed'],
-            well_filter=[well],
-            variable_components=['channel'],
-            group_by='site',
-            processing_funcs=self.image_preprocessor.create_composite,
-            processing_args={'weights': self.config.reference_composite_weights}
-        ).get(well, [])
 
         # Flatten Z-stacks if needed - use create_projection directly
-        flattened_files = self.process_patterns_with_variable_components(
-            input_dir=dirs['processed'],
+        self.process_patterns_with_variable_components(
+            input_dir=dirs['input'],
             output_dir=dirs['processed'],
             well_filter=[well],
             variable_components=['z_index'],
@@ -190,6 +171,28 @@ class PipelineOrchestrator:
                 'focus_analyzer': self.focus_analyzer
             }
         ).get(well, [])
+
+        # Process reference images
+        self.process_patterns_with_variable_components(
+            input_dir=dirs['processed'],
+            output_dir=dirs['processed'],
+            well_filter=[well],
+            variable_components=['site'],
+            group_by='channel',
+            processing_funcs=processing_funcs
+        ).get(well, [])
+
+        # Create composites in one step
+        self.process_patterns_with_variable_components(
+            input_dir=dirs['processed'],
+            output_dir=dirs['processed'],
+            well_filter=[well],
+            variable_components=['channel'],
+            group_by='site',
+            processing_funcs=self.image_preprocessor.create_composite,
+            processing_args={'weights': self.config.reference_composite_weights}
+        ).get(well, [])
+
 
     def process_final_images(self, well, dirs):
         """
@@ -218,7 +221,7 @@ class PipelineOrchestrator:
                 processing_funcs[channel] = []
 
         # Process final images
-        processed_files = self.process_patterns_with_variable_components(
+        self.process_patterns_with_variable_components(
             input_dir=dirs['input'],
             output_dir=dirs['post_processed'],
             well_filter=[well],
@@ -227,7 +230,7 @@ class PipelineOrchestrator:
         ).get(well, [])
 
         # Flatten Z-stacks if needed - use create_projection directly
-        flattened_files = self.process_patterns_with_variable_components(
+        self.process_patterns_with_variable_components(
             input_dir=dirs['post_processed'],
             output_dir=dirs['post_processed'],
             well_filter=[well],
@@ -285,7 +288,7 @@ class PipelineOrchestrator:
         channels = set()
         for img_path in image_paths:
             metadata = self.microscope_handler.parse_filename(img_path.name)
-            if metadata and 'well' in metadata and metadata['well'] == well and 'channel' in metadata:
+            if metadata and 'well' in metadata and metadata['well'].lower() == well.lower() and 'channel' in metadata:
                 channels.add(str(metadata['channel']))
 
         return list(channels)
@@ -655,15 +658,19 @@ class PipelineOrchestrator:
                         images = self.image_preprocessor.apply_function_to_stack(images, func)
 
             # Save processed images and delete what we modified
-            for i, image in enumerate(images):
-                if len(images) != len(matching_files):
-                    output_path = output_dir / matching_files[0]
-                else:
-                    output_path = output_dir / matching_files[i]
-                if input_dir is output_dir:
-                    for filename in matching_files:
-                        self.fs_manager.delete_file(output_path)
-                self.fs_manager.save_image(output_path, image)
-                output_files.append(output_path)
+            #clean_up old files if working in place
+            if input_dir is output_dir:
+                for filename in matching_files:
+                    self.fs_manager.delete_file(output_dir/filename)
+            # save flattened stack as 1 image if function flattens 
+            if len(images) != len(matching_files):
+                output_path = output_dir / matching_files[0]
+                self.fs_manager.save_image(output_path, images[0])
+            # if returns stack of same sive save each image with same name
+            else:
+                for image,file_name in zip(images,matching_files):
+                    output_path = output_dir / file_name
+                    self.fs_manager.save_image(output_path, image)
+            
 
         return output_files
