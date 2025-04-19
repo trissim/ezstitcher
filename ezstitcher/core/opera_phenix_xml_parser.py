@@ -346,6 +346,7 @@ class OperaPhenixXmlParser:
     def sort_fields_by_position(self, positions: Dict[int, Tuple[float, float]]) -> list:
         """
         Sort fields based on their positions in a top-left to bottom-right raster pattern.
+        Always scans left-to-right for each row, like a CRT screen.
 
         Args:
             positions: Dictionary mapping field IDs to (x, y) position tuples
@@ -368,8 +369,17 @@ class OperaPhenixXmlParser:
             y_idx = y_coords.index(y)  # This will now map top row to index 0
             grid[(x_idx, y_idx)] = field_id
 
+        # Debug output to help diagnose field mapping issues
+        logger.info("Field position grid:")
+        for y_idx in range(len(y_coords)):
+            row_str = ""
+            for x_idx in range(len(x_coords)):
+                field_id = grid.get((x_idx, y_idx), 0)
+                row_str += f"{field_id:3d} "
+            logger.info(row_str)
+
         # Sort field IDs by row (y) then column (x)
-        # Top row (y_idx=0) will be processed first, then left-to-right within each row
+        # Always process left-to-right for each row (true raster pattern)
         sorted_field_ids = []
         for y_idx in range(len(y_coords)):
             row_fields = []
