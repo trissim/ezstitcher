@@ -64,17 +64,18 @@ Alternatively, Z-stacks may be organized with Z-index in the filename:
 Metadata
 ^^^^^^^^
 
-ImageXpress metadata is stored in XML files with names like:
+ImageXpress metadata is stored in HTD (Hardware Test Definition) files with names like:
 
-- ``<plate_name>.xml``
-- ``<plate_name>_meta.xml``
-- ``MetaData/<plate_name>.xml``
+- ``<plate_name>.HTD``
+- ``<plate_name>_meta.HTD``
+- ``MetaData/<plate_name>.HTD``
 
 The metadata contains information about:
 
 - Grid dimensions (number of sites in x and y directions)
-- Pixel size
 - Acquisition settings
+
+Pixel size information is typically stored in the TIFF files themselves.
 
 Opera Phenix
 ------------
@@ -83,7 +84,7 @@ Opera Phenix microscopes use the following file naming convention:
 
 .. code-block:: text
 
-    <row><col>K<channel>F<field>P<plane>R<round>.tiff
+    r<row>c<col>f<field>p<plane>-ch<channel>sk<skew>fk<focus>fl<flim>.tiff
 
 For example:
 
@@ -140,7 +141,7 @@ EZStitcher can automatically detect the microscope type based on the file struct
 
     from ezstitcher.core.microscope_interfaces import MicroscopeHandler
     from pathlib import Path
-    
+
     plate_folder = Path("path/to/plate_folder")
     handler = MicroscopeHandler(plate_folder=plate_folder)
     print(f"Detected microscope type: {handler.__class__.__name__}")
@@ -181,16 +182,16 @@ Comparison of Microscope Formats
      - r01c01, r02c02, etc.
    * - Channel Identifier
      - w1, w2, etc.
-     - K1, K2, etc.
+     - ch1, ch2, etc.
    * - Site/Field Identifier
      - s1, s2, etc.
-     - F1, F2, etc.
+     - f1, f2, etc.
    * - Z-Stack Organization
      - ZStep folders or _z suffix
-     - P1, P2, etc. in filename
+     - p1, p2, etc. in filename
    * - Metadata Format
-     - XML with SiteRows/SiteColumns
+     - HTD files with SiteRows/SiteColumns
      - XML with PositionX/Y coordinates
    * - Pixel Size Location
-     - PixelWidthUM element
-     - ImageResolutionX/Y elements
+     - TIFF file metadata
+     - ImageResolutionX/Y elements in XML
