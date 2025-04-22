@@ -295,7 +295,73 @@ def process(self, context):
     return context
 ```
 
-### 6.2 Pattern Processing Logic
+### 6.2 Function Preparation Logic
+
+The `prepare_functions` function will handle preparing patterns and functions, similar to the current `_prepare_patterns_and_functions` method:
+
+```python
+def prepare_functions(patterns, func, group_by=None):
+    """
+    Prepare patterns and processing functions for processing.
+
+    This function handles two main tasks:
+    1. Ensuring patterns are in a component-keyed dictionary format
+    2. Determining which processing functions to use for each component
+
+    Args:
+        patterns: Patterns to process, either as a flat list or grouped by component
+        func: Processing functions to apply (callable, list, dict)
+        group_by: Component name for grouping
+
+    Returns:
+        tuple: (grouped_patterns, component_to_funcs)
+    """
+    # Fast path: If both patterns and func are dictionaries with matching keys,
+    # they're already properly structured, so return them as is
+    if (isinstance(patterns, dict) and isinstance(func, dict) and
+            set(patterns.keys()).issubset(set(func.keys()))):
+        return patterns, func
+
+    # Ensure patterns are in a dictionary format
+    # If already a dict, use as is; otherwise wrap the list in a dictionary
+    component = group_by or 'default'
+    grouped_patterns = patterns if isinstance(patterns, dict) else {component: patterns}
+
+    # Determine which processing functions to use for each component
+    component_to_funcs = {}
+
+    for comp_value in grouped_patterns.keys():
+        # Get functions for this component
+        component_to_funcs[comp_value] = get_processing_function(func, comp_value)
+
+    return grouped_patterns, component_to_funcs
+
+
+def get_processing_function(func, component=None):
+    """
+    Get processing function for a component.
+
+    Args:
+        func: Processing functions (callable, list, or dict)
+        component: Optional component to get specific function for
+
+    Returns:
+        Processing function or None if no function is defined
+    """
+    if func is None:
+        return None
+
+    if callable(func) or isinstance(func, list):
+        # If func is a callable or list of functions, apply to all components
+        return func
+    elif isinstance(func, dict) and component is not None and component in func:
+        # If func is a dict, get function for the specified component
+        return func[component]
+    else:
+        return None
+
+
+### 6.3 Pattern Processing Logic
 
 The `process_patterns` function will handle different function types and grouping strategies:
 
@@ -305,11 +371,8 @@ def process_patterns(patterns, func, group_by=None, processing_args=None):
 
     processing_args = processing_args or {}
 
-    # Group patterns if needed
-    if group_by:
-        grouped_patterns = group_patterns_by(patterns, group_by)
-    else:
-        grouped_patterns = {"all": patterns}
+    # Prepare patterns and functions
+    grouped_patterns, component_to_funcs = prepare_functions(patterns, func, group_by)
 
     # Process each group
     results = {}
