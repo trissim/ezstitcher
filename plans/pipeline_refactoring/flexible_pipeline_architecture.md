@@ -27,10 +27,8 @@ The current `process_patterns_with_variable_components` method has several stren
 3. **Result Organization**: Can group results by any dimension (`group_by`)
 4. **Well Filtering**: Can filter by wells
 5. **Argument Passing**: Can pass additional arguments to processing functions
-6. **Pattern Preparation**: Uses `_prepare_patterns_and_functions` to handle different function types
-7. **Tile Processing**: Uses `process_tiles` to apply functions to image stacks
 
-These strengths should be preserved and enhanced in the new architecture. The current implementation already has a solid foundation for handling different function types and grouping strategies, which we'll build upon.
+These strengths should be preserved and enhanced in the new architecture.
 
 ## 4. Core Architecture
 
@@ -134,7 +132,7 @@ class Pipeline:
 ```
 
 #### `ProcessingContext` Class
-A container for processing state:
+A container for processing state that provides access to all necessary components:
 
 ```python
 class ProcessingContext:
@@ -146,10 +144,28 @@ class ProcessingContext:
         output_dir=None,
         well_filter=None,
         config=None,
+        microscope_handler=None,
+        fs_manager=None,
+        image_preprocessor=None,
+        focus_analyzer=None,
+        stitcher=None,
         **kwargs
     ):
         """Initialize the processing context"""
-        # Implementation
+        self.input_dir = input_dir
+        self.output_dir = output_dir
+        self.well_filter = well_filter
+        self.config = config or {}
+        self.microscope_handler = microscope_handler
+        self.fs_manager = fs_manager
+        self.image_preprocessor = image_preprocessor
+        self.focus_analyzer = focus_analyzer
+        self.stitcher = stitcher
+        self.results = {}
+
+        # Add any additional attributes
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 ```
 
 #### Functional API
@@ -218,22 +234,19 @@ def pipeline(*steps, **kwargs):
 
 ### 5.3 Phase 3: Integration (Week 3)
 
-1. Leverage existing components directly
-   - Use `ImagePreprocessor` methods directly as processing functions
-   - Use `Stitcher` methods directly for position generation and stitching
-   - Use `FocusAnalyzer` directly for focus detection
+1. Create adapter functions for existing components
+   - Functions that wrap `ImagePreprocessor` methods
+   - Functions that wrap `Stitcher` methods
+   - Functions that wrap `FocusAnalyzer` methods
 
 2. Update `PipelineOrchestrator` to use the new architecture
    - Refactor `process_reference_images` to use pipelines
    - Refactor `process_final_images` to use pipelines
-   - Refactor `generate_positions` to use pipelines
-   - Refactor `stitch_images` to use pipelines
-   - Update `process_well` to create and run pipelines and collect results
+   - Update `process_well` to create and run pipelines
 
 3. Implement backward compatibility
-   - Keep the existing `process_patterns_with_variable_components` method
-   - Implement it using the new Pipeline architecture internally
-   - Ensure existing code continues to work without changes
+   - Ensure existing code continues to work
+   - Add deprecation warnings for old methods
 
 ### 5.4 Phase 4: Testing and Documentation (Week 4)
 
@@ -295,73 +308,7 @@ def process(self, context):
     return context
 ```
 
-### 6.2 Function Preparation Logic
-
-The `prepare_functions` function will handle preparing patterns and functions, similar to the current `_prepare_patterns_and_functions` method:
-
-```python
-def prepare_functions(patterns, func, group_by=None):
-    """
-    Prepare patterns and processing functions for processing.
-
-    This function handles two main tasks:
-    1. Ensuring patterns are in a component-keyed dictionary format
-    2. Determining which processing functions to use for each component
-
-    Args:
-        patterns: Patterns to process, either as a flat list or grouped by component
-        func: Processing functions to apply (callable, list, dict)
-        group_by: Component name for grouping
-
-    Returns:
-        tuple: (grouped_patterns, component_to_funcs)
-    """
-    # Fast path: If both patterns and func are dictionaries with matching keys,
-    # they're already properly structured, so return them as is
-    if (isinstance(patterns, dict) and isinstance(func, dict) and
-            set(patterns.keys()).issubset(set(func.keys()))):
-        return patterns, func
-
-    # Ensure patterns are in a dictionary format
-    # If already a dict, use as is; otherwise wrap the list in a dictionary
-    component = group_by or 'default'
-    grouped_patterns = patterns if isinstance(patterns, dict) else {component: patterns}
-
-    # Determine which processing functions to use for each component
-    component_to_funcs = {}
-
-    for comp_value in grouped_patterns.keys():
-        # Get functions for this component
-        component_to_funcs[comp_value] = get_processing_function(func, comp_value)
-
-    return grouped_patterns, component_to_funcs
-
-
-def get_processing_function(func, component=None):
-    """
-    Get processing function for a component.
-
-    Args:
-        func: Processing functions (callable, list, or dict)
-        component: Optional component to get specific function for
-
-    Returns:
-        Processing function or None if no function is defined
-    """
-    if func is None:
-        return None
-
-    if callable(func) or isinstance(func, list):
-        # If func is a callable or list of functions, apply to all components
-        return func
-    elif isinstance(func, dict) and component is not None and component in func:
-        # If func is a dict, get function for the specified component
-        return func[component]
-    else:
-        return None
-
-
-### 6.3 Pattern Processing Logic
+### 6.2 Pattern Processing Logic
 
 The `process_patterns` function will handle different function types and grouping strategies:
 
@@ -371,8 +318,11 @@ def process_patterns(patterns, func, group_by=None, processing_args=None):
 
     processing_args = processing_args or {}
 
-    # Prepare patterns and functions
-    grouped_patterns, component_to_funcs = prepare_functions(patterns, func, group_by)
+    # Group patterns if needed
+    if group_by:
+        grouped_patterns = group_patterns_by(patterns, group_by)
+    else:
+        grouped_patterns = {"all": patterns}
 
     # Process each group
     results = {}
@@ -424,7 +374,7 @@ def process_patterns(patterns, func, group_by=None, processing_args=None):
 
 ### 6.3 Pipeline Execution Logic
 
-The `Pipeline.run()` method will execute steps in sequence:
+The `Pipeline.run()` method will execute steps in sequence and handle directory structure management:
 
 ```python
 def run(self, input_dir=None, output_dir=None, well_filter=None):
@@ -438,12 +388,28 @@ def run(self, input_dir=None, output_dir=None, well_filter=None):
     if not effective_input:
         raise ValueError("Input directory must be specified")
 
+    # Ensure output directory exists if specified
+    if effective_output:
+        import os
+        os.makedirs(effective_output, exist_ok=True)
+
+        # Create well-specific subdirectories if needed
+        if effective_well_filter:
+            for well in effective_well_filter:
+                well_dir = os.path.join(effective_output, well)
+                os.makedirs(well_dir, exist_ok=True)
+
     # Initialize context
     context = ProcessingContext(
         input_dir=effective_input,
         output_dir=effective_output,
         well_filter=effective_well_filter,
-        config=self._config
+        config=self._config,
+        microscope_handler=self._config.get('microscope_handler'),
+        fs_manager=self._config.get('fs_manager'),
+        image_preprocessor=self._config.get('image_preprocessor'),
+        focus_analyzer=self._config.get('focus_analyzer'),
+        stitcher=self._config.get('stitcher')
     )
 
     # Execute each step
@@ -547,7 +513,88 @@ position_pipeline.run()
 assembly_pipeline.run()
 ```
 
-## 7. Integration with PipelineOrchestrator
+## 7. Parallel Processing
+
+The Pipeline architecture is designed to be thread-safe, allowing for parallel processing of multiple wells:
+
+```python
+def run_parallel(self, plate_folder, num_workers=None):
+    """Run the pipeline in parallel for all wells."""
+    # Setup directories
+    workspace_path = self.microscope_handler.init_workspace(plate_folder, None)
+    input_dir = self._prepare_images(workspace_path)
+    dirs = self._setup_directories(workspace_path, input_dir)
+
+    # Get wells to process
+    wells = self._get_wells_to_process(dirs['input'])
+
+    # Use specified number of workers or default from config
+    effective_workers = num_workers or self.config.num_workers
+    effective_workers = min(effective_workers, len(wells))
+
+    # Process wells in parallel
+    results = {}
+    if effective_workers > 1:
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=effective_workers) as executor:
+            # Submit all well processing tasks
+            future_to_well = {}
+            for well in wells:
+                # Create a thread-specific context to avoid shared state issues
+                thread_context = self.create_thread_specific_context()
+
+                # Create a pipeline for this well
+                well_pipeline = self.create_well_pipeline(well, dirs, thread_context)
+
+                # Submit the pipeline for execution
+                future = executor.submit(well_pipeline.run)
+                future_to_well[future] = well
+
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_well):
+                well = future_to_well[future]
+                try:
+                    result = future.result()
+                    results[well] = result
+                except Exception as e:
+                    results[well] = {"error": str(e)}
+    else:
+        # Process wells sequentially
+        for well in wells:
+            try:
+                results[well] = self.process_well(well, dirs)
+            except Exception as e:
+                results[well] = {"error": str(e)}
+
+    return results
+```
+
+The key to thread safety is creating thread-specific instances of components that maintain state:
+
+```python
+def create_thread_specific_context(self):
+    """Create a thread-specific context to avoid shared state issues."""
+    # Create new instances of components that need thread safety
+    thread_stitcher = Stitcher(
+        self.config.stitcher,
+        filename_parser=self.microscope_handler.parser
+    )
+
+    # Create a new context with thread-specific components
+    thread_context = ProcessingContext(
+        config=self.config,
+        microscope_handler=self.microscope_handler,
+        fs_manager=self.fs_manager,
+        image_preprocessor=self.image_preprocessor,
+        focus_analyzer=self.focus_analyzer,
+        stitcher=thread_stitcher
+    )
+
+    return thread_context
+```
+
+## 8. Integration with PipelineOrchestrator
 
 The refactored `PipelineOrchestrator` will use the new Pipeline architecture:
 
@@ -591,7 +638,7 @@ def process_reference_images(self, well, dirs):
     return reference_pipeline.run()
 ```
 
-## 8. Benefits of This Approach
+## 9. Benefits of This Approach
 
 1. **Preserves Flexibility**: Maintains the power of `process_patterns_with_variable_components`
 2. **Modular Design**: Encapsulates processing logic in reusable components
@@ -599,7 +646,7 @@ def process_reference_images(self, well, dirs):
 4. **Functional Interface**: Provides a simple, declarative API
 5. **Object-Oriented Core**: Uses objects to encapsulate state and behavior
 
-## 9. Risks and Mitigations
+## 10. Risks and Mitigations
 
 | Risk | Mitigation |
 |------|------------|
@@ -608,7 +655,7 @@ def process_reference_images(self, well, dirs):
 | Performance overhead | Benchmark and optimize critical paths |
 | Learning curve for users | Provide clear documentation and examples |
 
-## 10. Success Criteria
+## 11. Success Criteria
 
 The refactoring will be considered successful if:
 
@@ -618,7 +665,7 @@ The refactoring will be considered successful if:
 4. Performance is comparable or better
 5. The codebase is more maintainable and extensible
 
-## 11. Future Extensions
+## 12. Future Extensions
 
 Once the core architecture is in place, we can consider:
 
