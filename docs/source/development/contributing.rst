@@ -188,7 +188,7 @@ Pull Request Process
 
 1. **Ensure all tests pass** on your local machine
 2. **Update the documentation** to reflect your changes
-3. **Add a changelog entry** if your change is significant
+3. **Document your changes** thoroughly in code and documentation
 4. **Submit your pull request** with a clear description of the changes
 5. **Address any feedback** from the code review
 6. **Wait for approval** from a maintainer
@@ -197,7 +197,7 @@ Release Process
 ------------
 
 1. **Update version number** in `ezstitcher/__init__.py`
-2. **Update changelog** with all changes since the last release
+2. **Prepare a detailed changelog** for the release
 3. **Create a new release** on GitHub
 4. **Build and upload** the package to PyPI:
 
