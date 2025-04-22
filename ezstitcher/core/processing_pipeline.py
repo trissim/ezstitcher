@@ -157,21 +157,7 @@ class PipelineOrchestrator:
             logger.info("Detected Opera Phenix dataset. Using optimized well detection.")
             image_paths = []
 
-            # Check root directory
-            root_images = list(Path(input_dir).glob("*.tif*"))[:100]  # Limit to 100 files
-            image_paths.extend(root_images)
-
-            # If no files in root, check immediate subdirectories
-            if not image_paths:
-                for subdir in Path(input_dir).iterdir():
-                    if subdir.is_dir():
-                        subdir_images = list(subdir.glob("*.tif*"))[:100]  # Limit to 100 files per subdir
-                        image_paths.extend(subdir_images)
-                        if len(image_paths) >= 100:  # Stop after finding 100 files total
-                            break
-        else:
-            # For other microscopes, use the standard approach
-            image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
+        image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
 
         # Extract wells from filenames
         logger.info("Found %d image files. Extracting well information...", len(image_paths))
