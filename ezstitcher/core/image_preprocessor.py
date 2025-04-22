@@ -419,13 +419,15 @@ class ImagePreprocessor:
             func: Function to apply
 
         Returns:
-            Processed Z-stack
+            Processed Z-stack as a list of images, even if there's only one image
         """
         try:
             # Try to apply to the whole stack
             result = func(z_stack)
-            if isinstance(result, list) or (isinstance(result, np.ndarray) and result.ndim > 2):
-                return result
+
+            # If result is a list, return it; otherwise wrap in a list
+            return result if isinstance(result, list) else [result]
+
         except Exception:
             pass
 

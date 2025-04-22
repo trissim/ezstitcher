@@ -2,6 +2,7 @@ import logging
 import os
 import copy
 import concurrent.futures
+import numpy as np
 from pathlib import Path
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
@@ -147,16 +148,6 @@ class PipelineOrchestrator:
         # Auto-detect all wells
         all_wells = set()
 
-        # For Opera Phenix, we can optimize by only looking at a sample of files
-        # since all files in a well have the same well ID
-        is_opera_phenix = hasattr(self.microscope_handler.parser, 'remap_field_in_filename')
-
-        # Find image files - for Opera Phenix, limit to non-recursive and sample size
-        if is_opera_phenix:
-            # For Opera Phenix, just look at files in the root directory and immediate subdirectories
-            logger.info("Detected Opera Phenix dataset. Using optimized well detection.")
-            image_paths = []
-
         image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
 
         # Extract wells from filenames
@@ -235,20 +226,6 @@ class PipelineOrchestrator:
         """
         logger.info("Processing reference images for well %s", well)
 
-        # Determine which channels to use as reference
-        reference_channels = self.config.reference_channels
-
-        # Get reference processing functions from config
-        processing_funcs = {}
-        for channel in reference_channels:
-            channel_funcs = self._get_processing_functions(
-                getattr(self.config, 'reference_processing', None),
-                channel
-            )
-            if channel_funcs:
-                processing_funcs[channel] = channel_funcs
-
-
         # Flatten Z-stacks if needed - use create_projection directly
         self.process_patterns_with_variable_components(
             input_dir=dirs['input'],
@@ -262,14 +239,15 @@ class PipelineOrchestrator:
             }
         ).get(well, [])
 
-        # Process reference images
+        # Process reference images - pass reference_processing directly
+        # _prepare_patterns_and_functions will handle getting the right functions for each channel
         self.process_patterns_with_variable_components(
             input_dir=dirs['processed'],
             output_dir=dirs['processed'],
             well_filter=[well],
             variable_components=['site'],
             group_by='channel',
-            processing_funcs=processing_funcs
+            processing_funcs=getattr(self.config, 'reference_processing', None)
         ).get(well, [])
 
         # Create composites in one step
@@ -298,25 +276,15 @@ class PipelineOrchestrator:
         channels = self._get_available_channels(dirs['input'], well)
         logger.info("Processing all %d available channels for well %s", len(channels), well)
 
-        # Get final processing functions from config
-        processing_funcs = {}
-        for channel in channels:
-            channel_funcs = self._get_processing_functions(
-                getattr(self.config, 'final_processing', None),
-                channel
-            )
-            if channel_funcs:
-                processing_funcs[channel] = channel_funcs
-            else:
-                processing_funcs[channel] = []
-
-        # Process final images
+        # Process final images - pass final_processing directly
+        # _prepare_patterns_and_functions will handle getting the right functions for each channel
         self.process_patterns_with_variable_components(
             input_dir=dirs['input'],
             output_dir=dirs['post_processed'],
             well_filter=[well],
             variable_components=['site'],
-            processing_funcs=processing_funcs
+            group_by='channel',
+            processing_funcs=getattr(self.config, 'final_processing', None)
         ).get(well, [])
 
         # Flatten Z-stacks if needed - use create_projection directly
@@ -383,42 +351,6 @@ class PipelineOrchestrator:
 
         return list(channels)
 
-    def _group_patterns_by_component(self, input_dir, patterns, component):
-        """
-        Group patterns by a specific component extracted from matching files.
-
-        Args:
-            input_dir (str or Path): Input directory
-            patterns (list): List of file patterns
-            component (str): Component to group by (e.g., 'channel', 'z_index', 'well')
-
-        Returns:
-            dict: Dictionary mapping component values to patterns
-        """
-        # For flat patterns, determine all unique component values
-        component_to_patterns = {}
-
-        # First, get all unique component values from the patterns
-        unique_values = set()
-        for pattern in patterns:
-            sample_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-
-            for file_path in sample_files[:5]:  # Limit to first 5 files for efficiency
-                # Ensure we're passing just the filename, not the full path
-                filename = os.path.basename(file_path)
-                metadata = self.microscope_handler.parser.parse_filename(filename)
-                if metadata and component in metadata:
-                    unique_values.add(str(metadata[component]))
-
-        # If no values found, use a default
-        if not unique_values:
-            unique_values = ["1"]
-
-        # Assign all patterns to each component value
-        for value in unique_values:
-            component_to_patterns[value] = patterns
-
-        return component_to_patterns
 
     def _prepare_patterns_and_functions(self, patterns, processing_funcs, component='default'):
         """
@@ -452,12 +384,9 @@ class PipelineOrchestrator:
         component_to_funcs = {}
 
         for comp_value in grouped_patterns.keys():
-            if processing_funcs is None:
-                component_to_funcs[comp_value] = None
-            elif isinstance(processing_funcs, dict):
-                component_to_funcs[comp_value] = processing_funcs.get(comp_value)
-            else:
-                component_to_funcs[comp_value] = processing_funcs
+            # Reuse _get_processing_functions to get functions for this component
+            component_to_funcs[comp_value] = self._get_processing_functions(
+                processing_funcs, comp_value)
 
         return grouped_patterns, component_to_funcs
 
@@ -613,6 +542,9 @@ class PipelineOrchestrator:
         # Generate positions file path with well name and .csv extension
         positions_file = dirs['positions'] / f"{well}.csv"
 
+        # Try to find a sample pattern to use as reference
+        sample_pattern = None
+
         # Use auto_detect_patterns to find all patterns for this well
         patterns_by_well = self.microscope_handler.auto_detect_patterns(
             dirs['processed'],
@@ -620,9 +552,34 @@ class PipelineOrchestrator:
             variable_components=['site']
         )
 
-        if not patterns_by_well or well not in patterns_by_well:
+        # Extract a sample pattern if available
+        if patterns_by_well and well in patterns_by_well:
+            all_patterns = []
+            for _, patterns in patterns_by_well[well].items():
+                all_patterns.extend(patterns)
+
+            if all_patterns:
+                sample_pattern = all_patterns[0]
+
+        # Create reference pattern based on sample or fallback to generic
+        if sample_pattern:
+            # Parse sample pattern to get components
+            metadata = self.microscope_handler.parser.parse_filename(sample_pattern)
+
+            # Construct reference pattern with the same format but with {iii} for site
+            reference_pattern = self.microscope_handler.parser.construct_filename(
+                well=metadata['well'],
+                site="{iii}",
+                channel=metadata.get('channel'),
+                z_index=metadata.get('z_index'),
+                extension=metadata['extension'],
+                site_padding=DEFAULT_PADDING,
+                z_padding=DEFAULT_PADDING
+            )
+            logger.info("Using reference pattern: %s based on detected files", reference_pattern)
+        else:
+            # No patterns found, fall back to generic pattern
             logger.warning("No patterns found for well %s in %s", well, dirs['processed'])
-            # Fall back to a generic pattern if no patterns are found
             reference_pattern = self.microscope_handler.parser.construct_filename(
                 well=well,
                 site="{iii}",
@@ -630,48 +587,13 @@ class PipelineOrchestrator:
                 site_padding=DEFAULT_PADDING,
                 z_padding=DEFAULT_PADDING
             )
-        else:
-            # Get all patterns for this well
-            all_patterns = []
-            for _, patterns in patterns_by_well[well].items():
-                all_patterns.extend(patterns)
 
-            if not all_patterns:
-                logger.warning("No patterns found for well %s in %s", well, dirs['processed'])
-                # Fall back to a generic pattern if no patterns are found
-                reference_pattern = self.microscope_handler.parser.construct_filename(
-                    well=well,
-                    site="{iii}",
-                    extension='.tif',
-                    site_padding=DEFAULT_PADDING,
-                    z_padding=DEFAULT_PADDING
-                )
-            else:
-                # Parse a sample pattern to get the components
-                sample_pattern = all_patterns[0]
-                metadata = self.microscope_handler.parser.parse_filename(sample_pattern)
-
-                # Construct a reference pattern with the same format but with {iii} for site
-                reference_pattern = self.microscope_handler.parser.construct_filename(
-                    well=metadata['well'],
-                    site="{iii}",
-                    channel=metadata.get('channel'),
-                    z_index=metadata.get('z_index'),
-                    extension=metadata['extension'],
-                    site_padding=DEFAULT_PADDING,
-                    z_padding=DEFAULT_PADDING
-                )
-
-                logger.info("Using reference pattern: %s based on detected files", reference_pattern)
-
-        # Generate positions using the appropriate stitcher
         # Log the paths being used for debugging
         logger.info("Using processed directory: %s", dirs['processed'])
         logger.info("Using reference pattern: %s", reference_pattern)
         logger.info("Using positions file: %s", positions_file)
 
-        # We need to use the actual directory containing the files (well-specific directory)
-        # and the pattern without the well subfolder
+        # Generate positions using the appropriate stitcher
         stitcher_to_use.generate_positions(
             dirs['processed'],  # This is already the well-specific directory
             reference_pattern,  # Use the pattern without the well subfolder
@@ -783,35 +705,44 @@ class PipelineOrchestrator:
         output_files = []
 
         for pattern in patterns:
+            # Load images
             matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
             images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
             images = [img for img in images if img is not None]
 
+            if not images:
+                continue  # Skip if no valid images found
+
+            # Store original number of images to detect flattening
+            original_image_count = len(images)
+
             # Apply stack processing functions if specified
             if processing_funcs and images:
                 if callable(processing_funcs):
-                    # Single function - apply it with kwargs
-                    # Don't pass filenames as a positional argument to avoid conflicts
-                    images = [processing_funcs(images, **kwargs)]
+                    # Apply single function
+                    images = processing_funcs(images, **kwargs)
                 else:
-                    # List of functions - apply each one
+                    # Apply list of functions
                     for func in processing_funcs:
                         images = self.image_preprocessor.apply_function_to_stack(images, func)
 
-            # Save processed images and delete what we modified
-            #clean_up old files if working in place
+            # Clean up old files if working in place
             if input_dir is output_dir:
                 for filename in matching_files:
                     self.fs_manager.delete_file(output_dir/filename)
-            # save flattened stack as 1 image if function flattens
-            if len(images) != len(matching_files):
+
+            # Save processed images - handle both single and multiple image cases
+            if len(images) == 1 or len(images) < original_image_count:
+                # Single image or flattening occurred - save as one file
                 output_path = output_dir / matching_files[0]
                 self.fs_manager.save_image(output_path, images[0])
-            # if returns stack of same sive save each image with same name
+                output_files.append(str(output_path))
             else:
-                for image,file_name in zip(images,matching_files):
-                    output_path = output_dir / file_name
-                    self.fs_manager.save_image(output_path, image)
-
+                # Multiple images - save each with its corresponding filename
+                for i, image in enumerate(images):
+                    if i < len(matching_files):
+                        output_path = output_dir / matching_files[i]
+                        self.fs_manager.save_image(output_path, image)
+                        output_files.append(str(output_path))
 
         return output_files

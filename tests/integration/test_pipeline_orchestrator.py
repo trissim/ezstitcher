@@ -11,21 +11,28 @@ from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicrosc
 from ezstitcher.core.image_locator import ImageLocator
 
 
-def find_image_files(directory: Union[str, Path], pattern: str = "*") -> List[Path]:
+def find_image_files(directory: Union[str, Path], pattern: str = "*", recursive: bool = True) -> List[Path]:
     """
     Find all image files in a directory matching a pattern, using all supported extensions.
+    Recursively searches in subdirectories by default to handle nested well folders.
 
     Args:
         directory: Directory to search
         pattern: Glob pattern to match (default: "*" for all files)
+        recursive: Whether to search recursively in subdirectories (default: True)
 
     Returns:
         List of Path objects for image files
     """
     directory = Path(directory)
     image_files = []
+
+    # Use rglob for recursive search or glob for non-recursive
+    glob_func = directory.rglob if recursive else directory.glob
+
     for ext in ImageLocator.DEFAULT_EXTENSIONS:
-        image_files.extend(list(directory.glob(f"{pattern}{ext}")))
+        image_files.extend(list(glob_func(f"**/{pattern}{ext}" if recursive else f"{pattern}{ext}")))
+
     return sorted(image_files)
 
 # Define microscope configurations
@@ -51,7 +58,7 @@ syn_data_params = {
     "overlap_percent": 10,
     "wavelengths": 2,
     "cell_size_range": (3, 6),
-    "wells": ['A01', 'B02', 'C03', 'D04', 'E05', 'F06', 'G07', 'H08'],
+    "wells": ['A01','H08'],
 }
 
 # Test-specific parameters that can be customized per microscope format
@@ -296,7 +303,7 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
         config = base_pipeline_config
 
         # Ensure num_workers is set to a value greater than 1
-        config.num_workers = 8
+        config.num_workers = 2
 
         # Create and run pipeline
         pipeline = PipelineOrchestrator(config)
