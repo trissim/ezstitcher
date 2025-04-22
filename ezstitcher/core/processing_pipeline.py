@@ -1,5 +1,7 @@
 import logging
 import os
+import copy
+import concurrent.futures
 from pathlib import Path
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
@@ -52,20 +54,23 @@ class PipelineOrchestrator:
         try:
             # Setup
             plate_path = Path(plate_folder)
-            #plate_path = Path("/home/ts/nvme_usb/Opera/20250407TS-12w_axoTest/20250407TS-12w_axoTest/20250407TS-12w_axoTest__2025-04-07T14_16_59-Measurement_2")
             # Use workspace_path from config if provided, otherwise create a default path
-            workspace_path = self.config.workspace_path if self.config.workspace_path is not None else plate_path.parent / f"{plate_path.name}_workspace"
-            print("detecting microscope type")
+            workspace_path = (
+                self.config.workspace_path
+                if self.config.workspace_path is not None
+                else plate_path.parent / f"{plate_path.name}_workspace"
+            )
+            logger.info("Detecting microscope type")
             self.microscope_handler = create_microscope_handler('auto', plate_folder=plate_path)
-            print("init workspace " , workspace_path)
+            logger.info("Initializing workspace: %s", workspace_path)
             self.microscope_handler.init_workspace(plate_path, workspace_path)
             self.config.grid_size = self.microscope_handler.get_grid_dimensions(workspace_path)
-            print("grid size ", self.config.grid_size)
+            logger.info("Grid size: %s", self.config.grid_size)
             self.config.pixel_size = self.microscope_handler.get_pixel_size(workspace_path)
-            print("pixel size ", self.config.pixel_size)
+            logger.info("Pixel size: %s", self.config.pixel_size)
             self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
-            print("preapring images through renaming")
+            logger.info("Preparing images through renaming")
             # Prepare images (pad filenames and organize Z-stack folders)
             input_dir = self._prepare_images(workspace_path)
 
@@ -75,15 +80,48 @@ class PipelineOrchestrator:
             # Get wells to process
             wells = self._get_wells_to_process(dirs['input'])
 
-            # Process each well
-            for well in wells:
-                self.process_well(well, dirs)
+            # Process wells using ThreadPoolExecutor
+            num_workers = self.config.num_workers
+            # Use only one worker if there's only one well
+            effective_workers = min(num_workers, len(wells)) if len(wells) > 0 else 1
+            logger.info(
+                "Processing %d wells using %d worker threads",
+                len(wells),
+                effective_workers
+            )
 
-                # Clean up if configured
-                if self.config.cleanup_processed:
-                    self.fs_manager.empty_directory(dirs['processed'])
-                if self.config.cleanup_post_processed:
-                    self.fs_manager.empty_directory(dirs['post_processed'])
+            # Create a thread pool with the appropriate number of workers
+            with concurrent.futures.ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                # Submit all well processing tasks
+                # Create a mapping of futures to wells
+                future_to_well = {}
+                logger.info("About to submit %d wells for parallel processing", len(wells))
+                for well in wells:
+                    # Create a deep copy of dirs for each well to avoid shared state issues
+                    well_dirs = copy.deepcopy(dirs)
+                    logger.info("Submitting well %s to thread pool", well)
+                    future = executor.submit(self.process_well, well, well_dirs)
+                    future_to_well[future] = well
+
+                # Process results as they complete
+                for future in concurrent.futures.as_completed(future_to_well):
+                    well = future_to_well[future]
+                    try:
+                        future.result()  # Get the result (or exception)
+                        logger.info("Completed processing well %s", well)
+
+                        # Note: We don't have access to the well_dirs here since it's in the thread's scope
+                        # We'll skip cleanup here as each thread has its own copy of dirs
+                        # The main cleanup will happen at the end of processing all wells
+
+                    except Exception as e:
+                        logger.error("Error processing well %s: %s", well, e, exc_info=True)
+
+            # Final cleanup after all wells have been processed
+            if self.config.cleanup_processed:
+                self.fs_manager.empty_directory(dirs['processed'])
+            if self.config.cleanup_post_processed:
+                self.fs_manager.empty_directory(dirs['post_processed'])
 
             return True
 
@@ -162,19 +200,44 @@ class PipelineOrchestrator:
             dirs: Dictionary of directories
         """
         logger.info("Processing well %s", well)
+        logger.info("Processing well %s with pixel size %s", well, self.config.pixel_size)
 
-        print("pixel size ", self.config.pixel_size)
+        # Add thread ID information for debugging
+        import threading
+        thread_id = threading.get_ident()
+        thread_name = threading.current_thread().name
+        logger.info("Processing well %s in thread %s (ID: %s)", well, thread_name, thread_id)
+
+        # Create well-specific directories to avoid conflicts between threads
+        # We need to create well-specific subdirectories for processed and post-processed
+        well_dirs = copy.deepcopy(dirs)
+
+        # Create well-specific subdirectories
+        well_dirs['processed'] = dirs['processed'] / well
+        well_dirs['post_processed'] = dirs['post_processed'] / well
+
+        # Ensure the well-specific directories exist
+        self.fs_manager.ensure_directory(well_dirs['processed'])
+        self.fs_manager.ensure_directory(well_dirs['post_processed'])
+
+        logger.info("Created well-specific directories for well %s: %s", well, well_dirs['processed'])
+
+        # Create a new Stitcher instance for this thread to avoid shared state issues
+        thread_stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
+
         # 1. Process reference images (for position generation)
-        self.process_reference_images(well, dirs)
+        self.process_reference_images(well, well_dirs)
 
         # 2. Generate stitching positions
-        positions_file, stitch_pattern = self.generate_positions(well, dirs)
+        positions_file, stitch_pattern = self.generate_positions(well, well_dirs, thread_stitcher)
 
         # 3. Process final images (for stitching)
-        self.process_final_images(well, dirs)
+        self.process_final_images(well, well_dirs)
 
         # 4. Stitch final images
-        self.stitch_images(well, dirs, positions_file)
+        self.stitch_images(well, well_dirs, positions_file, thread_stitcher)
+
+
 
     def process_reference_images(self, well, dirs):
         """
@@ -485,6 +548,7 @@ class PipelineOrchestrator:
         Returns:
             dict: Dictionary of directories
         """
+        # Create main directories
         dirs = {
             'input': input_dir,
             'processed': plate_path.parent / f"{plate_path.name}{self.config.processed_dir_suffix}",
@@ -493,6 +557,7 @@ class PipelineOrchestrator:
             'stitched': plate_path.parent / f"{plate_path.name}{self.config.stitched_dir_suffix}"
         }
 
+        # Ensure main directories exist
         for dir_path in dirs.values():
             self.fs_manager.ensure_directory(dir_path)
 
@@ -539,18 +604,22 @@ class PipelineOrchestrator:
         logger.info("Image preparation completed in %.2f seconds", time.time() - start_time)
         return ImageLocator.find_image_directory(plate_path)
 
-    def generate_positions(self, well, dirs):
+    def generate_positions(self, well, dirs, stitcher=None):
         """
         Generate stitching positions for a well.
 
         Args:
             well: Well identifier
             dirs: Dictionary of directories
+            stitcher: Optional Stitcher instance to use (for thread safety)
 
         Returns:
             Tuple of (positions_file, stitch_pattern)
         """
         logger.info("Generating positions for well %s", well)
+
+        # Use the provided stitcher or the default one
+        stitcher_to_use = stitcher or self.stitcher
 
         # Ensure positions directory exists
         self.fs_manager.ensure_directory(dirs['positions'])
@@ -578,7 +647,7 @@ class PipelineOrchestrator:
         else:
             # Get all patterns for this well
             all_patterns = []
-            for channel, patterns in patterns_by_well[well].items():
+            for _, patterns in patterns_by_well[well].items():
                 all_patterns.extend(patterns)
 
             if not all_patterns:
@@ -609,10 +678,17 @@ class PipelineOrchestrator:
 
                 logger.info("Using reference pattern: %s based on detected files", reference_pattern)
 
-        # Generate positions
-        self.stitcher.generate_positions(
-            dirs['processed'],
-            reference_pattern,
+        # Generate positions using the appropriate stitcher
+        # Log the paths being used for debugging
+        logger.info("Using processed directory: %s", dirs['processed'])
+        logger.info("Using reference pattern: %s", reference_pattern)
+        logger.info("Using positions file: %s", positions_file)
+
+        # We need to use the actual directory containing the files (well-specific directory)
+        # and the pattern without the well subfolder
+        stitcher_to_use.generate_positions(
+            dirs['processed'],  # This is already the well-specific directory
+            reference_pattern,  # Use the pattern without the well subfolder
             positions_file,  # Pass the file path, not the directory
             self.config.grid_size[0],
             self.config.grid_size[1],
@@ -620,7 +696,7 @@ class PipelineOrchestrator:
 
         return positions_file, reference_pattern
 
-    def stitch_images(self, well, dirs, positions_file):
+    def stitch_images(self, well, dirs, positions_file, stitcher=None):
         """
         Stitch images for a well.
 
@@ -628,8 +704,12 @@ class PipelineOrchestrator:
             well: Well identifier
             dirs: Dictionary of directories
             positions_file: Path to positions file
+            stitcher: Optional Stitcher instance to use (for thread safety)
         """
         logger.info("Stitching images for well %s", well)
+
+        # Use the provided stitcher or the default one
+        stitcher_to_use = stitcher or self.stitcher
 
         # Use auto_detect_patterns to find all patterns for this well
         patterns_by_well = self.microscope_handler.parser.auto_detect_patterns(
@@ -645,7 +725,8 @@ class PipelineOrchestrator:
         # Stitch each pattern
         for pattern in patterns_by_well[well]:
             # Find all matching files for this pattern
-            matching_files = self.microscope_handler.parser.path_list_from_pattern(dirs['post_processed'], pattern)
+            matching_files = self.microscope_handler.parser.path_list_from_pattern(
+                dirs['post_processed'], pattern)
 
             if not matching_files:
                 logger.warning("No files found for pattern %s", pattern)
@@ -668,12 +749,35 @@ class PipelineOrchestrator:
             output_path = dirs['stitched'] / output_filename
             logger.info("Stitching pattern %s to %s", pattern, output_path)
 
-            # Assemble the stitched image
-            self.stitcher.assemble_image(
+            # Assemble the stitched image using the thread-specific stitcher
+            # Note: positions_file is already in the main positions directory
+            # The images are in the well-specific post-processed directory
+            # The output should go to the main stitched directory
+
+            # Log the paths being used for debugging
+            logger.info("Using positions file: %s", positions_file)
+            logger.info("Using images directory: %s", dirs['post_processed'])
+            logger.info("Using output path: %s", output_path)
+
+            # The matching_files are relative to the well-specific post-processed directory
+            # We need to construct the full paths for override_names
+            full_path_matching_files = []
+            for filename in matching_files:
+                # The filename is relative to the well-specific post-processed directory
+                # We need to construct the full path including the well subfolder
+                full_path = str(dirs['post_processed'] / filename)
+                full_path_matching_files.append(full_path)
+
+            # The images_dir should be the parent of the post-processed directory
+            # This is because the positions file references paths relative to this directory
+            # and includes the well subfolder in the paths
+            parent_dir = dirs['post_processed'].parent
+
+            stitcher_to_use.assemble_image(
                 positions_path=positions_file,
-                images_dir=dirs['post_processed'],
+                images_dir=parent_dir,  # Use the parent directory to find the well subfolder
                 output_path=output_path,
-                override_names=matching_files
+                override_names=full_path_matching_files  # Use full paths to the files
             )
 
     def process_tiles(self, input_dir, output_dir, patterns, processing_funcs=None, **kwargs):

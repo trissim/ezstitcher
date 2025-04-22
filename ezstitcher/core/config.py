@@ -22,6 +22,7 @@ class StitcherConfig:
     pixel_size: float = 1.0
 
 
+
 @dataclass
 class FocusAnalyzerConfig:
     """Configuration for the FocusAnalyzer class."""
@@ -50,7 +51,8 @@ class PipelineConfig:
     positions_dir_suffix: str = "_positions"
     stitched_dir_suffix: str = "_stitched"
     best_focus_dir_suffix: str = "_best_focus"
-    
+    num_workers = 8
+
     cleanup_processed: bool = True
     cleanup_post_processed: bool = True
 

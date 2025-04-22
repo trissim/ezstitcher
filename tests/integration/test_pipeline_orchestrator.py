@@ -51,7 +51,7 @@ syn_data_params = {
     "overlap_percent": 10,
     "wavelengths": 2,
     "cell_size_range": (3, 6),
-    "wells": ['A01', 'B02'],
+    "wells": ['A01', 'B02', 'C03', 'D04', 'E05', 'F06', 'G07', 'H08'],
 }
 
 # Test-specific parameters that can be customized per microscope format
@@ -228,28 +228,183 @@ def create_config(base_config, **kwargs):
 
 def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
     """Test processing a flat plate with minimal configuration."""
-    # Use the base configuration
-    config = base_pipeline_config
+    import threading
+    import time
+    from collections import defaultdict
 
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(flat_plate_dir)
+    # Track thread activity
+    active_threads = set()
+    thread_activity = defaultdict(list)
+    thread_lock = threading.Lock()
 
-    assert success, "Flat plate processing failed"
+    # Monkey patch the process_well method to track thread activity
+    original_process_well = PipelineOrchestrator.process_well
 
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(flat_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
+    def patched_process_well(self, well, dirs):
+        """Patched version of process_well that tracks thread activity."""
+        thread_id = threading.get_ident()
+        thread_name = threading.current_thread().name
 
-    assert processed_dir.exists(), "Processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
+        # Record thread start time
+        start_time = time.time()
 
-    # Check if stitched files were created
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched files created"
+        # Add this thread to active threads
+        with thread_lock:
+            active_threads.add(thread_id)
+            # Record the number of active threads at this moment
+            thread_activity[thread_id].append({
+                'well': well,
+                'thread_name': thread_name,
+                'time': time.time(),
+                'action': 'start',
+                'active_threads': len(active_threads)
+            })
+
+        print(f"Thread {thread_name} (ID: {thread_id}) started processing well {well}")
+        print(f"Active threads: {len(active_threads)}")
+
+        try:
+            # Call the original method
+            result = original_process_well(self, well, dirs)
+            return result
+        finally:
+            # Record thread end time
+            end_time = time.time()
+            duration = end_time - start_time
+
+            # Remove this thread from active threads
+            with thread_lock:
+                active_threads.remove(thread_id)
+                # Record the number of active threads at this moment
+                thread_activity[thread_id].append({
+                    'well': well,
+                    'thread_name': thread_name,
+                    'time': time.time(),
+                    'action': 'end',
+                    'duration': duration,
+                    'active_threads': len(active_threads)
+                })
+
+            print(f"Thread {thread_name} (ID: {thread_id}) finished processing well {well} in {duration:.2f} seconds")
+            print(f"Active threads: {len(active_threads)}")
+
+    # Apply the monkey patch
+    PipelineOrchestrator.process_well = patched_process_well
+
+    try:
+        # Use the base configuration
+        config = base_pipeline_config
+
+        # Ensure num_workers is set to a value greater than 1
+        config.num_workers = 8
+
+        # Create and run pipeline
+        pipeline = PipelineOrchestrator(config)
+        success = pipeline.run(flat_plate_dir)
+
+        assert success, "Flat plate processing failed"
+
+        # Check if output directories were created
+        # Use the plate path to check for output directories
+        plate_path = Path(flat_plate_dir)
+        workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+        processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+        stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
+
+        assert processed_dir.exists(), "Processed directory not created"
+        assert stitched_dir.exists(), "Stitched directory not created"
+
+        # Check if stitched files were created
+        stitched_files = find_image_files(stitched_dir)
+        assert len(stitched_files) > 0, "No stitched files created"
+
+        # Analyze thread activity to verify multithreading
+        max_concurrent = 0
+        thread_starts = []
+        thread_ends = []
+
+        for thread_id, activities in thread_activity.items():
+            for activity in activities:
+                max_concurrent = max(max_concurrent, activity['active_threads'])
+                if activity['action'] == 'start':
+                    thread_starts.append((activity['well'], activity['thread_name'], activity['time']))
+                else:  # 'end'
+                    thread_ends.append((activity['well'], activity['thread_name'], activity['time'], activity.get('duration', 0)))
+
+        # Sort by time
+        thread_starts.sort(key=lambda x: x[2])
+        thread_ends.sort(key=lambda x: x[2])
+
+        # Print thread activity report
+        print("\n" + "=" * 80)
+        print("Thread Activity Report")
+        print("=" * 80)
+
+        print("\nThread Start Events:")
+        for well, thread_name, time_val in thread_starts:
+            print(f"Thread {thread_name} started processing well {well} at {time_val:.2f}")
+
+        print("\nThread End Events:")
+        for well, thread_name, time_val, duration in thread_ends:
+            print(f"Thread {thread_name} finished processing well {well} at {time_val:.2f} (duration: {duration:.2f}s)")
+
+        print("\nOverlap Analysis:")
+        # Find overlapping time periods
+        overlaps = []
+        for i, (well1, thread1, start1) in enumerate(thread_starts):
+            # Find the end time for this thread
+            end1 = None
+            for w, t, end, d in thread_ends:
+                if t == thread1 and w == well1:
+                    end1 = end
+                    break
+
+            if end1 is None:
+                continue  # Skip if we can't find the end time
+
+            # Check for overlaps with other threads
+            for j, (well2, thread2, start2) in enumerate(thread_starts):
+                if i == j or thread1 == thread2:  # Skip same thread
+                    continue
+
+                # Find the end time for the other thread
+                end2 = None
+                for w, t, end, d in thread_ends:
+                    if t == thread2 and w == well2:
+                        end2 = end
+                        break
+
+                if end2 is None:
+                    continue  # Skip if we can't find the end time
+
+                # Check if there's an overlap
+                if start1 < end2 and start2 < end1:
+                    overlap_start = max(start1, start2)
+                    overlap_end = min(end1, end2)
+                    overlap_duration = overlap_end - overlap_start
+
+                    if overlap_duration > 0:
+                        overlaps.append({
+                            'thread1': thread1,
+                            'well1': well1,
+                            'thread2': thread2,
+                            'well2': well2,
+                            'duration': overlap_duration
+                        })
+                        print(f"Threads {thread1} and {thread2} overlapped for {overlap_duration:.2f}s")
+                        print(f"  {thread1} was processing well {well1}")
+                        print(f"  {thread2} was processing well {well2}")
+
+        print(f"\nFound {len(overlaps)} thread overlaps")
+        print(f"Maximum concurrent threads: {max_concurrent}")
+        print("=" * 80)
+
+        # Assert that multiple threads were used
+        assert max_concurrent > 1, f"Expected multiple concurrent threads, but only {max_concurrent} was used"
+        assert len(overlaps) > 0, "Expected thread overlaps, but none were found"
+    finally:
+        # Restore the original process_well method
+        PipelineOrchestrator.process_well = original_process_well
 
 def test_zstack_projection_minimal(zstack_plate_dir, base_pipeline_config):
     """Test processing a Z-stack plate with projection."""

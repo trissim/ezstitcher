@@ -584,6 +584,9 @@ class MicroscopeHandler:
 
             # Find metadata file (Index.xml for Opera Phenix)
             metadata_file = self.metadata_handler.find_metadata_file(plate_path)
+
+
+            ### SMELLY: this responsibility should be dedicated to an operaphenix specific class ###
             if metadata_file and hasattr(self.metadata_handler, 'create_xml_parser'):
                 print(f"Found metadata file: {metadata_file}. Starting field remapping.")
                 sys.stdout.flush()  # Force output to be displayed immediately
@@ -599,37 +602,16 @@ class MicroscopeHandler:
                 print("Finding image files in workspace...")
                 sys.stdout.flush()  # Force output to be displayed immediately
 
-                # Find all image files in the workspace
-                print("Finding all image files in workspace...")
+                # Find the image directory (handles both root and subdirectory cases)
+                image_dir = ImageLocator.find_image_directory(workspace_path)
+                print(f"Found image directory: {image_dir}")
                 sys.stdout.flush()  # Force output to be displayed immediately
 
-                # First check the root directory
-                image_files = []
-                print("Checking root directory for image files...")
-                sys.stdout.flush()  # Force output to be displayed immediately
-                root_tiff_files = list(workspace_path.glob("*.tiff"))
-                root_tif_files = list(workspace_path.glob("*.tif"))
-                image_files.extend(root_tiff_files)
-                image_files.extend(root_tif_files)
-
-                # If no files found in the root, try one level down (common for Opera Phenix)
-                if not image_files:
-                    print("No image files found in root directory. Checking subdirectories...")
-                    sys.stdout.flush()  # Force output to be displayed immediately
-                    subdirs = list(workspace_path.iterdir())
-                    print(f"Found {len(subdirs)} subdirectories")
-                    sys.stdout.flush()  # Force output to be displayed immediately
-
-                    for i, subdir in enumerate(subdirs):
-                        if subdir.is_dir():
-                            print(f"Checking subdirectory {i+1}/{len(subdirs)}: {subdir.name}")
-                            sys.stdout.flush()  # Force output to be displayed immediately
-                            subdir_tiff_files = list(subdir.glob("*.tiff"))
-                            subdir_tif_files = list(subdir.glob("*.tif"))
-                            image_files.extend(subdir_tiff_files)
-                            image_files.extend(subdir_tif_files)
-                            print(f"Found {len(subdir_tiff_files) + len(subdir_tif_files)} files in {subdir.name}")
-                            sys.stdout.flush()  # Force output to be displayed immediately
+                # Find all image files in the directory using default extensions
+                image_files = ImageLocator.find_images_in_directory(
+                    image_dir,
+                    recursive=True
+                )
 
                 total_files = len(image_files)
                 print(f"Found {total_files} image files. Remapping field IDs...")
@@ -647,25 +629,16 @@ class MicroscopeHandler:
                     new_field_id = field_mapping[field_id]
                     print(f"  Field {field_id:3d} -> {new_field_id:3d}")
 
-                # Print total number of mappings
-                print(f"Total mappings: {len(field_mapping)}")
-                sys.stdout.flush()
-
-                # Remap field IDs in filenames
-                additional_symlinks = 0
-                remapped_files = 0
-                skipped_files = 0
-                renamed_files = {}
-
                 # Create a temporary subfolder for all files that need to be renamed
                 temp_folder_name = f"temp_rename_{uuid.uuid4().hex[:8]}"
-                image_folder= ImageLocator.find_image_directory(workspace_path)
-                temp_folder = image_folder / temp_folder_name
+                # Use the image_dir we already found
+                temp_folder = image_dir / temp_folder_name
                 #temp_folder = workspace_path / temp_folder_name
                 temp_folder.mkdir(exist_ok=True)
                 print(f"Created temporary folder: {temp_folder}")
                 sys.stdout.flush()
 
+                ### SMELLY: we should log everything and reuse it
                 # Calculate progress reporting interval based on total number of files
                 # For large datasets, report less frequently
                 if total_files > 10000:
@@ -675,97 +648,74 @@ class MicroscopeHandler:
                 else:
                     report_interval = 10    # Report every 10 files for small datasets
 
+
+                # Remap field IDs in filenames
+                additional_symlinks = 0
+                remapped_files = 0
+                skipped_files = 0
+                renamed_files = {}
+
                 print(f"Starting to process {total_files} files...")
                 sys.stdout.flush()
 
-                # Group files by field ID for more efficient processing
-                files_by_field = {}
-                for image_file in image_files:
-                    metadata = self.parser.parse_filename(image_file.name)
-                    if metadata and 'site' in metadata and metadata['site'] is not None:
-                        field_id = metadata['site']
-                        if field_id not in files_by_field:
-                            files_by_field[field_id] = []
-                        files_by_field[field_id].append(image_file)
-                    else:
-                        skipped_files += 1
-
-                print(f"Grouped files by field ID: {len(files_by_field)} unique field IDs")
-                for field_id, files in files_by_field.items():
-                    print(f"  Field {field_id}: {len(files)} files")
-                if skipped_files > 0:
-                    print(f"  Skipped {skipped_files} files with no field ID")
-                sys.stdout.flush()
-
-                # Process files by field ID
+                # For each image in the folder:
+                # 1. Get the field number from the filename
+                # 2. Use the field number to find the new field number from the mapping
+                # 3. Generate a new filename using the filename parser
+                # 4. Move the image to a temporary folder
                 processed_files = 0
-                for field_id, field_files in files_by_field.items():
-                    # Get the new field ID from the mapping
-                    new_field_id = field_mapping.get(field_id, field_id)
+                for image_file in image_files:
+                    processed_files += 1
 
-                    # Process all files for this field ID
-                    for image_file in field_files:
-                        processed_files += 1
+                    # Log progress at appropriate intervals
+                    if processed_files > 0 and processed_files % report_interval == 0:
+                        percent_done = (processed_files/total_files)*100
+                        msg = f"Processed {processed_files}/{total_files} files"
+                        msg += f" ({percent_done:.1f}%)"
+                        print(msg)
+                        sys.stdout.flush()  # Force output to be displayed immediately
 
-                        # Log progress at appropriate intervals
-                        if processed_files > 0 and processed_files % report_interval == 0:
-                            print(f"Processed {processed_files}/{total_files} files ({(processed_files/total_files)*100:.1f}%)")
-                            sys.stdout.flush()  # Force output to be displayed immediately
+                    # Parse the filename to get metadata
+                    metadata = self.parser.parse_filename(image_file.name)
 
-                        # Always create a new filename with consistent padding, even if the field ID doesn't change
-                        metadata = self.parser.parse_filename(image_file.name)
-                        if metadata:
-                            # Determine the field ID to use (original or remapped)
-                            site_to_use = metadata['site']
-                            if field_id in field_mapping:
-                                site_to_use = field_mapping[field_id]  # Use the remapped field ID
-                                remapped_files += 1
+                    if metadata and 'site' in metadata and metadata['site'] is not None:
+                        # Get the field ID (site number)
+                        field_id = metadata['site']
 
-                            # Create a new filename with the appropriate field ID
-                            new_filename = self.parser.construct_filename(
-                                well=metadata['well'],
-                                site=site_to_use,
-                                channel=metadata['channel'],
-                                z_index=metadata['z_index'],
-                                extension=metadata['extension'],
-                                site_padding=3,
-                                z_padding=3
-                            )
+                        # Find the new field ID from the mapping
+                        new_field_id = field_mapping.get(field_id, field_id)
 
-                            # Create the symlink if the filename is different
-                            try:
-                                # Get the target of the original symlink
-                                #target = image_file.resolve()
+                        # Create a new filename with the remapped field ID
+                        new_filename = self.parser.construct_filename(
+                            well=metadata['well'],
+                            site=new_field_id,  # Use the remapped field ID
+                            channel=metadata['channel'],
+                            z_index=metadata['z_index'],
+                            extension=metadata['extension'],
+                            site_padding=3,
+                            z_padding=3
+                        )
 
-                                # Move the original symlink to the temp folder
-                                temp_path = temp_folder / image_file.name
-                                os.rename(str(image_file), str(temp_path))
-
-                                ## Create a new symlink in the temp folder with the new name
-                                #new_temp_path = temp_folder / new_filename
-                                #new_temp_path.symlink_to(target)
-
-                                # Store the mapping for later moving back to original location
-                                renamed_files[image_file.name] = temp_path
-                                additional_symlinks += 1
-                            except Exception as e:
-                                print(f"Error renaming {image_file.name} to {new_filename}: {e}")
+                        temp_path = temp_folder / new_filename
+                        shutil.move(str(image_dir / image_file), str(temp_path))
+                        renamed_files[new_filename] = temp_path
 
                 symlink_count += additional_symlinks
                 print(f"Field remapping completed in {time.time() - remap_start_time:.2f} seconds.")
-                print(f"Remapped {remapped_files} files, created {additional_symlinks} new symlinks.")
+                print(f"Remapped {remapped_files} files")
+                print(f"Created {additional_symlinks} new symlinks")
                 sys.stdout.flush()  # Force output to be displayed immediately
 
-                # Move the renamed symlinks back to the original location
+                # Move the renamed symlinks back to the original location with their new names
                 print(f"Moving {len(renamed_files)} renamed files back to original location...")
                 sys.stdout.flush()
                 move_start_time = time.time()
 
                 for new_filename, temp_path in renamed_files.items():
                     try:
-                        # Move the renamed symlink back to the original location
-                        dest_path = image_folder / new_filename
-                        os.rename(str(temp_path), str(dest_path))
+                        # Move the file back to the original location with the new filename
+                        dest_path = image_dir / new_filename
+                        shutil.move(str(temp_path), str(dest_path))
                     except Exception as e:
                         print(f"Error moving {temp_path} to {dest_path}: {e}")
 
@@ -778,16 +728,12 @@ class MicroscopeHandler:
                         # Check if the folder is empty before removing
                         remaining_files = list(temp_folder.iterdir())
                         if remaining_files:
-                            print(f"Warning: {len(remaining_files)} files remain in the temporary folder.")
+                            num_remaining = len(remaining_files)
+                            print(f"Warning: {num_remaining} files remain in the temp folder")
                             print("These files may have had conflicts during renaming.")
                         shutil.rmtree(temp_folder)
                 except Exception as e:
                     print(f"Error removing temporary folder: {e}")
-
-        print("Workspace initialization completed successfully.")
-        sys.stdout.flush()  # Force output to be displayed immediately
-        return symlink_count
-
 
 def create_microscope_handler(microscope_type: str = 'auto', **kwargs) -> MicroscopeHandler:
     """Create the appropriate microscope handler."""

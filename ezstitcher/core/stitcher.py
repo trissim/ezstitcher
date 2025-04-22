@@ -1,4 +1,6 @@
 """
+# Set environment variables to force single-threaded operation in Ashlar
+# This is necessary to avoid conflicts when running in a multithreaded environment
 Stitcher module for ezstitcher.
 
 This module contains the Stitcher class for handling image stitching operations.
@@ -18,6 +20,11 @@ from ezstitcher.core.config import StitcherConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.image_preprocessor import create_linear_weight_mask
 from ezstitcher.core.microscope_interfaces import FilenameParser
+
+import os
+#os.environ['OPENBLAS_NUM_THREADS'] = '1'
+#os.environ['MKL_NUM_THREADS'] = '1'
+#os.environ['OMP_NUM_THREADS'] = '1'
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +188,8 @@ class Stitcher:
             # Build a Mosaic from the alignment
             mosaic_args = {
                 'verbose': True,
-                'flip_mosaic_y': False  # if your final mosaic needs flipping
+                'flip_mosaic_y': False,  # if your final mosaic needs flipping
+                # 'num_workers': 1  # This parameter is not supported by Ashlar's Mosaic class
             }
             mosaic = reg.Mosaic(
                 aligner,

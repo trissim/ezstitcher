@@ -22,13 +22,14 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def test_field_remapping(xml_path):
+def test_field_remapping():
     """
     Test the field remapping functionality.
-
-    Args:
-        xml_path: Path to the Index.xml file
     """
+    # Use the Index.xml file in the project root directory
+    xml_path = Path(__file__).parent.parent / "Index.xml"
+    assert xml_path.exists(), f"Index.xml file not found at: {xml_path}"
+
     logger.info(f"Testing field remapping with XML file: {xml_path}")
 
     # Parse the XML file
@@ -49,8 +50,28 @@ def test_field_remapping(xml_path):
     # Get field ID mapping
     field_id_mapping = xml_parser.get_field_id_mapping()
     logger.info("Field ID mapping:")
+
+    # Create a reverse mapping (new_id -> original_id)
+    reverse_mapping = {}
     for original_id, new_id in field_id_mapping.items():
-        logger.info(f"  Original ID: {original_id} -> New ID: {new_id}")
+        if new_id not in reverse_mapping:
+            reverse_mapping[new_id] = []
+        reverse_mapping[new_id].append(original_id)
+
+    # Display mapping as (new_id, original_id)
+    logger.info("Format: (new_field_id, original_field_id)")
+    for new_id in sorted(reverse_mapping.keys()):
+        original_ids = reverse_mapping[new_id]
+        if len(original_ids) == 1:
+            logger.info(f"  ({new_id}, {original_ids[0]})")
+        else:
+            # Handle case where multiple original IDs map to the same new ID
+            logger.info(f"  ({new_id}, {original_ids})")
+
+    # Also show the original mapping for reference
+    logger.info("\nOriginal mapping (original_id -> new_id):")
+    for original_id, new_id in sorted(field_id_mapping.items()):
+        logger.info(f"  {original_id} -> {new_id}")
 
     # Test remapping a filename
     filename_parser = OperaPhenixFilenameParser()
@@ -69,7 +90,7 @@ def test_field_remapping(xml_path):
 
 if __name__ == "__main__":
     # Use the Index.xml file in the main directory
-    index_xml_path = Path(__file__).parent.parent / "Index.xml"
+    index_xml_path = Path(__file__).parent / "Index.xml"
 
     if not index_xml_path.exists():
         logger.error(f"Index.xml file not found at: {index_xml_path}")
