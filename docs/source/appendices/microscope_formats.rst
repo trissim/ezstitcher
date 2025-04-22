@@ -84,23 +84,24 @@ Opera Phenix microscopes use the following file naming convention:
 
 .. code-block:: text
 
-    r<row>c<col>f<field>p<plane>-ch<channel>sk<skew>fk<focus>fl<flim>.tiff
+    r<row>c<col>f<field>p<plane>-ch<channel>sk1fk1fl1.tiff
 
 For example:
 
-
-- ``r01c01f01p01-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 1
-- ``r01c01f01p01-ch2sk1fk1fl1.tiff``: Well A01, Channel 2, Field 1, Plane 1
-- ``r01c01f02p01-ch2sk1fk1fl1.tiff``: Well A01, Channel 1, Field 2, Plane 1
-- ``r01c01f01p02-ch2sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 2
+- ``r01c01f001p01-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 1
+- ``r01c01f001p01-ch2sk1fk1fl1.tiff``: Well A01, Channel 2, Field 1, Plane 1
+- ``r01c01f002p01-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 2, Plane 1
+- ``r01c01f001p02-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 2
 
 Components:
 
 - ``r<row>``: Row number (r01 = A, r02 = B, etc.)
 - ``c<col>``: Column number (c01, c02, etc.)
 - ``ch<channel>``: Channel number (ch1, ch2, etc.)
-- ``f<field>``: Field/site number (f1, f2, etc.)
-- ``p<plane>``: Z-plane number (p1, p2, etc.)
+- ``f<field>``: Field/site number (f001, f002, etc.)
+- ``p<plane>``: Z-plane number (p01, p02, etc.)
+
+Note: The suffixes ``sk1``, ``fk1``, and ``fl1`` are fixed values that represent sequence ID, timepoint ID, and flim ID respectively. These are always expected to be 1 and are not supported as variable components.
 
 Directory Structure
 ^^^^^^^^^^^^^^^^^^^
