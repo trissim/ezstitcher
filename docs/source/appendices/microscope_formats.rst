@@ -62,7 +62,7 @@ Alternatively, Z-stacks may be organized with Z-index in the filename:
     └── ...
 
 Metadata
-^^^^^^&^
+^^^^^^^^
 
 ImageXpress metadata is stored in XML files with names like:
 
