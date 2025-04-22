@@ -345,14 +345,14 @@ class OperaPhenixXmlParser:
 
     def sort_fields_by_position(self, positions: Dict[int, Tuple[float, float]]) -> list:
         """
-        Sort fields based on their positions in a snake pattern starting from the top.
-        First row goes left-to-right, second row goes right-to-left, and so on.
+        Sort fields based on their positions in a raster pattern starting from the top.
+        All rows go left-to-right in a consistent raster scan pattern.
 
         Args:
             positions: Dictionary mapping field IDs to (x, y) position tuples
 
         Returns:
-            list: Field IDs sorted in snake pattern order starting from the top
+            list: Field IDs sorted in raster pattern order starting from the top
         """
         if not positions:
             return []
@@ -379,16 +379,12 @@ class OperaPhenixXmlParser:
             logger.info(row_str)
 
         # Sort field IDs by row (y) then column (x)
-        # Use snake pattern: first row (top) goes left-to-right, second row goes right-to-left, etc.
+        # Use raster pattern: all rows go left-to-right in a consistent pattern
         sorted_field_ids = []
         for y_idx in range(len(y_coords)):
             row_fields = []
-            # First row (y_idx=0) goes left-to-right
-            # Second row (y_idx=1) goes right-to-left, and so on
-            if y_idx % 2 == 0:  # Left to right (first row, third row, etc.)
-                x_range = range(len(x_coords))
-            else:  # Right to left (second row, fourth row, etc.)
-                x_range = range(len(x_coords) - 1, -1, -1)
+            # All rows go left to right in a raster pattern
+            x_range = range(len(x_coords))
 
             for x_idx in x_range:
                 if (x_idx, y_idx) in grid:
