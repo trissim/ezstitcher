@@ -25,13 +25,12 @@ Key Features
 
    getting_started/installation
    getting_started/quickstart
-   getting_started/basic_concepts
+   getting_started/concepts
 
 .. toctree::
    :maxdepth: 2
    :caption: User Guide
 
-   user_guide/core_concepts
    user_guide/file_organization
    user_guide/configuration
    user_guide/microscope_support

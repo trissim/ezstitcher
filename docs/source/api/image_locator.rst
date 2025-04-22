@@ -48,11 +48,11 @@ ImageLocator
 
    .. py:staticmethod:: find_z_stack_dirs(root_dir, pattern="ZStep_\\d+", recursive=True)
 
-      Find directories matching a pattern (default: ZStep_#) recursively.
+      Find directories matching a pattern (default: Z-step_#) recursively.
 
       :param root_dir: Root directory to start the search
       :type root_dir: str or Path
-      :param pattern: Regex pattern to match directory names (default: ZStep_\\d+)
+      :param pattern: Regex pattern to match directory names (default: pattern for Z-step folders)
       :type pattern: str
       :param recursive: Whether to search recursively in subdirectories
       :type recursive: bool
@@ -76,7 +76,7 @@ ImageLocator
 
       Handles both cases:
       1. Images directly in a folder (returns that folder)
-      2. Images split across ZStep folders (returns parent of ZStep folders)
+      2. Images split across Z-step folders (returns parent of Z-step folders)
 
       :param plate_folder: Base directory to search
       :type plate_folder: str or Path

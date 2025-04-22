@@ -1,115 +1,90 @@
 File Organization
 ================
 
-This page explains how EZStitcher organizes files and directories.
+This page explains how EZStitcher organizes and processes files.
 
-Expected Input Structure
-----------------------
+Input Directory Structure
+-----------------------
 
-EZStitcher expects specific input directory structures depending on the microscope type.
+EZStitcher supports various input directory structures, with automatic detection of microscope types and file organizations.
 
-ImageXpress
-~~~~~~~~~~
+Basic Structure
+~~~~~~~~~~~~~
 
-Standard structure:
+The basic input structure is a plate folder containing image files. EZStitcher automatically detects the microscope type based on the file naming and directory structure.
 
-.. code-block:: text
-
-    plate_folder/
-    ├── TimePoint_1/
-    │   ├── A01_s1_w1.tif
-    │   ├── A01_s1_w2.tif
-    │   ├── A01_s2_w1.tif
-    │   └── ...
-    └── ...
-
-Z-stack structure:
-
-.. code-block:: text
-
-    plate_folder/
-    ├── TimePoint_1/
-    │   ├── ZStep_1/
-    │   │   ├── A01_s1_w1.tif
-    │   │   ├── A01_s1_w2.tif
-    │   │   └── ...
-    │   ├── ZStep_2/
-    │   │   ├── A01_s1_w1.tif
-    │   │   ├── A01_s1_w2.tif
-    │   │   └── ...
-    │   └── ...
-    └── ...
-
-Opera Phenix
-~~~~~~~~~~~
-
-Standard structure:
-
-.. code-block:: text
-
-    plate_folder/
-    ├── Images/
-    │   ├── r01c01f01p01-ch1sk1fk1fl1.tif  # Well A01, Channel 1, Field 1, Plane 1 
-    │   ├── r01c01f01p02-ch1sk1fk1fl1.tif  # Well A01, Channel 1, Field 1, Plane 2 
-    │   ├── r01c01f02p01-ch1sk1fk1fl1.tif  # Well A01, Channel 1, Field 2, Plane 1 
-    │   └── ...
-    ├── Index.xml
-    └── ...
+For detailed information about supported microscope formats, see the :doc:`../appendices/microscope_formats` appendix.
 
 Output Directory Structure
 ------------------------
 
-EZStitcher creates several output directories:
+EZStitcher creates several output directories during processing:
 
 .. code-block:: text
 
-    parent_directory/
-    ├── plate_folder/                  # Original data
-    │   └── ...
-    ├── plate_folder_processed/        # Processed individual tiles
-    │   └── ...
-    ├── plate_folder_post_processed/   # Post-processed images
-    │   └── ...
-    ├── plate_folder_positions/        # CSV files with stitching positions
-    │   └── ...
-    └── plate_folder_stitched/         # Final stitched images
-        └── ...
+    plate_folder/                 # Original data
+    plate_folder_processed/       # Processed individual tiles
+    plate_folder_post_processed/  # Post-processed images
+    plate_folder_positions/       # CSV files with stitching positions
+    plate_folder_stitched/        # Final stitched images
+
+Each directory serves a specific purpose in the processing pipeline:
 
 Processed Directory
 ~~~~~~~~~~~~~~~~~
 
-Contains processed individual tiles:
+Contains processed individual tiles after applying preprocessing functions:
 
 .. code-block:: text
 
     plate_folder_processed/
-    ├── A01_s1_w1.tif
-    ├── A01_s1_w2.tif
-    ├── A01_s2_w1.tif
+    ├── A01/
+    │   ├── A01_s1_w1.tif
+    │   ├── A01_s1_w2.tif
+    │   ├── A01_s2_w1.tif
+    │   └── ...
+    ├── A02/
+    │   └── ...
     └── ...
+
+Processing operations may include:
+- Background subtraction
+- Contrast enhancement
+- Noise reduction
+- Custom preprocessing functions
 
 Post-Processed Directory
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Contains post-processed images (after channel selection/composition):
+Contains post-processed images after channel selection/composition and Z-stack flattening:
 
 .. code-block:: text
 
     plate_folder_post_processed/
-    ├── A01_w1.tif
-    ├── A01_w2.tif
+    ├── A01/
+    │   ├── A01_w1.tif
+    │   ├── A01_w2.tif
+    │   └── ...
+    ├── A02/
+    │   └── ...
     └── ...
+
+Post-processing operations may include:
+- Z-stack flattening (max projection, best focus, etc.)
+- Channel composition
+- Reference channel selection
 
 Positions Directory
 ~~~~~~~~~~~~~~~~~
 
-Contains CSV files with stitching positions:
+Contains CSV files with stitching positions for each well and channel:
 
 .. code-block:: text
 
     plate_folder_positions/
     ├── A01_w1.csv
     ├── A01_w2.csv
+    ├── A02_w1.csv
     └── ...
 
 Each CSV file contains the positions of tiles for a specific well and channel:
@@ -126,138 +101,60 @@ Each CSV file contains the positions of tiles for a specific well and channel:
 Stitched Directory
 ~~~~~~~~~~~~~~~~
 
-Contains final stitched images:
+Contains final stitched images for each well and channel:
 
 .. code-block:: text
 
     plate_folder_stitched/
     ├── A01_w1.tif
     ├── A01_w2.tif
+    ├── A02_w1.tif
     └── ...
 
-Naming Conventions
-----------------
+Well-Based Organization
+---------------------
 
-EZStitcher uses specific naming conventions for files:
+EZStitcher processes images on a per-well basis. Each well is processed independently, allowing for parallel processing and efficient memory usage.
 
-Well Identifiers
-~~~~~~~~~~~~~~
+For each well, EZStitcher:
 
-- **ImageXpress**: A01, A02, B01, B02, etc.
-- **Opera Phenix**: r01c01 (A01), r01c02 (A02), r02c01 (B01), r02c02 (B02), etc. (row and column as 2-digit numbers)
+1. Finds all images for that well
+2. Processes them according to the configuration
+3. Generates stitching positions
+4. Stitches the images
+5. Saves the results
 
-Site Identifiers
-~~~~~~~~~~~~~~
+Z-Stack Organization
+-----------------
 
-- **ImageXpress**: s1, s2, s3, etc.
-- **Opera Phenix**: F1, F2, F3, etc.
+EZStitcher supports different Z-stack organizations:
 
-Channel Identifiers
-~~~~~~~~~~~~~~~~
+- **Folder-based**: Z-planes organized in separate folders
+- **Filename-based**: Z-plane index included in the filename
 
-- **ImageXpress**: w1, w2, w3, etc.
-- **Opera Phenix**: CH1, CH2, CH3, etc.
+For details on how EZStitcher handles Z-stacks, see the :doc:`zstack_handling` guide.
 
-Z-Stack Identifiers
-~~~~~~~~~~~~~~~~
+Custom File Organization
+---------------------
 
-- **ImageXpress**: ZStep_1, ZStep_2, etc. (folder-based) or _z1, _z2, etc. (suffix-based)
-- **Opera Phenix**: P1, P2, P3, etc.
+If your files don't match the standard patterns, you can customize how EZStitcher finds and processes them:
+
+.. code-block:: python
+
+    from ezstitcher.core.config import PipelineConfig
+    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+
+    # Custom file pattern
+    config = PipelineConfig(
+        file_pattern="custom_{well}_site{site}_channel{channel}.tif"
+    )
+
+    pipeline = PipelineOrchestrator(config)
+    pipeline.run("path/to/plate_folder")
+
+For more advanced customization, see the :doc:`../api/microscope_interfaces` API reference.
 
 File Formats
 -----------
 
-EZStitcher supports several image formats:
-
-- **TIFF**: Preferred format for microscopy images
-- **PNG**: Supported for input and output
-- **JPEG**: Supported for input and output
-
-Metadata formats:
-
-- **ImageXpress**: HTD files (text-based)
-- **Opera Phenix**: XML files (Index.xml)
-
-Position CSV format:
-
-.. code-block:: text
-
-    filename,x,y
-    A01_s1_w1.tif,0.0,0.0
-    A01_s2_w1.tif,1024.5,0.0
-    ...
-
-Configuration file formats:
-
-- **JSON**: JSON configuration files
-- **YAML**: YAML configuration files
-
-Metadata Files
-------------
-
-EZStitcher extracts metadata from microscope-specific files:
-
-ImageXpress HTD Files
-~~~~~~~~~~~~~~~~~~~
-
-HTD files contain metadata for ImageXpress acquisitions:
-
-.. code-block:: text
-
-    [General]
-    Plate Type=96 Well
-    ...
-    [Sites]
-    SiteCount=9
-    GridRows=3
-    GridColumns=3
-    ...
-    [Wavelengths]
-    WavelengthCount=3
-    ...
-    [Scale]
-    PixelSize=0.65
-    ...
-
-Opera Phenix XML Files
-~~~~~~~~~~~~~~~~~~~~
-
-Index.xml files contain metadata for Opera Phenix acquisitions:
-
-.. code-block:: xml
-
-    <?xml version="1.0" encoding="utf-8"?>
-    <EvaluationInputData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="1" xmlns="http://www.perkinelmer.com/PEHH/HarmonyV6">
-      <Plates>
-        <Plate>
-          <PlateID>plate_name</PlateID>
-          <PlateTypeName>96well</PlateTypeName>
-          <PlateRows>8</PlateRows>
-          <PlateColumns>12</PlateColumns>
-          ...
-        </Plate>
-      </Plates>
-      <Images>
-        <Image id="r01c01f001p01-ch1sk1fk1fl1">
-          <URL>Images/r01c01f001p01-ch1sk1fk1fl1.tiff</URL>
-          <ChannelID>1</ChannelID>
-          <FieldID>1</FieldID>
-          <PlaneID>1</PlaneID>
-          <PositionX>0.0</PositionX>
-          <PositionY>0.0</PositionY>
-          <ImageResolutionX>0.65</ImageResolutionX>
-          <ImageResolutionY>0.65</ImageResolutionY>
-          <ImageResolutionXUnit>m</ImageResolutionXUnit>
-          <ImageResolutionYUnit>m</ImageResolutionYUnit>
-          ...
-        </Image>
-        ...
-      </Images>
-    </EvaluationInputData>
-
-EZStitcher extracts the following information from metadata files:
-
-- Grid dimensions (number of tiles in X and Y directions)
-- Pixel size (in micrometers)
-- Well information
-- Channel information
+For detailed information about supported file formats, see the :doc:`../appendices/file_formats` appendix.

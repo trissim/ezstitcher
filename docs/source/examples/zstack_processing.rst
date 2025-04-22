@@ -1,12 +1,12 @@
-Z-Stack Processing
-================
+Z-Stack Processing Examples
+=========================
 
-This example demonstrates how to process Z-stacks with EZStitcher.
+This page provides practical examples of Z-stack processing with EZStitcher.
 
-Z-Stack Max Projection
---------------------
+Basic Z-Stack Processing
+---------------------
 
-The simplest way to process Z-stacks is to create a maximum intensity projection:
+Process Z-stacks with maximum intensity projection:
 
 .. code-block:: python
 
@@ -27,7 +27,7 @@ The simplest way to process Z-stacks is to create a maximum intensity projection
 Best Focus Detection
 -----------------
 
-EZStitcher can detect the best focused plane in each Z-stack:
+Detect the best focused plane in each Z-stack:
 
 .. code-block:: python
 
@@ -39,9 +39,8 @@ EZStitcher can detect the best focused plane in each Z-stack:
         reference_channels=["1"],
         reference_flatten="max_projection",  # Use max projection for reference
         stitch_flatten="best_focus",         # Use best focus for final images
-        focus_method="combined",             # Combined focus metrics
         focus_config=FocusAnalyzerConfig(
-            method="combined",
+            method="combined",               # Combined focus metrics
             roi=(100, 100, 200, 200)         # Optional ROI for focus detection
         )
     )
@@ -53,7 +52,7 @@ EZStitcher can detect the best focused plane in each Z-stack:
 Multiple Projections
 -----------------
 
-EZStitcher can create multiple projections from the same Z-stack:
+Create multiple projections from the same Z-stack:
 
 .. code-block:: python
 
@@ -75,7 +74,7 @@ EZStitcher can create multiple projections from the same Z-stack:
 Per-Plane Stitching
 ----------------
 
-EZStitcher can stitch each Z-plane separately:
+Stitch each Z-plane separately:
 
 .. code-block:: python
 
@@ -92,6 +91,53 @@ EZStitcher can stitch each Z-plane separately:
     # Create and run the pipeline
     pipeline = PipelineOrchestrator(config)
     pipeline.run("path/to/zstack_plate")
+
+Complete Z-Stack Workflow
+----------------------
+
+A complete workflow for Z-stack processing:
+
+.. code-block:: python
+
+    import os
+    from ezstitcher.core.config import PipelineConfig, StitcherConfig, FocusAnalyzerConfig
+    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+
+    # Input directory
+    plate_folder = "path/to/zstack_plate"
+
+    # Configure Z-stack processing
+    config = PipelineConfig(
+        # Basic settings
+        reference_channels=["1"],
+        well_filter=["A01", "A02"],  # Process only these wells
+
+        # Z-stack settings
+        reference_flatten="max_projection",  # Use max projection for reference
+        stitch_flatten="best_focus",         # Use best focus for final images
+
+        # Focus detection settings
+        focus_config=FocusAnalyzerConfig(
+            method="combined",               # Combined focus metrics
+            roi=(100, 100, 200, 200)         # Optional ROI for focus detection
+        ),
+
+        # Stitching settings
+        stitcher=StitcherConfig(
+            tile_overlap=10.0,               # 10% overlap between tiles
+            max_shift=50                     # Maximum shift in pixels
+        )
+    )
+
+    # Create and run the pipeline
+    pipeline = PipelineOrchestrator(config)
+    success = pipeline.run(plate_folder)
+
+    if success:
+        print(f"Z-stack processing completed successfully!")
+        print(f"Stitched images saved to: {os.path.join(plate_folder + '_stitched')}")
+    else:
+        print("Z-stack processing failed.")
 
 Command Line Interface
 --------------------

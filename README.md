@@ -61,7 +61,7 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/macOS/WSL
 # or
 .venv\Scripts\activate     # Windows
-pip install -e .
+python -m pip install -e .
 ```
 
 For detailed installation instructions, including troubleshooting common issues, see the [Installation Guide](https://ezstitcher.readthedocs.io/en/latest/getting_started/installation.html).

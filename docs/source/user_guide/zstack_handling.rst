@@ -1,165 +1,160 @@
 Z-Stack Handling
-===============
+==============
 
-This page explains how EZStitcher handles Z-stacks.
+This page explains how EZStitcher handles Z-stacks (3D image stacks).
+
+Z-Stack Concepts
+--------------
+
+Z-stacks are 3D image stacks captured at different focal planes. Each Z-plane represents a different depth in the sample.
+
+EZStitcher provides several options for handling Z-stacks:
+
+- **Projection**: Create a 2D representation of the 3D stack
+- **Best Focus Selection**: Select the best focused plane
+- **Per-Plane Stitching**: Stitch each Z-plane separately
 
 Z-Stack Organization
-------------------
+-----------------
 
-Z-stacks are 3D image stacks captured at different focal planes. EZStitcher supports different Z-stack organizations depending on the microscope type:
-
-ImageXpress
-~~~~~~~~~~
-
-ImageXpress supports two Z-stack formats:
-
-1. **Folder-based Z-stacks**:
-
-.. code-block:: text
-
-    plate_folder/
-    ├── TimePoint_1/
-    │   ├── ZStep_1/
-    │   │   ├── A01_s1_w1.tif
-    │   │   ├── A01_s1_w2.tif
-    │   │   └── ...
-    │   ├── ZStep_2/
-    │   │   ├── A01_s1_w1.tif
-    │   │   ├── A01_s1_w2.tif
-    │   │   └── ...
-    │   └── ...
-    └── ...
-
-2. **Suffix-based Z-stacks**:
-
-.. code-block:: text
-
-    plate_folder/
-    ├── TimePoint_1/
-    │   ├── A01_s1_w1_z1.tif
-    │   ├── A01_s1_w1_z2.tif
-    │   ├── A01_s1_w1_z3.tif
-    │   ├── A01_s1_w2_z1.tif
-    │   ├── A01_s1_w2_z2.tif
-    │   ├── A01_s1_w2_z3.tif
-    │   └── ...
-    └── ...
-
-Opera Phenix
-~~~~~~~~~~~
-
-Opera Phenix Z-stacks are identified by the plane identifier (P) in the filename:
-
-.. code-block:: text
-
-    plate_folder/
-    ├── Images/
-    │   ├── r01c01f001p01-ch1sk1fk1fl1.tiff  # Well A01, Channel 1, Field 1, Plane 1
-    │   ├── r01c01f001p02-ch1sk1fk1fl1.tiff  # Well A01, Channel 1, Field 1, Plane 2
-    │   ├── r01c01f001p03-ch1sk1fk1fl1.tiff  # Well A01, Channel 1, Field 1, Plane 3
-    │   └── ...
-    └── ...
+EZStitcher supports different Z-stack organizations depending on the microscope type. For detailed information about microscope-specific Z-stack formats, see the :doc:`../appendices/microscope_formats` appendix.
 
 EZStitcher automatically detects Z-stacks and organizes them for processing.
 
-Z-Stack Loading
--------------
+Z-Stack Processing Options
+----------------------
 
-EZStitcher provides methods for loading Z-stacks into memory:
+EZStitcher provides several configuration options for Z-stack processing:
 
 .. code-block:: python
 
-    from ezstitcher.core.file_system_manager import FileSystemManager
-    from ezstitcher.core.image_locator import ImageLocator
-    from pathlib import Path
+    from ezstitcher.core.config import PipelineConfig
+    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
-    # Create file system manager
-    fs_manager = FileSystemManager()
+    # Configure Z-stack processing
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="max_projection",  # Method for reference channel
+        stitch_flatten="best_focus"          # Method for final stitching
+    )
 
-    # Find Z-stack directories
-    plate_path = Path("path/to/plate_folder")
-    image_dir = ImageLocator.find_image_directory(plate_path)
-    z_stack_dirs = ImageLocator.find_z_stack_dirs(image_dir)
+    # Create and run pipeline
+    pipeline = PipelineOrchestrator(config)
+    pipeline.run("path/to/plate_folder")
 
-    # Load Z-stack images
-    z_stack_images = []
-    for z_index, z_dir in sorted(z_stack_dirs):
-        # Find images in Z-stack directory
-        images = fs_manager.list_image_files(z_dir)
+The key configuration parameters for Z-stack processing are:
 
-        # Load first image in each Z-stack directory
-        if images:
-            image = fs_manager.load_image(images[0])
-            z_stack_images.append(image)
+- **reference_flatten**: Method used for position generation ("max_projection", "mean_projection", "best_focus", etc.)
+- **stitch_flatten**: Method used for final stitching ("max_projection", "mean_projection", "best_focus", None for per-plane stitching)
+- **focus_method**: Method used for focus detection ("combined", "nvar", "lap", "ten", "fft")
+- **additional_projections**: List of additional projections to create (["max", "mean", "std"])
 
-    print(f"Loaded {len(z_stack_images)} Z-stack images")
+Projection Methods
+---------------
 
-For Opera Phenix, the process is similar but uses the plane identifier (P) in the filename instead of directories. For ImageXpress with suffix-based Z-stacks, the process uses the z-index suffix in the filename.
+EZStitcher provides several projection methods for Z-stacks:
 
-Z-Stack Processing
+Maximum Intensity Projection
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Creates a 2D image where each pixel is the maximum value across all Z-planes:
+
+.. code-block:: python
+
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="max_projection",  # Use max projection for reference
+        stitch_flatten="max_projection"      # Use max projection for final stitching
+    )
+
+Mean Projection
+~~~~~~~~~~~~
+
+Creates a 2D image where each pixel is the average value across all Z-planes:
+
+.. code-block:: python
+
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="mean_projection",  # Use mean projection for reference
+        stitch_flatten="mean_projection"      # Use mean projection for final stitching
+    )
+
+Standard Deviation Projection
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Creates a 2D image where each pixel is the standard deviation across all Z-planes:
+
+.. code-block:: python
+
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="std_projection",  # Use std projection for reference
+        stitch_flatten="std_projection"      # Use std projection for final stitching
+    )
+
+Best Focus Detection
+-----------------
+
+EZStitcher can detect the best focused plane in each Z-stack:
+
+.. code-block:: python
+
+    from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
+    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="max_projection",  # Use max projection for reference
+        stitch_flatten="best_focus",         # Use best focus for final images
+        focus_config=FocusAnalyzerConfig(
+            method="combined",               # Combined focus metrics
+            roi=(100, 100, 200, 200)         # Optional ROI for focus detection
+        )
+    )
+
+Focus Detection Methods
+~~~~~~~~~~~~~~~~~~~~
+
+EZStitcher provides several focus detection methods:
+
+- **Normalized Variance (nvar)**: Based on image variance
+- **Laplacian (lap)**: Based on edge detection
+- **Tenengrad (ten)**: Based on gradient magnitude
+- **Fourier (fft)**: Based on frequency domain analysis
+- **Combined**: Weighted combination of multiple methods
+
+You can customize the weights for the combined method:
+
+.. code-block:: python
+
+    focus_config=FocusAnalyzerConfig(
+        method="combined",
+        weights={
+            "nvar": 0.4,
+            "lap": 0.3,
+            "ten": 0.2,
+            "fft": 0.1
+        }
+    )
+
+Per-Plane Stitching
 ----------------
 
-EZStitcher provides several options for processing Z-stacks:
-
-Processing Individual Z-Planes
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-You can process each Z-plane separately:
+EZStitcher can stitch each Z-plane separately:
 
 .. code-block:: python
 
-    from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-
-    # Create configuration for per-plane processing
     config = PipelineConfig(
         reference_channels=["1"],
-        reference_flatten="max_projection",  # Use max projection for position generation
-        stitch_flatten=None                  # Process each Z-plane separately
+        reference_flatten="max_projection",  # Use max projection for reference
+        stitch_flatten=None                  # Stitch each Z-plane separately
     )
 
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    pipeline.run("path/to/plate_folder")
+This creates a separate stitched image for each Z-plane, preserving the 3D structure.
 
-This will:
-
-1. Use max projection for position generation
-2. Process each Z-plane separately
-3. Stitch each Z-plane using the positions from the reference
-
-Processing Entire Z-Stacks
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-You can also process entire Z-stacks at once:
-
-.. code-block:: python
-
-    from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor
-
-    # Define a function to process entire Z-stacks
-    def process_zstack(stack):
-        """Process an entire Z-stack."""
-        # Apply processing to each plane
-        processed_stack = []
-        for plane in stack:
-            processed_plane = ImagePreprocessor.equalize_histogram(plane)
-            processed_stack.append(processed_plane)
-        return processed_stack
-
-    # Create configuration for Z-stack processing
-    config = PipelineConfig(
-        reference_channels=["1"],
-        reference_processing=process_zstack,
-        reference_flatten="max_projection",
-        stitch_flatten="best_focus"
-    )
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    pipeline.run("path/to/plate_folder")
+Advanced Z-Stack Processing
+------------------------
 
 Custom Z-Stack Processing Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -171,44 +166,24 @@ You can define custom functions for processing Z-stacks:
     import numpy as np
     from skimage import filters
 
-    def stack_equalize_histogram(stack):
-        """Apply histogram equalization to each plane in a Z-stack."""
-        from ezstitcher.core.image_preprocessor import ImagePreprocessor
-        return [ImagePreprocessor.equalize_histogram(plane) for plane in stack]
+    def preprocess_zstack(stack):
+        """Apply custom preprocessing to each plane in a Z-stack."""
+        processed_stack = []
+        for plane in stack:
+            # Apply histogram equalization
+            from ezstitcher.core.image_preprocessor import ImagePreprocessor
+            processed_plane = ImagePreprocessor.equalize_histogram(plane)
+            # Apply denoising
+            processed_plane = filters.gaussian(processed_plane, sigma=1)
+            processed_stack.append(processed_plane)
+        return processed_stack
 
-    def stack_background_subtract(stack, radius=50):
-        """Apply background subtraction to each plane in a Z-stack."""
-        from ezstitcher.core.image_preprocessor import ImagePreprocessor
-        return [ImagePreprocessor.background_subtract(plane, radius) for plane in stack]
-
-    def stack_denoise(stack, sigma=1):
-        """Apply denoising to each plane in a Z-stack."""
-        return [filters.gaussian(plane, sigma=sigma) for plane in stack]
-
-Projections
-----------
-
-EZStitcher provides several methods for creating projections from Z-stacks:
-
-Maximum Intensity Projection
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor
-
-    # Create maximum intensity projection
-    max_projection = ImagePreprocessor.max_projection(z_stack_images)
-
-Mean Projection
-~~~~~~~~~~~~~
-
-.. code-block:: python
-
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor
-
-    # Create mean projection
-    mean_projection = ImagePreprocessor.mean_projection(z_stack_images)
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_processing=preprocess_zstack,  # Custom preprocessing function
+        reference_flatten="max_projection",
+        stitch_flatten="best_focus"
+    )
 
 Custom Projection Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -237,88 +212,29 @@ You can define custom projection functions:
         weighted_stack = np.array([stack[i] * weights[i] for i in range(len(stack))])
         return np.sum(weighted_stack, axis=0) / np.sum(weights)
 
-Best Focus Selection
-------------------
+Multiple Projections
+-----------------
 
-EZStitcher can select the best focused plane in a Z-stack:
-
-.. code-block:: python
-
-    from ezstitcher.core.focus_analyzer import FocusAnalyzer
-    from ezstitcher.core.config import FocusAnalyzerConfig
-
-    # Create focus analyzer
-    focus_config = FocusAnalyzerConfig(method="combined")
-    focus_analyzer = FocusAnalyzer(focus_config)
-
-    # Find best focus
-    best_idx, focus_scores = focus_analyzer.find_best_focus(z_stack_images)
-    best_focus_image = z_stack_images[best_idx]
-
-    print(f"Best focus plane: {best_idx}")
-    print(f"Focus scores: {focus_scores}")
-
-You can also select the best focus with a region of interest (ROI):
+EZStitcher can create multiple projections from the same Z-stack:
 
 .. code-block:: python
 
-    # Define ROI (x, y, width, height)
-    roi = (100, 100, 200, 200)
-
-    # Find best focus with ROI
-    best_idx, focus_scores = focus_analyzer.find_best_focus(z_stack_images, roi=roi)
-    best_focus_image = z_stack_images[best_idx]
-
-Complete Z-Stack Processing Example
----------------------------------
-
-Here's a complete example of Z-stack processing:
-
-.. code-block:: python
-
-    from ezstitcher.core.config import PipelineConfig, StitcherConfig, FocusAnalyzerConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor
-
-    # Define Z-stack preprocessing function
-    def preprocess_zstack(stack):
-        """Preprocess a Z-stack."""
-        # Apply histogram equalization to each plane
-        return [ImagePreprocessor.equalize_histogram(plane) for plane in stack]
-
-    # Create configuration for Z-stack processing
     config = PipelineConfig(
         reference_channels=["1"],
-        reference_processing=preprocess_zstack,
-        reference_flatten="max_projection",  # Use max projection for position generation
-        stitch_flatten="best_focus",         # Use best focus for final stitching
-        focus_method="combined",             # Use combined focus metric
-        focus_config=FocusAnalyzerConfig(
-            method="combined",
-            roi=None,  # Use entire image
-            weights={
-                "nvar": 0.4,
-                "lap": 0.3,
-                "ten": 0.2,
-                "fft": 0.1
-            }
-        ),
-        stitcher=StitcherConfig(
-            tile_overlap=10.0,
-            max_shift=50,
-            margin_ratio=0.1
-        ),
+        reference_flatten="max_projection",     # Use max projection for reference
+        stitch_flatten="best_focus",            # Use best focus for final images
         additional_projections=["max", "mean"]  # Create additional projections
     )
 
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    pipeline.run("path/to/plate_folder")
+This creates additional projections in the output directory, allowing you to compare different methods.
 
-This example:
+Best Practices
+-----------
 
-1. Applies histogram equalization to each plane in the Z-stack
-2. Uses max projection for position generation
-3. Uses best focus for final stitching
-4. Uses combined focus metric with custom weights
-5. Creates additional max and mean projections
+- **For position generation**: Use max projection (fastest and most reliable)
+- **For final stitching**: Use best focus for most applications
+- **For 3D analysis**: Use per-plane stitching
+- **For noisy images**: Use mean projection to reduce noise
+- **For focus detection**: Use combined method for best results
+
+For practical examples of Z-stack processing, see the :doc:`../examples/zstack_processing` guide.

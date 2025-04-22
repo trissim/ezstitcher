@@ -6,7 +6,7 @@ This guide will help you install EZStitcher and its dependencies.
 System Requirements
 ------------------
 
-- **Python**: 3.8 or higher (but less than 3.12)
+- **Python**: 3.8 or higher (3.11 recommended)
 - **Operating System**: Windows, macOS, or Linux
 - **RAM**: 8GB minimum, 16GB or more recommended for large images
 - **CPU**: Multi-core processor recommended for faster processing
@@ -51,13 +51,14 @@ Quick Installation Steps
        python -m venv .venv
        source .venv/bin/activate
 
-3. **Install EZStitcher**:
+3. **Install EZStitcher from source**:
 
    .. code-block:: bash
 
        git clone https://github.com/trissim/ezstitcher.git
        cd ezstitcher
-       pip install -e .
+       # Install in development mode
+       python -m pip install -e .
 
 Dependencies
 -----------
@@ -68,63 +69,37 @@ EZStitcher's main dependencies will be installed automatically:
 - **pandas**, **tifffile**, **ashlar**: Data handling and stitching
 - **opencv-python**: Computer vision algorithms
 - **PyYAML**: Configuration handling
+- **imagecodecs**: Image compression/decompression
 
 Optional dependencies for development and visualization include **matplotlib** and **jupyter**.
 
-Troubleshooting Installation Issues
+Basic Troubleshooting
+-------------------
+
+If you encounter issues during installation:
+
+1. **Ensure you're using Python 3.8-3.11** (3.11 recommended)
+2. **Check that your virtual environment is activated**
+3. **Try installing in a fresh virtual environment**
+
+For detailed troubleshooting, see the :doc:`../troubleshooting/installation` guide.
+
+Verifying Installation
+------------------
+
+To verify that EZStitcher is installed correctly:
+
+.. code-block:: bash
+
+    python -c "import ezstitcher; print('EZStitcher installed successfully')"
+
+This should print "EZStitcher installed successfully". If you get an error, the installation was not successful.
+
+Platform-Specific Installation Details
 ----------------------------------
 
-Common Issues
-~~~~~~~~~~~~
-
-1. **Missing Dependencies**:
-
-   If you encounter errors about missing dependencies, try installing them manually:
-
-   .. code-block:: bash
-
-       pip install numpy scikit-image scipy pandas imageio tifffile ashlar opencv-python PyYAML
-
-2. **Version Conflicts**:
-
-   If you encounter version conflicts, try creating a fresh virtual environment:
-
-   .. code-block:: bash
-
-       python -m venv .venv
-       source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-       pip install -r requirements.txt
-
-3. **Compilation Errors**:
-
-   Some dependencies may require compilation tools:
-
-   .. code-block:: bash
-
-       # Ubuntu/Debian
-       sudo apt-get install python3-dev
-
-       # macOS
-       brew install libtiff
-
-   On Windows, you might need to install Visual C++ Build Tools from the Microsoft website.
-
-**Linux**:
-
-- If you encounter issues with image I/O libraries, install the required system packages:
-
-  .. code-block:: bash
-
-      # Ubuntu/Debian
-      sudo apt-get install libtiff5-dev libopenjp2-7-dev
-
-      # Fedora/RHEL
-      sudo dnf install libtiff-devel openjpeg2-devel
-
-Detailed Platform-Specific Installation
-----------------------------------
-
-**Linux (Ubuntu/Debian)**
+Linux (Ubuntu/Debian)
+~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
@@ -134,21 +109,19 @@ Detailed Platform-Specific Installation
     libbz2-dev libreadline-dev libsqlite3-dev wget curl \
     libncurses5-dev xz-utils tk-dev libffi-dev liblzma-dev
 
-    # Install pyenv
-    curl https://pyenv.run | bash
+    # Install image processing dependencies
+    sudo apt-get install -y libtiff5-dev libopenjp2-7-dev
 
-    # Add to shell (add to ~/.bashrc)
-    echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-    echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-    echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-    source ~/.bashrc
-
-**macOS**
+macOS
+~~~~
 
 .. code-block:: bash
 
     # Install pyenv with Homebrew
     brew install pyenv
+
+    # Install image processing dependencies
+    brew install libtiff
 
     # Add to shell (for zsh)
     echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.zshrc
@@ -156,7 +129,8 @@ Detailed Platform-Specific Installation
     echo 'eval "$(pyenv init -)"' >> ~/.zshrc
     source ~/.zshrc
 
-**Windows with WSL**
+Windows with WSL
+~~~~~~~~~~~~
 
 .. code-block:: bash
 
@@ -172,15 +146,14 @@ Detailed Platform-Specific Installation
     echo 'eval "$(pyenv init -)"' >> ~/.bashrc
     source ~/.bashrc
 
-Using EZStitcher
---------------
+Getting Started
+------------
 
 After installation, you can verify and use EZStitcher:
 
 .. code-block:: bash
 
-    # Verify installation
-    python -c "import ezstitcher; print(ezstitcher.__version__)"
-
-    # Run EZStitcher
+    # Run EZStitcher with help flag to see available options
     python -m ezstitcher --help
+
+For a quick introduction to using EZStitcher, see the :doc:`quickstart` guide.

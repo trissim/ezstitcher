@@ -1,12 +1,12 @@
 File Formats
-============
+===========
 
-This page describes the file formats used by EZStitcher.
+This appendix provides technical specifications for file formats and directory structures supported by EZStitcher.
 
-Image Formats
------------
+Image File Formats
+----------------
 
-EZStitcher supports the following image formats:
+EZStitcher supports the following image file formats:
 
 .. list-table::
    :header-rows: 1
@@ -25,34 +25,55 @@ EZStitcher supports the following image formats:
      - .png
      - Portable Network Graphics format, a lossless compressed image format.
 
-Positions CSV Format
------------------
+Bit Depth Support
+~~~~~~~~~~~~~~
 
-EZStitcher uses a CSV file to store tile positions for stitching. The format is:
+EZStitcher supports various bit depths for image processing:
+
+- **8-bit**: Values from 0-255 (uint8)
+- **16-bit**: Values from 0-65535 (uint16) - Recommended for most microscopy images
+- **32-bit float**: Floating-point values (float32) - Used for some specialized processing
+
+Position Files
+------------
+
+Position files are CSV files with the following format:
 
 .. code-block:: text
 
-    file: <filename>; grid: (col, row); position: (x, y)
+    filename,x,y
+    A01_s1_w1.tif,0.0,0.0
+    A01_s2_w1.tif,1024.5,0.0
+    A01_s3_w1.tif,2049.2,0.0
+    A01_s4_w1.tif,0.0,1024.3
+    ...
 
-For example:
+Where:
+- **filename**: The filename of the tile
+- **x, y**: Pixel coordinates in the final stitched image (floating-point values for subpixel precision)
+
+Alternative format with grid positions:
 
 .. code-block:: text
 
-    file: A01_s1_w1.tif; grid: (0, 0); position: (0.0, 0.0)
-    file: A01_s2_w1.tif; grid: (1, 0); position: (1024.5, 0.0)
-    file: A01_s3_w1.tif; grid: (0, 1); position: (0.0, 1024.5)
-    file: A01_s4_w1.tif; grid: (1, 1); position: (1024.5, 1024.5)
+    file,i,j,x,y
+    A01_s1_w1.tif,0,0,0.0,0.0
+    A01_s2_w1.tif,1,0,1024.5,0.0
+    A01_s3_w1.tif,0,1,0.0,1024.5
+    A01_s4_w1.tif,1,1,1024.5,1024.5
+    ...
 
-The fields are:
-
+Where:
 - **file**: The filename of the tile
-- **grid**: The grid position of the tile as (column, row)
-- **position**: The subpixel position of the tile as (x, y) in pixels
+- **i, j**: Grid coordinates (column, row)
+- **x, y**: Pixel coordinates in the final stitched image
 
-Configuration Format
------------------
+Configuration Files
+----------------
 
-EZStitcher uses Python objects for configuration, but these can be serialized to JSON for storage and sharing:
+EZStitcher supports JSON and YAML configuration files:
+
+JSON Example:
 
 .. code-block:: json
 
@@ -73,17 +94,28 @@ EZStitcher uses Python objects for configuration, but these can be serialized to
       "additional_projections": ["max", "mean"]
     }
 
-The configuration can be loaded from JSON:
+YAML Example:
 
-.. code-block:: python
+.. code-block:: yaml
 
-    import json
-    from ezstitcher.core.config import PipelineConfig
-
-    # Load from JSON
-    with open("config.json", "r") as f:
-        config_dict = json.load(f)
-        config = PipelineConfig(**config_dict)
+    reference_channels:
+      - "1"
+      - "2"
+    well_filter:
+      - "A01"
+      - "A02"
+    stitcher:
+      tile_overlap: 15.0
+      max_shift: 75
+      margin_ratio: 0.15
+    focus_config:
+      method: laplacian
+      roi: [100, 100, 200, 200]
+    reference_flatten: max_projection
+    stitch_flatten: best_focus
+    additional_projections:
+      - max
+      - mean
 
 Metadata Formats
 -------------
@@ -93,7 +125,7 @@ EZStitcher extracts metadata from microscope-specific files:
 ImageXpress Metadata
 ^^^^^^^^^^^^^^^^^
 
-ImageXpress metadata is stored in XML files with the following structure:
+ImageXpress metadata is stored in HTD files (text-based) or XML files with the following structure:
 
 .. code-block:: xml
 
@@ -107,52 +139,71 @@ ImageXpress metadata is stored in XML files with the following structure:
       </ImageSize>
     </MetaData>
 
-Opera Phenix Metadata
-^^^^^^^^^^^^^^^^^
-
-Opera Phenix metadata is stored in XML files with the following structure:
-
-.. code-block:: xml
-
-    <OperaDB>
-      <MeasurementDetail>
-        <ImageResolutionX Unit="m">0.00000065</ImageResolutionX>
-        <ImageResolutionY Unit="m">0.00000065</ImageResolutionY>
-      </MeasurementDetail>
-      <Image>
-        <PositionX Unit="m">0.0</PositionX>
-        <PositionY Unit="m">0.0</PositionY>
-      </Image>
-    </OperaDB>
-
-Output Directory Structure
------------------------
-
-EZStitcher creates the following directory structure:
+HTD files have a similar structure but in a text-based format:
 
 .. code-block:: text
 
-    plate_folder/
-    ├── plate_folder_processed/
-    │   ├── A01_s1_w1.tif
-    │   ├── A01_s2_w1.tif
-    │   └── ...
-    ├── plate_folder_post_processed/
-    │   ├── A01_s1_w1.tif
-    │   ├── A01_s2_w1.tif
-    │   └── ...
-    ├── plate_folder_positions/
-    │   ├── A01_w1_positions.csv
-    │   ├── A02_w1_positions.csv
-    │   └── ...
-    └── plate_folder_stitched/
-        ├── A01_w1.tif
-        ├── A01_w2.tif
-        └── ...
+    [General]
+    Plate Type=96 Well
+    ...
+    [Sites]
+    SiteCount=9
+    GridRows=3
+    GridColumns=3
+    ...
+    [Wavelengths]
+    WavelengthCount=3
+    ...
+    [Scale]
+    PixelSize=0.65
+    ...
 
-The directories are:
+Opera Phenix Metadata
+^^^^^^^^^^^^^^^^^
 
-- **plate_folder_processed**: Contains preprocessed individual tiles
-- **plate_folder_post_processed**: Contains post-processed tiles (e.g., after Z-stack flattening)
-- **plate_folder_positions**: Contains CSV files with tile positions
-- **plate_folder_stitched**: Contains final stitched images
+Opera Phenix metadata is stored in XML files (Index.xml) with the following structure:
+
+.. code-block:: xml
+
+    <EvaluationInputData>
+      <Plates>
+        <Plate>
+          <PlateID>plate_name</PlateID>
+          <PlateTypeName>96well</PlateTypeName>
+          <PlateRows>8</PlateRows>
+          <PlateColumns>12</PlateColumns>
+        </Plate>
+      </Plates>
+      <Images>
+        <Image id="r01c01f001p01-ch1sk1fk1fl1">
+          <URL>Images/r01c01f001p01-ch1sk1fk1fl1.tiff</URL>
+          <ChannelID>1</ChannelID>
+          <FieldID>1</FieldID>
+          <PlaneID>1</PlaneID>
+          <PositionX>0.0</PositionX>
+          <PositionY>0.0</PositionY>
+          <ImageResolutionX>0.65</ImageResolutionX>
+          <ImageResolutionY>0.65</ImageResolutionY>
+        </Image>
+      </Images>
+    </EvaluationInputData>
+
+File Naming Conventions
+--------------------
+
+For detailed information about file naming conventions for different microscope types, see the :doc:`microscope_formats` appendix.
+
+Output File Structure
+------------------
+
+EZStitcher creates the following directory structure during processing:
+
+.. code-block:: text
+
+    plate_folder/                 # Original data
+    plate_folder_processed/       # Processed individual tiles
+    plate_folder_post_processed/  # Post-processed images
+    plate_folder_positions/       # CSV files with stitching positions
+    plate_folder_stitched/        # Final stitched images
+
+For detailed information about how EZStitcher organizes and processes files, see the :doc:`../user_guide/file_organization` guide.
