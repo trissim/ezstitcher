@@ -47,12 +47,12 @@ Here's an example implementation:
             """Parse a NewMicroscope filename into its components."""
             pattern = r'([A-Z]\d{2})_s(\d+)_w(\d+)(?:_z(\d+))?\.(?:tif|tiff)'
             match = re.match(pattern, filename)
-            
+
             if not match:
                 return None
-                
+
             well, site, channel, z_index = match.groups()
-            
+
             return {
                 'well': well,
                 'site': int(site),
@@ -74,13 +74,13 @@ Here's an example implementation:
                 site_str = f"_s{site}"
             else:
                 site_str = f"_s{int(site):0{site_padding}d}"
-                
+
             # Format channel number
             if channel is None:
                 channel_str = ""
             else:
                 channel_str = f"_w{int(channel)}"
-                
+
             # Format z-index with padding
             if z_index is None:
                 z_str = ""
@@ -88,11 +88,11 @@ Here's an example implementation:
                 z_str = f"_z{z_index}"
             else:
                 z_str = f"_z{int(z_index):0{z_padding}d}"
-                
+
             # Ensure extension starts with a dot
             if not extension.startswith('.'):
                 extension = f".{extension}"
-                
+
             return f"{well}{site_str}{channel_str}{z_str}{extension}"
 
 
@@ -102,12 +102,12 @@ Here's an example implementation:
         def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
             """Find the metadata file for a NewMicroscope plate."""
             plate_path = Path(plate_path)
-            
+
             # Look for metadata file
             metadata_file = plate_path / "metadata.xml"
             if metadata_file.exists():
                 return metadata_file
-                
+
             return None
 
         def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
@@ -116,13 +116,13 @@ Here's an example implementation:
             if not metadata_file:
                 # Default grid size if metadata file not found
                 return (3, 3)
-                
+
             # Parse metadata file to extract grid dimensions
             # This is just an example, implement your own parsing logic
             try:
                 # Parse XML or other format
                 # ...
-                
+
                 # Return grid dimensions
                 return (4, 4)
             except Exception as e:
@@ -134,13 +134,13 @@ Here's an example implementation:
             metadata_file = self.find_metadata_file(plate_path)
             if not metadata_file:
                 return None
-                
+
             # Parse metadata file to extract pixel size
             # This is just an example, implement your own parsing logic
             try:
                 # Parse XML or other format
                 # ...
-                
+
                 # Return pixel size in micrometers
                 return 0.65
             except Exception as e:
@@ -190,11 +190,11 @@ You can add custom preprocessing functions to the `ImagePreprocessor` class:
         """
         # Implement your custom preprocessing logic here
         processed = image.copy()
-        
+
         # Example: Apply some processing
         processed = ndimage.gaussian_filter(processed, sigma=param1)
         processed = np.clip(processed * param2, 0, 65535).astype(np.uint16)
-        
+
         return processed
 
     # Add the method to the ImagePreprocessor class
@@ -204,11 +204,28 @@ You can add custom preprocessing functions to the `ImagePreprocessor` class:
     from ezstitcher.core.config import PipelineConfig
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
+    # Example 1: Using a dictionary mapping channels to functions
+    config = PipelineConfig(
+        reference_channels=["1", "2"],
+        reference_processing={
+            "1": lambda img: ImagePreprocessor.my_custom_preprocessing(img, param1=2.0, param2=1.5),
+            "2": ImagePreprocessor.equalize_histogram
+        }
+    )
+
+    # Example 2: Using a single function for all channels
+    config = PipelineConfig(
+        reference_channels=["1", "2"],
+        reference_processing=ImagePreprocessor.my_custom_preprocessing
+    )
+
+    # Example 3: Using a list of functions to apply in sequence
     config = PipelineConfig(
         reference_channels=["1"],
-        reference_processing={
-            "1": lambda img: ImagePreprocessor.my_custom_preprocessing(img, param1=2.0, param2=1.5)
-        }
+        reference_processing=[
+            ImagePreprocessor.background_subtract,
+            lambda img: ImagePreprocessor.my_custom_preprocessing(img, param1=2.0, param2=1.5)
+        ]
     )
 
     pipeline = PipelineOrchestrator(config)
@@ -217,7 +234,15 @@ You can add custom preprocessing functions to the `ImagePreprocessor` class:
 Adding Custom Focus Detection Methods
 ---------------------------------
 
-You can add custom focus detection methods to the `FocusAnalyzer` class:
+You can add custom focus detection methods to the `FocusAnalyzer` class. The FocusAnalyzer currently supports the following methods:
+
+- `normalized_variance`: Measures the variance of pixel intensities
+- `laplacian_energy`: Uses the Laplacian operator to detect edges
+- `tenengrad_variance`: Based on gradient magnitude
+- `adaptive_fft_focus`: Uses frequency domain analysis
+- `combined_focus_measure`: Combines multiple methods with weights
+
+Here's how to add a new focus detection method:
 
 .. code-block:: python
 
@@ -272,6 +297,7 @@ You can add custom focus detection methods to the `FocusAnalyzer` class:
     from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 
+    # Example 1: Using a single focus method
     config = PipelineConfig(
         reference_channels=["1"],
         reference_flatten="max_projection",
@@ -281,13 +307,40 @@ You can add custom focus detection methods to the `FocusAnalyzer` class:
         )
     )
 
+    # Example 2: Using a combined focus method with custom weights
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="max_projection",
+        stitch_flatten="best_focus",
+        focus_config=FocusAnalyzerConfig(
+            method="combined",
+            weights={
+                'nvar': 0.3,
+                'lap': 0.3,
+                'ten': 0.2,
+                'fft': 0.2
+            }
+        )
+    )
+
+    # Example 3: Using a focus method with a region of interest
+    config = PipelineConfig(
+        reference_channels=["1"],
+        reference_flatten="max_projection",
+        stitch_flatten="best_focus",
+        focus_config=FocusAnalyzerConfig(
+            method="gradient_magnitude",
+            roi=(100, 100, 200, 200)  # (x, y, width, height)
+        )
+    )
+
     pipeline = PipelineOrchestrator(config)
     pipeline.run("path/to/plate_folder")
 
 Creating a Custom Pipeline
 -----------------------
 
-You can create a custom pipeline by subclassing `PipelineOrchestrator`:
+You can create a custom pipeline by subclassing `PipelineOrchestrator`. The PipelineOrchestrator provides a flexible framework for processing microscopy images, with the key method `process_patterns_with_variable_components` that handles pattern detection and processing.
 
 .. code-block:: python
 
@@ -306,28 +359,60 @@ You can create a custom pipeline by subclassing `PipelineOrchestrator`:
         def run(self, plate_folder):
             """Process a plate through the custom pipeline."""
             plate_path = Path(plate_folder)
-            
+
             # Add custom pre-processing steps
             self._custom_preprocessing(plate_path)
-            
+
             # Call the parent implementation
             result = super().run(plate_folder)
-            
+
             # Add custom post-processing steps
             self._custom_postprocessing(plate_path)
-            
+
             return result
-            
+
         def _custom_preprocessing(self, plate_path):
             """Custom preprocessing step."""
             # Implement your custom preprocessing logic here
             print(f"Custom preprocessing for {plate_path}")
-            
+
         def _custom_postprocessing(self, plate_path):
             """Custom postprocessing step."""
             # Implement your custom postprocessing logic here
             print(f"Custom postprocessing for {plate_path}")
 
+        def process_custom_patterns(self, well, dirs):
+            """Process custom patterns for a well."""
+            # Use the process_patterns_with_variable_components method
+            # to process patterns with custom logic
+            return self.process_patterns_with_variable_components(
+                input_dir=dirs['input'],
+                output_dir=dirs['processed'],
+                well_filter=[well],
+                variable_components=['site', 'channel'],
+                group_by='z_index',
+                processing_funcs=self._custom_processing_function
+            )
+
+        def _custom_processing_function(self, images, **kwargs):
+            """Custom processing function for image stacks."""
+            # Implement your custom processing logic here
+            # This function will be called with a list of images
+            # and should return a processed list of images
+            return [self.image_preprocessor.normalize(img) for img in images]
+
     # Use the custom pipeline
     custom_pipeline = CustomPipeline()
+    custom_pipeline.run("path/to/plate_folder")
+
+    # Example with custom configuration
+    config = PipelineConfig(
+        reference_channels=["1", "2"],
+        reference_flatten="max_projection",
+        stitch_flatten="best_focus",
+        cleanup_processed=False,  # Keep processed files
+        cleanup_post_processed=False,  # Keep post-processed files
+        num_workers=1  # Use single-threaded processing
+    )
+    custom_pipeline = CustomPipeline(config)
     custom_pipeline.run("path/to/plate_folder")

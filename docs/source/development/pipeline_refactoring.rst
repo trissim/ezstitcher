@@ -49,6 +49,28 @@ The method works by:
 3. Processing each group of patterns with its corresponding function
 4. Returning a dictionary mapping wells to processed file paths
 
+The `processing_funcs` parameter is particularly flexible and can be:
+
+- A single function to apply to all patterns
+- A list of functions to apply in sequence
+- A dictionary mapping component values to functions
+
+For example:
+
+.. code-block:: python
+
+    # Single function
+    processing_funcs = ImagePreprocessor.normalize
+
+    # List of functions
+    processing_funcs = [ImagePreprocessor.background_subtract, ImagePreprocessor.normalize]
+
+    # Dictionary mapping channels to functions
+    processing_funcs = {
+        "1": ImagePreprocessor.normalize,
+        "2": ImagePreprocessor.equalize_histogram
+    }
+
 Helper Methods
 -------------
 
@@ -64,7 +86,7 @@ This method prepares patterns and processing functions for processing:
     def _prepare_patterns_and_functions(self, patterns, processing_funcs, component='default'):
         """
         Prepare patterns and processing functions for processing.
-        
+
         This function handles two main tasks:
         1. Ensuring patterns are in a component-keyed dictionary format
         2. Determining which processing functions to use for each component
@@ -82,7 +104,7 @@ This method processes tiles using the specified processing functions:
     def process_tiles(self, input_dir, output_dir, patterns, processing_funcs=None, **kwargs):
         """
         Unified processing using zstack_processor.
-        
+
         Args:
             input_dir: Input directory
             output_dir: Output directory
@@ -110,7 +132,10 @@ Processing Reference Images
         well_filter=[well],
         variable_components=['site'],
         group_by='channel',
-        processing_funcs=processing_funcs
+        processing_funcs={
+            "1": ImagePreprocessor.normalize,
+            "2": ImagePreprocessor.equalize_histogram
+        }
     )
 
 Creating Composite Images
@@ -126,7 +151,10 @@ Creating Composite Images
         variable_components=['channel'],
         group_by='site',
         processing_funcs=pipeline.image_preprocessor.create_composite,
-        processing_args={'weights': weights}
+        processing_args={'weights': {
+            "1": 0.7,
+            "2": 0.3
+        }}
     )
 
 Flattening Z-Stacks
@@ -134,7 +162,7 @@ Flattening Z-Stacks
 
 .. code-block:: python
 
-    # Flatten Z-stacks using projection
+    # Flatten Z-stacks using max projection
     flattened_files = pipeline.process_patterns_with_variable_components(
         input_dir=dirs['processed'],
         output_dir=dirs['processed'],
@@ -143,6 +171,19 @@ Flattening Z-Stacks
         processing_funcs=pipeline.image_preprocessor.create_projection,
         processing_args={
             'method': 'max_projection',
+            'focus_analyzer': pipeline.focus_analyzer
+        }
+    )
+
+    # Flatten Z-stacks using best focus detection
+    flattened_files = pipeline.process_patterns_with_variable_components(
+        input_dir=dirs['post_processed'],
+        output_dir=dirs['post_processed'],
+        well_filter=[well],
+        variable_components=['z_index'],
+        processing_funcs=pipeline.image_preprocessor.create_projection,
+        processing_args={
+            'method': 'best_focus',
             'focus_analyzer': pipeline.focus_analyzer
         }
     )
