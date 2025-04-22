@@ -36,17 +36,18 @@ Here's an example implementation:
     class NewMicroscopeFilenameParser(FilenameParser):
         """Filename parser for NewMicroscope microscopes."""
 
+        # Define the regex pattern as a class attribute
+        FILENAME_PATTERN = r'([A-Z]\d{2})_s(\d+)_w(\d+)(?:_z(\d+))?\.(?:tif|tiff)'
+
         @classmethod
         def can_parse(cls, filename: str) -> bool:
             """Check if this parser can parse the given filename."""
-            # Implement your pattern matching logic here
-            pattern = r'([A-Z]\d{2})_s(\d+)_w(\d+)(?:_z(\d+))?\.(?:tif|tiff)'
-            return bool(re.match(pattern, filename))
+            # Use the class attribute pattern
+            return bool(re.match(cls.FILENAME_PATTERN, filename))
 
         def parse_filename(self, filename: str) -> Optional[Dict[str, Any]]:
             """Parse a NewMicroscope filename into its components."""
-            pattern = r'([A-Z]\d{2})_s(\d+)_w(\d+)(?:_z(\d+))?\.(?:tif|tiff)'
-            match = re.match(pattern, filename)
+            match = re.match(self.FILENAME_PATTERN, filename)
 
             if not match:
                 return None
