@@ -145,25 +145,22 @@ The processing workflow follows a clear, linear flow:
    - Organize Z-stack folders
    - Pad filenames for consistent sorting
 
-2. **Process tiles** (per well, per site, per channel):
-   - Apply preprocessing functions
-   - Save processed images
+2. **Process reference images** (for position generation):
+   - Apply preprocessing functions to reference channels
+   - Create composites if needed
+   - Save processed reference images
 
-3. **Select or compose channels**:
-   - Select specific channels
-   - Create composite images
-   - Save post-processed images
-
-4. **Flatten Z-stacks** (if present):
-   - Apply flattening function (max projection, best focus, etc.)
-   - Save flattened images
-
-5. **Generate stitching positions**:
+3. **Generate stitching positions**:
    - Calculate relative positions of tiles
    - Save positions to CSV
 
-6. **Stitch images**:
-   - Load images
+4. **Process final images** (for stitching):
+   - Apply preprocessing functions to all channels
+   - Flatten Z-stacks if present
+   - Save processed images
+
+5. **Stitch images**:
+   - Load processed images
    - Apply positions
    - Blend overlapping regions
    - Save stitched images

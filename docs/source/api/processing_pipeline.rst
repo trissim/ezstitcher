@@ -15,9 +15,10 @@ PipelineOrchestrator
    The pipeline follows a clear, linear flow:
 
    1. Load and organize images
-   2. Process patterns with variable components
+   2. Process reference images (for position generation)
    3. Generate stitching positions
-   4. Stitch images
+   4. Process final images (for stitching)
+   5. Stitch images
 
    :param config: Configuration for the pipeline (optional)
    :type config: :class:`~ezstitcher.core.config.PipelineConfig`
