@@ -146,24 +146,25 @@ The processing workflow follows a clear, linear flow:
    - Pad filenames for consistent sorting
 
 2. **Process reference images** (for position generation):
-   - Apply preprocessing functions to reference channels
-   - Create composites if needed
+   - Flatten Z-stacks if needed (using ``reference_flatten`` method)
+   - Apply channel-specific processing functions to reference channels
+   - Create composite images if needed
    - Save processed reference images
 
 3. **Generate stitching positions**:
-   - Calculate relative positions of tiles
-   - Save positions to CSV
+   - Calculate relative positions of tiles using reference images
+   - Save positions to CSV files
 
 4. **Process final images** (for stitching):
-   - Apply preprocessing functions to all channels
-   - Flatten Z-stacks if present
-   - Save processed images
+   - Apply channel-specific processing functions to all channels
+   - Flatten Z-stacks if needed (using ``stitch_flatten`` method)
+   - Save processed images for stitching
 
 5. **Stitch images**:
    - Load processed images
-   - Apply positions
+   - Apply positions from reference channels
    - Blend overlapping regions
-   - Save stitched images
+   - Save final stitched images
 
 This workflow is implemented in the ``PipelineOrchestrator`` class, which coordinates all the components.
 
