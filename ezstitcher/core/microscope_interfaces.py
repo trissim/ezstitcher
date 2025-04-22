@@ -104,7 +104,8 @@ class FilenameParser(ABC):
 
         # Find all files in the directory
         matching_files = []
-        for file_path in directory.glob('*'):
+        all_images= ImageLocator.find_images_in_directory(directory)
+        for file_path in all_images:
             if not file_path.is_file():
                 continue
 
