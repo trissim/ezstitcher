@@ -2,9 +2,8 @@ import logging
 import os
 import copy
 import concurrent.futures
-import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Union, Optional, Callable, Any
+
 
 from ezstitcher.core.microscope_interfaces import create_microscope_handler
 from ezstitcher.core.image_locator import ImageLocator
@@ -13,6 +12,9 @@ from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
+
+# Import the new pipeline architecture
+from ezstitcher.core.pipeline import Step, Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +44,13 @@ class PipelineOrchestrator:
         self.microscope_handler = None
         self.stitcher = None
 
-    def run(self, plate_folder):
+    def run(self, plate_folder, pipeline_functions=None):
         """
         Process a plate through the complete pipeline.
 
         Args:
             plate_folder: Path to the plate folder
+            pipeline_functions: Dictionary of pipeline functions to use
 
         Returns:
             bool: True if successful, False otherwise
@@ -81,6 +84,10 @@ class PipelineOrchestrator:
             # Get wells to process
             wells = self._get_wells_to_process(dirs['input'])
 
+            # Build pipeline functions if not provided
+            if pipeline_functions is None:
+                pipeline_functions = self.build_pipeline_functions()
+
             # Process wells using ThreadPoolExecutor
             num_workers = self.config.num_workers
             # Use only one worker if there's only one well
@@ -101,7 +108,7 @@ class PipelineOrchestrator:
                     # Create a deep copy of dirs for each well to avoid shared state issues
                     well_dirs = copy.deepcopy(dirs)
                     logger.info("Submitting well %s to thread pool", well)
-                    future = executor.submit(self.process_well, well, well_dirs)
+                    future = executor.submit(self.process_well, well, well_dirs, pipeline_functions)
                     future_to_well[future] = well
 
                 # Process results as they complete
@@ -110,10 +117,6 @@ class PipelineOrchestrator:
                     try:
                         future.result()  # Get the result (or exception)
                         logger.info("Completed processing well %s", well)
-
-                        # Note: We don't have access to the well_dirs here since it's in the thread's scope
-                        # We'll skip cleanup here as each thread has its own copy of dirs
-                        # The main cleanup will happen at the end of processing all wells
 
                     except Exception as e:
                         logger.error("Error processing well %s: %s", well, e, exc_info=True)
@@ -130,6 +133,194 @@ class PipelineOrchestrator:
             logger.error("Pipeline failed with unexpected error: %s", str(e))
             logger.debug("Exception details:", exc_info=True)
             return False
+
+    def create_image_processing_pipeline(self, steps, well, name=None):
+        """
+        Create a pipeline for processing images.
+
+        Args:
+            steps: List of processing steps
+            well: Well identifier
+            name: Optional name for the pipeline
+
+        Returns:
+            Pipeline: Configured pipeline for image processing
+        """
+        # Create and return the pipeline
+        pipeline = Pipeline(
+            steps=steps,
+            well_filter=[well],
+            name=name or f"Image Processing Pipeline - {well}"
+        )
+
+        return pipeline
+
+    def run_image_processing_pipeline(self, steps, well, dirs, name=None):
+        """
+        Create and run an image processing pipeline.
+
+        Args:
+            steps: List of processing steps
+            well: Well identifier
+            dirs: Dictionary of directories (not used in pipeline creation)
+            name: Optional name for the pipeline
+        """
+        pipeline = self.create_image_processing_pipeline(
+            steps, well, name=name or f"Pipeline - {well}"
+        )
+        pipeline.run(well_filter=[well], microscope_handler=self.microscope_handler)
+
+    def create_reference_processing_steps(self, dirs):
+        """
+        Create standard steps for reference image processing.
+
+        Args:
+            dirs: Dictionary of directories
+
+        Returns:
+            List[Step]: List of processing steps
+        """
+        return [
+            # Step 1: Flatten Z-stacks
+            Step(
+                func=self.image_preprocessor.create_projection,
+                variable_components=['z_index'],
+                processing_args={
+                    'method': self.config.reference_flatten,
+                    'focus_analyzer': self.focus_analyzer
+                },
+                name="Z-Stack Flattening",
+                input_dir=dirs['input'],
+                output_dir=dirs['processed'],
+            ),
+            # Step 2: Process channels
+            Step(
+                func=getattr(self.config, 'reference_processing', None),
+                variable_components=['site'],
+                group_by='channel',
+                name="Channel Processing"
+            ),
+            # Step 3: Create composites
+            Step(
+                func=self.image_preprocessor.create_composite,
+                variable_components=['channel'],
+                group_by='site',
+                processing_args={'weights': self.config.reference_composite_weights},
+                name="Composite Creation"
+            )
+        ]
+
+    def create_final_processing_steps(self, dirs):
+        """
+        Create standard steps for final image processing.
+
+        Args:
+            dirs: Dictionary of directories
+
+        Returns:
+            List[Step]: List of processing steps
+        """
+        return [
+            # Step 1: Flatten Z-stacks
+            Step(
+                func=self.image_preprocessor.create_projection,
+                variable_components=['z_index'],
+                processing_args={
+                    'method': self.config.stitch_flatten,
+                    'focus_analyzer': self.focus_analyzer
+                },
+                name="Z-Stack Flattening",
+                input_dir=dirs['input'],
+                output_dir=dirs['post_processed'],
+            ),
+            # Step 2: Enhance tiles
+            Step(
+                func=getattr(self.config, 'final_processing', None),
+                variable_components=['site'],
+                group_by='channel',
+                name="Tile Enhancement"
+            )
+        ]
+
+    def create_position_generation_function(self, processing_steps=None):
+        """
+        Create a function that processes images and generates positions.
+
+        Args:
+            processing_steps: Optional list of steps for image processing
+
+        Returns:
+            Callable: Function for processing images and generating positions
+        """
+        def process_and_generate_positions(well, dirs, stitcher=None):
+            # Default processing steps if none provided
+            steps = processing_steps or self.create_reference_processing_steps(dirs)
+
+            # Run the image processing pipeline
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Reference Pipeline - {well}"
+            )
+
+            # Generate positions
+            return self.generate_positions(well, dirs, stitcher)
+
+        return process_and_generate_positions
+
+    def create_image_assembly_function(self, processing_steps=None):
+        """
+        Create a function that processes images and assembles them.
+
+        Args:
+            processing_steps: Optional list of steps for image processing
+
+        Returns:
+            Callable: Function for processing images and assembling them
+        """
+        def process_and_assemble_images(well, dirs, positions_file, stitcher=None):
+            # Default processing steps if none provided
+            steps = processing_steps or self.create_final_processing_steps(dirs)
+
+            # Run the image processing pipeline
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Final Processing Pipeline - {well}"
+            )
+
+            # Stitch images
+            self.stitch_images(well, dirs, positions_file, stitcher)
+
+        return process_and_assemble_images
+
+    def build_pipeline_functions(self):
+        """
+        Build and return pipeline functions for well processing.
+
+        Returns:
+            dict: Dictionary of pipeline functions
+        """
+        # Create a function for reference image processing
+        def process_reference_images(well, dirs):
+            steps = self.create_reference_processing_steps(dirs)
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Reference Pipeline - {well}"
+            )
+
+        # Create a function for final image processing
+        def process_final_images(well, dirs):
+            steps = self.create_final_processing_steps(dirs)
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Final Processing Pipeline - {well}"
+            )
+
+        # Use the position generation and image assembly factories
+        position_generation = self.create_position_generation_function()
+        image_assembly = self.create_image_assembly_function()
+
+        return {
+            'reference_images': process_reference_images,
+            'generate_positions': position_generation,
+            'final_images': process_final_images,
+            'stitch_images': image_assembly
+        }
 
     def _get_wells_to_process(self, input_dir):
         """
@@ -168,13 +359,14 @@ class PipelineOrchestrator:
         logger.info("Found %d wells in %.2f seconds", len(wells_to_process), time.time() - start_time)
         return wells_to_process
 
-    def process_well(self, well, dirs):
+    def process_well(self, well, dirs, pipeline_functions=None):
         """
         Process a single well through the pipeline.
 
         Args:
             well: Well identifier
             dirs: Dictionary of directories
+            pipeline_functions: Dictionary of pipeline functions to use
         """
         logger.info("Processing well %s", well)
         logger.info("Processing well %s with pixel size %s", well, self.config.pixel_size)
@@ -199,258 +391,56 @@ class PipelineOrchestrator:
 
         logger.info("Created well-specific directories for well %s: %s", well, well_dirs['processed'])
 
+        # Default pipeline functions if none provided
+        if pipeline_functions is None:
+            pipeline_functions = self.build_pipeline_functions()
+
         # Create a new Stitcher instance for this thread to avoid shared state issues
         thread_stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
+        # Use the provided functions
+        reference_func = pipeline_functions.get('reference_images', self.process_reference_images)
+        positions_func = pipeline_functions.get('generate_positions', self.generate_positions)
+        final_func = pipeline_functions.get('final_images', self.process_final_images)
+        stitch_func = pipeline_functions.get('stitch_images', self.stitch_images)
+
         # 1. Process reference images (for position generation)
-        self.process_reference_images(well, well_dirs)
+        reference_func(well, well_dirs)
 
         # 2. Generate stitching positions
-        positions_file, stitch_pattern = self.generate_positions(well, well_dirs, thread_stitcher)
+        positions_file, _ = positions_func(well, well_dirs, thread_stitcher)
 
         # 3. Process final images (for stitching)
-        self.process_final_images(well, well_dirs)
+        final_func(well, well_dirs)
 
         # 4. Stitch final images
-        self.stitch_images(well, well_dirs, positions_file, thread_stitcher)
-
-
+        stitch_func(well, well_dirs, positions_file, thread_stitcher)
 
     def process_reference_images(self, well, dirs):
         """
-        Process images for position generation.
+        Process images for position generation using the new Pipeline architecture.
 
         Args:
             well: Well identifier
             dirs: Dictionary of directories
         """
-        logger.info("Processing reference images for well %s", well)
-
-        # Flatten Z-stacks if needed - use create_projection directly
-        self.process_patterns_with_variable_components(
-            input_dir=dirs['input'],
-            output_dir=dirs['processed'],
-            well_filter=[well],
-            variable_components=['z_index'],
-            processing_funcs=self.image_preprocessor.create_projection,
-            processing_args={
-                'method': self.config.reference_flatten,
-                'focus_analyzer': self.focus_analyzer
-            }
-        ).get(well, [])
-
-        # Process reference images - pass reference_processing directly
-        # _prepare_patterns_and_functions will handle getting the right functions for each channel
-        self.process_patterns_with_variable_components(
-            input_dir=dirs['processed'],
-            output_dir=dirs['processed'],
-            well_filter=[well],
-            variable_components=['site'],
-            group_by='channel',
-            processing_funcs=getattr(self.config, 'reference_processing', None)
-        ).get(well, [])
-
-        # Create composites in one step
-        self.process_patterns_with_variable_components(
-            input_dir=dirs['processed'],
-            output_dir=dirs['processed'],
-            well_filter=[well],
-            variable_components=['channel'],
-            group_by='site',
-            processing_funcs=self.image_preprocessor.create_composite,
-            processing_args={'weights': self.config.reference_composite_weights}
-        ).get(well, [])
-
+        steps = self.create_reference_processing_steps(dirs)
+        self.run_image_processing_pipeline(
+            steps, well, dirs, name=f"Reference Pipeline - {well}"
+        )
 
     def process_final_images(self, well, dirs):
         """
-        Process images for final stitching.
+        Process images for final stitching using the new Pipeline architecture.
 
         Args:
             well: Well identifier
             dirs: Dictionary of directories
         """
-        logger.info("Processing final images for well %s", well)
-
-        # Get all available channels
-        channels = self._get_available_channels(dirs['input'], well)
-        logger.info("Processing all %d available channels for well %s", len(channels), well)
-
-        # Process final images - pass final_processing directly
-        # _prepare_patterns_and_functions will handle getting the right functions for each channel
-        self.process_patterns_with_variable_components(
-            input_dir=dirs['input'],
-            output_dir=dirs['post_processed'],
-            well_filter=[well],
-            variable_components=['site'],
-            group_by='channel',
-            processing_funcs=getattr(self.config, 'final_processing', None)
-        ).get(well, [])
-
-        # Flatten Z-stacks if needed - use create_projection directly
-        self.process_patterns_with_variable_components(
-            input_dir=dirs['post_processed'],
-            output_dir=dirs['post_processed'],
-            well_filter=[well],
-            variable_components=['z_index'],
-            processing_funcs=self.image_preprocessor.create_projection,
-            processing_args={
-                'method': self.config.stitch_flatten,
-                'focus_analyzer': self.focus_analyzer
-            }
-        ).get(well, [])
-
-    def _get_processing_functions(self, functions, channel=None):
-        """
-        Get processing functions for a channel.
-
-        Args:
-            functions: Processing functions (callable, list, or dict)
-            channel: Optional channel to get specific functions for
-
-        Returns:
-            List of processing functions or None if no functions are defined
-        """
-        if functions is None:
-            return None
-
-        if callable(functions) or isinstance(functions, list):
-            # If functions is a callable or list of functions, apply to all channels
-            result = functions
-        elif isinstance(functions, dict) and channel is not None and channel in functions:
-            # If functions is a dict, get functions for the specified channel
-            result = functions[channel]
-        else:
-            return None
-
-        # Convert single function to list for consistent handling
-        if callable(result):
-            return [result]
-        return result
-
-    def _get_available_channels(self, input_dir, well):
-        """
-        Get all available channels for a well.
-
-        Args:
-            input_dir: Input directory
-            well: Well identifier
-
-        Returns:
-            list: List of available channels
-        """
-        # Find all image files for this well
-        image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
-
-        # Extract channels from filenames
-        channels = set()
-        for img_path in image_paths:
-            metadata = self.microscope_handler.parse_filename(img_path.name)
-            if metadata and 'well' in metadata and metadata['well'].lower() == well.lower() and 'channel' in metadata:
-                channels.add(str(metadata['channel']))
-
-        return list(channels)
-
-
-    def _prepare_patterns_and_functions(self, patterns, processing_funcs, component='default'):
-        """
-        Prepare patterns and processing functions for processing.
-
-        This function handles two main tasks:
-        1. Ensuring patterns are in a component-keyed dictionary format
-        2. Determining which processing functions to use for each component
-
-        Args:
-            patterns (list or dict): Patterns to process, either as a flat list or grouped by component
-            processing_funcs (callable, list, dict, optional): Processing functions to apply
-            component (str): Component name for grouping (only used for clarity in the result)
-
-        Returns:
-            tuple: (grouped_patterns, component_to_funcs)
-                - grouped_patterns: Dictionary mapping component values to patterns
-                - component_to_funcs: Dictionary mapping component values to processing functions
-        """
-        # Fast path: If both patterns and processing_funcs are dictionaries with matching keys,
-        # they're already properly structured, so return them as is
-        if (isinstance(patterns, dict) and isinstance(processing_funcs, dict) and
-                set(patterns.keys()).issubset(set(processing_funcs.keys()))):
-            return patterns, processing_funcs
-
-        # Ensure patterns are in a dictionary format
-        # If already a dict, use as is; otherwise wrap the list in a dictionary
-        grouped_patterns = patterns if isinstance(patterns, dict) else {component: patterns}
-
-        # Determine which processing functions to use for each component
-        component_to_funcs = {}
-
-        for comp_value in grouped_patterns.keys():
-            # Reuse _get_processing_functions to get functions for this component
-            component_to_funcs[comp_value] = self._get_processing_functions(
-                processing_funcs, comp_value)
-
-        return grouped_patterns, component_to_funcs
-
-    def process_patterns_with_variable_components(self, input_dir, output_dir, well_filter=None,
-                                                 variable_components=None, group_by=None,
-                                                 processing_funcs=None, processing_args=None):
-        """
-        Detect patterns with variable components and process them flexibly.
-
-        Args:
-            input_dir (str or Path): Input directory containing images
-            output_dir (str or Path): Output directory for processed images
-            well_filter (list, optional): List of wells to include
-            variable_components (list, optional): Components to make variable (e.g., ['site', 'z_index'])
-            group_by (str, optional): How to group patterns (e.g., 'channel', 'z_index', 'well')
-            processing_funcs (callable, list, dict, optional): Processing functions to apply
-            processing_args (dict, optional): Additional arguments to pass to processing functions
-
-        Returns:
-            dict: Dictionary mapping wells to processed file paths
-        """
-        # Default variable components if not specified
-        if variable_components is None:
-            variable_components = ['site']
-
-        # Default processing args
-        if processing_args is None:
-            processing_args = {}
-
-        # Auto-detect patterns with the specified variable components
-        patterns_by_well = self.microscope_handler.auto_detect_patterns(
-            input_dir,
-            well_filter=well_filter,
-            variable_components=variable_components,
-            group_by=group_by
+        steps = self.create_final_processing_steps(dirs)
+        self.run_image_processing_pipeline(
+            steps, well, dirs, name=f"Final Processing Pipeline - {well}"
         )
-
-        # Process each well
-        results = {}
-        for well, patterns in patterns_by_well.items():
-            results[well] = []
-
-            # Prepare patterns and functions - works with both grouped and flat patterns
-            grouped_patterns, component_to_funcs = self._prepare_patterns_and_functions(
-                patterns, processing_funcs, component=group_by or '1'
-            )
-
-            # Process each group of patterns with its corresponding function
-            # Both dictionaries have the same keys, so we can iterate over the keys
-            for component_value in grouped_patterns.keys():
-                component_patterns = grouped_patterns[component_value]
-                component_func = component_to_funcs[component_value]
-
-                # Process tiles for this component
-                files = self.process_tiles(
-                    input_dir,
-                    output_dir,
-                    component_patterns,
-                    processing_funcs=component_func,
-                    **processing_args
-                )
-                results[well].extend(files)
-
-        return results
 
     def _setup_directories(self, plate_path, input_dir):
         """
@@ -467,7 +457,8 @@ class PipelineOrchestrator:
         dirs = {
             'input': input_dir,
             'processed': plate_path.parent / f"{plate_path.name}{self.config.processed_dir_suffix}",
-            'post_processed': plate_path.parent / f"{plate_path.name}{self.config.post_processed_dir_suffix}",
+            'post_processed': (plate_path.parent /
+                f"{plate_path.name}{self.config.post_processed_dir_suffix}"),
             'positions': plate_path.parent / f"{plate_path.name}{self.config.positions_dir_suffix}",
             'stitched': plate_path.parent / f"{plate_path.name}{self.config.stitched_dir_suffix}"
         }
@@ -512,7 +503,8 @@ class PipelineOrchestrator:
         if has_zstack_folders:
             logger.info("Found %d Z-stack folders in %s", len(z_folders), image_dir)
             logger.info("Organizing Z-stack folders...")
-            self.fs_manager.organize_zstack_folders(image_dir, filename_parser=self.microscope_handler)
+            self.fs_manager.organize_zstack_folders(
+                image_dir, filename_parser=self.microscope_handler)
             logger.info("Organized Z-stack folders in %.2f seconds", time.time() - zstack_start)
 
         # Return the image directory (which may have changed if Z-stack folders were organized)
@@ -548,7 +540,7 @@ class PipelineOrchestrator:
         # Use auto_detect_patterns to find all patterns for this well
         patterns_by_well = self.microscope_handler.auto_detect_patterns(
             dirs['processed'],
-            well_filter=[well],
+            well_filter=[well],  # Filter by well
             variable_components=['site']
         )
 
@@ -619,10 +611,10 @@ class PipelineOrchestrator:
         # Use the provided stitcher or the default one
         stitcher_to_use = stitcher or self.stitcher
 
-        # Use auto_detect_patterns to find all patterns for this well
-        patterns_by_well = self.microscope_handler.parser.auto_detect_patterns(
+        # Use auto_detect_patterns to find all patterns
+        patterns_by_well = self.microscope_handler.auto_detect_patterns(
             dirs['post_processed'],
-            well_filter=[well],
+            well_filter=[well],  # Filter by well
             variable_components=['site']
         )
 
@@ -631,7 +623,11 @@ class PipelineOrchestrator:
             return
 
         # Stitch each pattern
-        for pattern in patterns_by_well[well]:
+        all_patterns = []
+        for _, patterns in patterns_by_well[well].items():
+            all_patterns.extend(patterns)
+
+        for pattern in all_patterns:
             # Find all matching files for this pattern
             matching_files = self.microscope_handler.parser.path_list_from_pattern(
                 dirs['post_processed'], pattern)
@@ -667,82 +663,19 @@ class PipelineOrchestrator:
             logger.info("Using images directory: %s", dirs['post_processed'])
             logger.info("Using output path: %s", output_path)
 
-            # The matching_files are relative to the well-specific post-processed directory
-            # We need to construct the full paths for override_names
+            # Construct full paths for override_names
             full_path_matching_files = []
             for filename in matching_files:
-                # The filename is relative to the well-specific post-processed directory
-                # We need to construct the full path including the well subfolder
+                # Construct the full path
                 full_path = str(dirs['post_processed'] / filename)
                 full_path_matching_files.append(full_path)
 
-            # The images_dir should be the parent of the post-processed directory
-            # This is because the positions file references paths relative to this directory
-            # and includes the well subfolder in the paths
-            parent_dir = dirs['post_processed'].parent
+            # Use the post-processed directory directly
+            # since we're not using well-specific subdirectories
 
             stitcher_to_use.assemble_image(
                 positions_path=positions_file,
-                images_dir=parent_dir,  # Use the parent directory to find the well subfolder
+                images_dir=dirs['post_processed'],  # Use the post-processed directory directly
                 output_path=output_path,
                 override_names=full_path_matching_files  # Use full paths to the files
             )
-
-    def process_tiles(self, input_dir, output_dir, patterns, processing_funcs=None, **kwargs):
-        """
-        Unified processing using zstack_processor.
-
-        Args:
-            input_dir: Input directory
-            output_dir: Output directory
-            patterns: List of file patterns
-            processing_funcs: Processing functions to apply (optional)
-            **kwargs: Additional arguments to pass to processing functions
-
-        Returns:
-            list: Paths to created images
-        """
-        output_files = []
-
-        for pattern in patterns:
-            # Load images
-            matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
-            images = [self.fs_manager.load_image(input_dir / filename) for filename in matching_files]
-            images = [img for img in images if img is not None]
-
-            if not images:
-                continue  # Skip if no valid images found
-
-            # Store original number of images to detect flattening
-            original_image_count = len(images)
-
-            # Apply stack processing functions if specified
-            if processing_funcs and images:
-                if callable(processing_funcs):
-                    # Apply single function
-                    images = processing_funcs(images, **kwargs)
-                else:
-                    # Apply list of functions
-                    for func in processing_funcs:
-                        images = self.image_preprocessor.apply_function_to_stack(images, func)
-
-            # Clean up old files if working in place
-            if input_dir is output_dir:
-                for filename in matching_files:
-                    self.fs_manager.delete_file(output_dir/filename)
-
-            # Save processed images - handle both single and multiple image cases
-            if len(images) == 1 or len(images) < original_image_count:
-                # Single image or flattening occurred - save as one file
-                output_path = output_dir / matching_files[0]
-                self.fs_manager.save_image(output_path, images[0])
-                output_files.append(str(output_path))
-            else:
-                # Multiple images - save each with its corresponding filename
-                for i, image in enumerate(images):
-                    if i < len(matching_files):
-                        output_path = output_dir / matching_files[i]
-                        self.fs_manager.save_image(output_path, image)
-                        output_files.append(str(output_path))
-
-        return output_files

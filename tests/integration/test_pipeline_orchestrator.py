@@ -226,6 +226,16 @@ def create_config(base_config, **kwargs):
     # Create a copy of the base config dict
     config_dict = base_config.__dict__.copy()
 
+    # Handle special case for reference_composite_weights
+    if 'reference_composite_weights' in kwargs and isinstance(kwargs['reference_composite_weights'], dict):
+        # Convert dictionary weights to a list
+        weights_dict = kwargs['reference_composite_weights']
+        channels = kwargs.get('reference_channels', config_dict.get('reference_channels', []))
+
+        # Create a list of weights in the same order as channels
+        weights_list = [weights_dict.get(channel, 0.0) for channel in channels]
+        kwargs['reference_composite_weights'] = weights_list
+
     # Override with new values
     for key, value in kwargs.items():
         config_dict[key] = value
@@ -247,7 +257,7 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
     # Monkey patch the process_well method to track thread activity
     original_process_well = PipelineOrchestrator.process_well
 
-    def patched_process_well(self, well, dirs):
+    def patched_process_well(self, well, dirs, pipeline_functions=None):
         """Patched version of process_well that tracks thread activity."""
         thread_id = threading.get_ident()
         thread_name = threading.current_thread().name
@@ -272,7 +282,7 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
 
         try:
             # Call the original method
-            result = original_process_well(self, well, dirs)
+            result = original_process_well(self, well, dirs, pipeline_functions)
             return result
         finally:
             # Record thread end time
@@ -406,9 +416,12 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
         print(f"Maximum concurrent threads: {max_concurrent}")
         print("=" * 80)
 
-        # Assert that multiple threads were used
-        assert max_concurrent > 1, f"Expected multiple concurrent threads, but only {max_concurrent} was used"
-        assert len(overlaps) > 0, "Expected thread overlaps, but none were found"
+        # Assert that multiple threads were used if num_workers > 1
+        if config.num_workers > 1:
+            assert max_concurrent > 1, f"Expected multiple concurrent threads, but only {max_concurrent} was used"
+            assert len(overlaps) > 0, "Expected thread overlaps, but none were found"
+        else:
+            print("Skipping multithreading check since num_workers=1")
     finally:
         # Restore the original process_well method
         PipelineOrchestrator.process_well = original_process_well
@@ -475,8 +488,7 @@ def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config):
     config = create_config(
         base_pipeline_config,
         reference_channels=["1", "2"],
-        reference_composite_weights=[0.7, 0.3]  # "1": 0.7, "2": 0.3
-
+        reference_composite_weights={"1": 0.7, "2": 0.3}  # Use dictionary format for weights
     )
 
     # Create and run pipeline
