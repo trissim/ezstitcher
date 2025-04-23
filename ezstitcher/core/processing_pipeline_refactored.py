@@ -114,10 +114,6 @@ class PipelineOrchestrator:
                         future.result()  # Get the result (or exception)
                         logger.info("Completed processing well %s", well)
 
-                        # Note: We don't have access to the well_dirs here since it's in the thread's scope
-                        # We'll skip cleanup here as each thread has its own copy of dirs
-                        # The main cleanup will happen at the end of processing all wells
-
                     except Exception as e:
                         logger.error("Error processing well %s: %s", well, e, exc_info=True)
 
@@ -266,8 +262,6 @@ class PipelineOrchestrator:
 
         # Run the pipeline with microscope handler
         reference_pipeline.run(
-#            input_dir=dirs['input'],  # Pass input directory explicitly
-#            output_dir=dirs['processed'],  # Pass output directory explicitly
             well_filter=[well],  # Pass well filter explicitly
             microscope_handler=self.microscope_handler
         )
@@ -284,22 +278,10 @@ class PipelineOrchestrator:
         """
         logger.info("Processing final images for well %s", well)
 
-        # Get all available channels
-        channels = self._get_available_channels(dirs['processed'], well)
-        logger.info("Processing all %d available channels for well %s", len(channels), well)
-
         # Create final processing pipeline
         final_pipeline = Pipeline(
             steps=[
-                # Step 1: Process channels
-                Step(
-                    func=getattr(self.config, 'final_processing', None),
-                    variable_components=['site'],
-                    group_by='channel',
-                    name="Channel Processing"
-                ),
-
-                # Step 2: Flatten Z-stacks
+                # Step 1: Flatten Z-stacks
                 Step(
                     func=self.image_preprocessor.create_projection,
                     variable_components=['z_index'],
@@ -307,51 +289,31 @@ class PipelineOrchestrator:
                         'method': self.config.stitch_flatten,
                         'focus_analyzer': self.focus_analyzer
                     },
-                    name="Z-Stack Flattening"
+                    name="Z-Stack Flattening",
+                    input_dir=dirs['input'],  # Use processed as input
+                    output_dir=dirs['post_processed'],  # Output to post_processed
+                ),
+
+                # Step 2: Enhance tiles
+                Step(
+                    func=getattr(self.config, 'final_processing', None),
+                    variable_components=['site'],
+                    group_by='channel',
+                    name="Tile Enhancement",
                 )
             ],
-            input_dir=dirs['processed'],  # Use processed as input
-            output_dir=dirs['post_processed'],  # Output to post_processed
+            #output_dir=dirs['post_processed'],  # Output to post_processed
             well_filter=[well],
             name=f"Final Processing Pipeline - {well}"
         )
 
         # Run the pipeline with microscope handler
         final_pipeline.run(
-            input_dir=dirs['processed'],  # Pass input directory explicitly
-            output_dir=dirs['post_processed'],  # Pass output directory explicitly
             well_filter=[well],  # Pass well filter explicitly
             microscope_handler=self.microscope_handler
         )
 
         logger.info("Final processing pipeline completed for well %s", well)
-
-    # _get_processing_functions method removed - now handled by
-    # pipeline_core.prepare_patterns_and_functions
-
-    def _get_available_channels(self, input_dir, well):
-        """
-        Get all available channels for a well.
-
-        Args:
-            input_dir: Input directory
-            well: Well identifier
-
-        Returns:
-            list: List of available channels
-        """
-        # Find all image files for this well
-        image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
-
-        # Extract channels from filenames
-        channels = set()
-        for img_path in image_paths:
-            metadata = self.microscope_handler.parse_filename(img_path.name)
-            if (metadata and 'well' in metadata and
-                metadata['well'].lower() == well.lower() and 'channel' in metadata):
-                channels.add(str(metadata['channel']))
-
-        return list(channels)
 
     def _setup_directories(self, plate_path, input_dir):
         """

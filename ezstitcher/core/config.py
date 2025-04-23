@@ -96,7 +96,7 @@ class StitchingConfig:
     well_filter: Optional[List[str]] = None
     composite_weights: Optional[Dict] = None
     preprocessing_funcs: Optional[Dict] = None
-    margin_ratio: float = 0.1
+    margin_ratio: float = 0.5
 
 
 # ZStackConfig has been removed as it's been replaced by ZStackProcessorConfig

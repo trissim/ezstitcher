@@ -55,10 +55,10 @@ MICROSCOPE_CONFIGS = {
 # Test parameters
 syn_data_params = {
     "grid_size": (4, 4),
-    "tile_size": (64, 64),
+    "tile_size": (128, 128),
     "overlap_percent": 10,
     "wavelengths": 2,
-    "cell_size_range": (3, 6),
+    "cell_size_range": (5, 10),
     "wells": ['A01','H08'],
 }
 
