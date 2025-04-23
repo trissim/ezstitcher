@@ -187,6 +187,7 @@ def zstack_plate_dir(test_function_dir, microscope_config, test_params):
 
 # Import the ImagePreprocessor for stack functions
 from ezstitcher.core.image_preprocessor import ImagePreprocessor
+from ezstitcher.core.utils import track_thread_activity, clear_thread_activity, print_thread_activity_report
 
 # Create an instance of ImagePreprocessor for testing
 _image_preprocessor = ImagePreprocessor()
@@ -195,6 +196,24 @@ _image_preprocessor = ImagePreprocessor()
 def normalize(stack):
     """Apply true histogram equalization to an entire stack."""
     return _image_preprocessor.stack_percentile_normalize(stack,low_percentile=0.1, high_percentile=99.99)
+
+@pytest.fixture
+def thread_tracker():
+    """Fixture to track thread activity for tests."""
+    # Store the original method
+    original_process_well = PipelineOrchestrator.process_well
+
+    # Apply the decorator to the process_well method
+    PipelineOrchestrator.process_well = track_thread_activity(original_process_well)
+
+    # Clear any previous thread activity data
+    clear_thread_activity()
+
+    # Provide the fixture
+    yield
+
+    # Restore the original method
+    PipelineOrchestrator.process_well = original_process_well
 
 
 @pytest.fixture
@@ -243,190 +262,45 @@ def create_config(base_config, **kwargs):
     # Create a new config object
     return PipelineConfig(**config_dict)
 
-def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
+def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test processing a flat plate with minimal configuration."""
-    import threading
-    import time
-    from collections import defaultdict
+    # Use the base configuration
+    config = base_pipeline_config
 
-    # Track thread activity
-    active_threads = set()
-    thread_activity = defaultdict(list)
-    thread_lock = threading.Lock()
+    # Ensure num_workers is set to a value greater than 1
+    config.num_workers = 2
 
-    # Monkey patch the process_well method to track thread activity
-    original_process_well = PipelineOrchestrator.process_well
+    # Create and run pipeline
+    pipeline = PipelineOrchestrator(config)
+    success = pipeline.run(flat_plate_dir)
 
-    def patched_process_well(self, well, dirs, pipeline_functions=None):
-        """Patched version of process_well that tracks thread activity."""
-        thread_id = threading.get_ident()
-        thread_name = threading.current_thread().name
+    assert success, "Flat plate processing failed"
 
-        # Record thread start time
-        start_time = time.time()
+    # Check if output directories were created
+    # Use the plate path to check for output directories
+    plate_path = Path(flat_plate_dir)
+    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
+    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
+    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
 
-        # Add this thread to active threads
-        with thread_lock:
-            active_threads.add(thread_id)
-            # Record the number of active threads at this moment
-            thread_activity[thread_id].append({
-                'well': well,
-                'thread_name': thread_name,
-                'time': time.time(),
-                'action': 'start',
-                'active_threads': len(active_threads)
-            })
+    assert processed_dir.exists(), "Processed directory not created"
+    assert stitched_dir.exists(), "Stitched directory not created"
 
-        print(f"Thread {thread_name} (ID: {thread_id}) started processing well {well}")
-        print(f"Active threads: {len(active_threads)}")
+    # Check if stitched files were created
+    stitched_files = find_image_files(stitched_dir)
+    assert len(stitched_files) > 0, "No stitched files created"
 
-        try:
-            # Call the original method
-            result = original_process_well(self, well, dirs, pipeline_functions)
-            return result
-        finally:
-            # Record thread end time
-            end_time = time.time()
-            duration = end_time - start_time
+    # Print and analyze thread activity
+    analysis = print_thread_activity_report()
 
-            # Remove this thread from active threads
-            with thread_lock:
-                active_threads.remove(thread_id)
-                # Record the number of active threads at this moment
-                thread_activity[thread_id].append({
-                    'well': well,
-                    'thread_name': thread_name,
-                    'time': time.time(),
-                    'action': 'end',
-                    'duration': duration,
-                    'active_threads': len(active_threads)
-                })
+    # Assert that multiple threads were used if num_workers > 1
+    if config.num_workers > 1:
+        assert analysis['max_concurrent'] > 1, f"Expected multiple concurrent threads, but only {analysis['max_concurrent']} was used"
+        assert len(analysis['overlaps']) > 0, "Expected thread overlaps, but none were found"
+    else:
+        print("Skipping multithreading check since num_workers=1")
 
-            print(f"Thread {thread_name} (ID: {thread_id}) finished processing well {well} in {duration:.2f} seconds")
-            print(f"Active threads: {len(active_threads)}")
-
-    # Apply the monkey patch
-    PipelineOrchestrator.process_well = patched_process_well
-
-    try:
-        # Use the base configuration
-        config = base_pipeline_config
-
-        # Ensure num_workers is set to a value greater than 1
-        config.num_workers = 2
-
-        # Create and run pipeline
-        pipeline = PipelineOrchestrator(config)
-        success = pipeline.run(flat_plate_dir)
-
-        assert success, "Flat plate processing failed"
-
-        # Check if output directories were created
-        # Use the plate path to check for output directories
-        plate_path = Path(flat_plate_dir)
-        workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-        processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-        stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-
-        assert processed_dir.exists(), "Processed directory not created"
-        assert stitched_dir.exists(), "Stitched directory not created"
-
-        # Check if stitched files were created
-        stitched_files = find_image_files(stitched_dir)
-        assert len(stitched_files) > 0, "No stitched files created"
-
-        # Analyze thread activity to verify multithreading
-        max_concurrent = 0
-        thread_starts = []
-        thread_ends = []
-
-        for thread_id, activities in thread_activity.items():
-            for activity in activities:
-                max_concurrent = max(max_concurrent, activity['active_threads'])
-                if activity['action'] == 'start':
-                    thread_starts.append((activity['well'], activity['thread_name'], activity['time']))
-                else:  # 'end'
-                    thread_ends.append((activity['well'], activity['thread_name'], activity['time'], activity.get('duration', 0)))
-
-        # Sort by time
-        thread_starts.sort(key=lambda x: x[2])
-        thread_ends.sort(key=lambda x: x[2])
-
-        # Print thread activity report
-        print("\n" + "=" * 80)
-        print("Thread Activity Report")
-        print("=" * 80)
-
-        print("\nThread Start Events:")
-        for well, thread_name, time_val in thread_starts:
-            print(f"Thread {thread_name} started processing well {well} at {time_val:.2f}")
-
-        print("\nThread End Events:")
-        for well, thread_name, time_val, duration in thread_ends:
-            print(f"Thread {thread_name} finished processing well {well} at {time_val:.2f} (duration: {duration:.2f}s)")
-
-        print("\nOverlap Analysis:")
-        # Find overlapping time periods
-        overlaps = []
-        for i, (well1, thread1, start1) in enumerate(thread_starts):
-            # Find the end time for this thread
-            end1 = None
-            for w, t, end, d in thread_ends:
-                if t == thread1 and w == well1:
-                    end1 = end
-                    break
-
-            if end1 is None:
-                continue  # Skip if we can't find the end time
-
-            # Check for overlaps with other threads
-            for j, (well2, thread2, start2) in enumerate(thread_starts):
-                if i == j or thread1 == thread2:  # Skip same thread
-                    continue
-
-                # Find the end time for the other thread
-                end2 = None
-                for w, t, end, d in thread_ends:
-                    if t == thread2 and w == well2:
-                        end2 = end
-                        break
-
-                if end2 is None:
-                    continue  # Skip if we can't find the end time
-
-                # Check if there's an overlap
-                if start1 < end2 and start2 < end1:
-                    overlap_start = max(start1, start2)
-                    overlap_end = min(end1, end2)
-                    overlap_duration = overlap_end - overlap_start
-
-                    if overlap_duration > 0:
-                        overlaps.append({
-                            'thread1': thread1,
-                            'well1': well1,
-                            'thread2': thread2,
-                            'well2': well2,
-                            'duration': overlap_duration
-                        })
-                        print(f"Threads {thread1} and {thread2} overlapped for {overlap_duration:.2f}s")
-                        print(f"  {thread1} was processing well {well1}")
-                        print(f"  {thread2} was processing well {well2}")
-
-        print(f"\nFound {len(overlaps)} thread overlaps")
-        print(f"Maximum concurrent threads: {max_concurrent}")
-        print("=" * 80)
-
-        # Assert that multiple threads were used if num_workers > 1
-        if config.num_workers > 1:
-            assert max_concurrent > 1, f"Expected multiple concurrent threads, but only {max_concurrent} was used"
-            assert len(overlaps) > 0, "Expected thread overlaps, but none were found"
-        else:
-            print("Skipping multithreading check since num_workers=1")
-    finally:
-        # Restore the original process_well method
-        PipelineOrchestrator.process_well = original_process_well
-
-def test_zstack_projection_minimal(zstack_plate_dir, base_pipeline_config):
+def test_zstack_projection_minimal(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test processing a Z-stack plate with projection."""
     # Create pipeline configuration based on the base config
     config = create_config(base_pipeline_config, reference_flatten="max_projection")
@@ -451,7 +325,10 @@ def test_zstack_projection_minimal(zstack_plate_dir, base_pipeline_config):
     stitched_files = find_image_files(stitched_dir)
     assert len(stitched_files) > 0, "No stitched files created"
 
-def test_zstack_per_plane_minimal(zstack_plate_dir, base_pipeline_config):
+    # Print thread activity report
+    print_thread_activity_report()
+
+def test_zstack_per_plane_minimal(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test processing a Z-stack plate with per-plane stitching."""
     # Create pipeline configuration based on the base config
     config = create_config(
@@ -482,7 +359,10 @@ def test_zstack_per_plane_minimal(zstack_plate_dir, base_pipeline_config):
     print(f"All files in stitched directory: {[f.name for f in all_files]}")
     assert len(all_files) > 0, "No stitched files created"
 
-def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config):
+    # Print thread activity report
+    print_thread_activity_report()
+
+def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test processing a flat plate with multiple reference channels."""
     # Create pipeline configuration based on the base config
     config = create_config(
@@ -511,7 +391,10 @@ def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config):
     stitched_files = find_image_files(stitched_dir)
     assert len(stitched_files) > 0, "No stitched files created"
 
-def test_best_focus_reference(zstack_plate_dir, base_pipeline_config):
+    # Print thread activity report
+    print_thread_activity_report()
+
+def test_best_focus_reference(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test processing a Z-stack plate using best focus planes to be assembled for stitching."""
     # Create pipeline configuration based on the base config
     config = create_config(
@@ -541,7 +424,10 @@ def test_best_focus_reference(zstack_plate_dir, base_pipeline_config):
     stitched_files = find_image_files(stitched_dir)
     assert len(stitched_files) > 0, "No stitched files created"
 
-def test_preprocessing_functions(flat_plate_dir, base_pipeline_config):
+    # Print thread activity report
+    print_thread_activity_report()
+
+def test_preprocessing_functions(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test processing a flat plate with preprocessing functions."""
     # Create pipeline configuration based on the base config
 
@@ -578,7 +464,10 @@ def test_preprocessing_functions(flat_plate_dir, base_pipeline_config):
     assert len(processed_files) > 0, "No processed files created"
     assert len(post_processed_files) > 0, "No post-processed files created"
 
-def test_all_channels_stitched(flat_plate_dir, base_pipeline_config):
+    # Print thread activity report
+    print_thread_activity_report()
+
+def test_all_channels_stitched(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test that all available channels are stitched by default."""
     # Use the base configuration which already has reference_channels=["1"]
     config = base_pipeline_config
@@ -600,6 +489,9 @@ def test_all_channels_stitched(flat_plate_dir, base_pipeline_config):
     stitched_files = find_image_files(stitched_dir)
     assert len(stitched_files) > 0, "No stitched files created"
 
+    # Print thread activity report
+    print_thread_activity_report()
+
 def calcein_process(stack):
     """Apply tophat filter to Calcein images."""
     return [ImagePreprocessor.tophat(img) for img in stack]
@@ -609,7 +501,7 @@ def dapi_process(stack):
     stack = ImagePreprocessor.stack_percentile_normalize(stack,low_percentile=0.1,high_percentile=99.9)
     return [ImagePreprocessor.tophat(img) for img in stack]
 
-def test_mixed_preprocessing_functions(zstack_plate_dir, base_pipeline_config):
+def test_mixed_preprocessing_functions(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test that both single-image and stack-processing functions can be used."""
     # Create pipeline configuration based on the base config
     config = create_config(
@@ -651,3 +543,6 @@ def test_mixed_preprocessing_functions(zstack_plate_dir, base_pipeline_config):
     assert len(processed_files) > 0, "No processed files created"
     assert len(post_processed_files) > 0, "No post-processed files created"
     assert len(stitched_files) > 0, "No stitched files created"
+
+    # Print thread activity report
+    print_thread_activity_report()
