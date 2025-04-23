@@ -258,7 +258,7 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
     # Monkey patch the process_well method to track thread activity
     original_process_well = PipelineOrchestrator.process_well
 
-    def patched_process_well(self, well, dirs):
+    def patched_process_well(self, well, dirs, pipeline_functions=None):
         """Patched version of process_well that tracks thread activity."""
         thread_id = threading.get_ident()
         thread_name = threading.current_thread().name
@@ -283,7 +283,7 @@ def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config):
 
         try:
             # Call the original method
-            result = original_process_well(self, well, dirs)
+            result = original_process_well(self, well, dirs, pipeline_functions)
             return result
         finally:
             # Record thread end time

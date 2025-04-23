@@ -2,9 +2,8 @@ import logging
 import os
 import copy
 import concurrent.futures
-import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Union, Optional, Callable, Any
+
 
 from ezstitcher.core.microscope_interfaces import create_microscope_handler
 from ezstitcher.core.image_locator import ImageLocator
@@ -45,12 +44,13 @@ class PipelineOrchestrator:
         self.microscope_handler = None
         self.stitcher = None
 
-    def run(self, plate_folder):
+    def run(self, plate_folder, pipeline_functions=None):
         """
         Process a plate through the complete pipeline.
 
         Args:
             plate_folder: Path to the plate folder
+            pipeline_functions: Dictionary of pipeline functions to use
 
         Returns:
             bool: True if successful, False otherwise
@@ -84,6 +84,10 @@ class PipelineOrchestrator:
             # Get wells to process
             wells = self._get_wells_to_process(dirs['input'])
 
+            # Build pipeline functions if not provided
+            if pipeline_functions is None:
+                pipeline_functions = self.build_pipeline_functions()
+
             # Process wells using ThreadPoolExecutor
             num_workers = self.config.num_workers
             # Use only one worker if there's only one well
@@ -104,7 +108,7 @@ class PipelineOrchestrator:
                     # Create a deep copy of dirs for each well to avoid shared state issues
                     well_dirs = copy.deepcopy(dirs)
                     logger.info("Submitting well %s to thread pool", well)
-                    future = executor.submit(self.process_well, well, well_dirs)
+                    future = executor.submit(self.process_well, well, well_dirs, pipeline_functions)
                     future_to_well[future] = well
 
                 # Process results as they complete
@@ -129,6 +133,194 @@ class PipelineOrchestrator:
             logger.error("Pipeline failed with unexpected error: %s", str(e))
             logger.debug("Exception details:", exc_info=True)
             return False
+
+    def create_image_processing_pipeline(self, steps, well, name=None):
+        """
+        Create a pipeline for processing images.
+
+        Args:
+            steps: List of processing steps
+            well: Well identifier
+            name: Optional name for the pipeline
+
+        Returns:
+            Pipeline: Configured pipeline for image processing
+        """
+        # Create and return the pipeline
+        pipeline = Pipeline(
+            steps=steps,
+            well_filter=[well],
+            name=name or f"Image Processing Pipeline - {well}"
+        )
+
+        return pipeline
+
+    def run_image_processing_pipeline(self, steps, well, dirs, name=None):
+        """
+        Create and run an image processing pipeline.
+
+        Args:
+            steps: List of processing steps
+            well: Well identifier
+            dirs: Dictionary of directories (not used in pipeline creation)
+            name: Optional name for the pipeline
+        """
+        pipeline = self.create_image_processing_pipeline(
+            steps, well, name=name or f"Pipeline - {well}"
+        )
+        pipeline.run(well_filter=[well], microscope_handler=self.microscope_handler)
+
+    def create_reference_processing_steps(self, dirs):
+        """
+        Create standard steps for reference image processing.
+
+        Args:
+            dirs: Dictionary of directories
+
+        Returns:
+            List[Step]: List of processing steps
+        """
+        return [
+            # Step 1: Flatten Z-stacks
+            Step(
+                func=self.image_preprocessor.create_projection,
+                variable_components=['z_index'],
+                processing_args={
+                    'method': self.config.reference_flatten,
+                    'focus_analyzer': self.focus_analyzer
+                },
+                name="Z-Stack Flattening",
+                input_dir=dirs['input'],
+                output_dir=dirs['processed'],
+            ),
+            # Step 2: Process channels
+            Step(
+                func=getattr(self.config, 'reference_processing', None),
+                variable_components=['site'],
+                group_by='channel',
+                name="Channel Processing"
+            ),
+            # Step 3: Create composites
+            Step(
+                func=self.image_preprocessor.create_composite,
+                variable_components=['channel'],
+                group_by='site',
+                processing_args={'weights': self.config.reference_composite_weights},
+                name="Composite Creation"
+            )
+        ]
+
+    def create_final_processing_steps(self, dirs):
+        """
+        Create standard steps for final image processing.
+
+        Args:
+            dirs: Dictionary of directories
+
+        Returns:
+            List[Step]: List of processing steps
+        """
+        return [
+            # Step 1: Flatten Z-stacks
+            Step(
+                func=self.image_preprocessor.create_projection,
+                variable_components=['z_index'],
+                processing_args={
+                    'method': self.config.stitch_flatten,
+                    'focus_analyzer': self.focus_analyzer
+                },
+                name="Z-Stack Flattening",
+                input_dir=dirs['input'],
+                output_dir=dirs['post_processed'],
+            ),
+            # Step 2: Enhance tiles
+            Step(
+                func=getattr(self.config, 'final_processing', None),
+                variable_components=['site'],
+                group_by='channel',
+                name="Tile Enhancement"
+            )
+        ]
+
+    def create_position_generation_function(self, processing_steps=None):
+        """
+        Create a function that processes images and generates positions.
+
+        Args:
+            processing_steps: Optional list of steps for image processing
+
+        Returns:
+            Callable: Function for processing images and generating positions
+        """
+        def process_and_generate_positions(well, dirs, stitcher=None):
+            # Default processing steps if none provided
+            steps = processing_steps or self.create_reference_processing_steps(dirs)
+
+            # Run the image processing pipeline
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Reference Pipeline - {well}"
+            )
+
+            # Generate positions
+            return self.generate_positions(well, dirs, stitcher)
+
+        return process_and_generate_positions
+
+    def create_image_assembly_function(self, processing_steps=None):
+        """
+        Create a function that processes images and assembles them.
+
+        Args:
+            processing_steps: Optional list of steps for image processing
+
+        Returns:
+            Callable: Function for processing images and assembling them
+        """
+        def process_and_assemble_images(well, dirs, positions_file, stitcher=None):
+            # Default processing steps if none provided
+            steps = processing_steps or self.create_final_processing_steps(dirs)
+
+            # Run the image processing pipeline
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Final Processing Pipeline - {well}"
+            )
+
+            # Stitch images
+            self.stitch_images(well, dirs, positions_file, stitcher)
+
+        return process_and_assemble_images
+
+    def build_pipeline_functions(self):
+        """
+        Build and return pipeline functions for well processing.
+
+        Returns:
+            dict: Dictionary of pipeline functions
+        """
+        # Create a function for reference image processing
+        def process_reference_images(well, dirs):
+            steps = self.create_reference_processing_steps(dirs)
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Reference Pipeline - {well}"
+            )
+
+        # Create a function for final image processing
+        def process_final_images(well, dirs):
+            steps = self.create_final_processing_steps(dirs)
+            self.run_image_processing_pipeline(
+                steps, well, dirs, name=f"Final Processing Pipeline - {well}"
+            )
+
+        # Use the position generation and image assembly factories
+        position_generation = self.create_position_generation_function()
+        image_assembly = self.create_image_assembly_function()
+
+        return {
+            'reference_images': process_reference_images,
+            'generate_positions': position_generation,
+            'final_images': process_final_images,
+            'stitch_images': image_assembly
+        }
 
     def _get_wells_to_process(self, input_dir):
         """
@@ -167,13 +359,14 @@ class PipelineOrchestrator:
         logger.info("Found %d wells in %.2f seconds", len(wells_to_process), time.time() - start_time)
         return wells_to_process
 
-    def process_well(self, well, dirs):
+    def process_well(self, well, dirs, pipeline_functions=None):
         """
         Process a single well through the pipeline.
 
         Args:
             well: Well identifier
             dirs: Dictionary of directories
+            pipeline_functions: Dictionary of pipeline functions to use
         """
         logger.info("Processing well %s", well)
         logger.info("Processing well %s with pixel size %s", well, self.config.pixel_size)
@@ -198,20 +391,30 @@ class PipelineOrchestrator:
 
         logger.info("Created well-specific directories for well %s: %s", well, well_dirs['processed'])
 
+        # Default pipeline functions if none provided
+        if pipeline_functions is None:
+            pipeline_functions = self.build_pipeline_functions()
+
         # Create a new Stitcher instance for this thread to avoid shared state issues
         thread_stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
+        # Use the provided functions
+        reference_func = pipeline_functions.get('reference_images', self.process_reference_images)
+        positions_func = pipeline_functions.get('generate_positions', self.generate_positions)
+        final_func = pipeline_functions.get('final_images', self.process_final_images)
+        stitch_func = pipeline_functions.get('stitch_images', self.stitch_images)
+
         # 1. Process reference images (for position generation)
-        self.process_reference_images(well, well_dirs)
+        reference_func(well, well_dirs)
 
         # 2. Generate stitching positions
-        positions_file, stitch_pattern = self.generate_positions(well, well_dirs, thread_stitcher)
+        positions_file, _ = positions_func(well, well_dirs, thread_stitcher)
 
         # 3. Process final images (for stitching)
-        self.process_final_images(well, well_dirs)
+        final_func(well, well_dirs)
 
         # 4. Stitch final images
-        self.stitch_images(well, well_dirs, positions_file, thread_stitcher)
+        stitch_func(well, well_dirs, positions_file, thread_stitcher)
 
     def process_reference_images(self, well, dirs):
         """
@@ -221,52 +424,10 @@ class PipelineOrchestrator:
             well: Well identifier
             dirs: Dictionary of directories
         """
-        logger.info("Processing reference images for well %s", well)
-
-        # Create reference image processing pipeline
-        reference_pipeline = Pipeline(
-            steps=[
-                # Step 1: Flatten Z-stacks
-                Step(
-                    func=self.image_preprocessor.create_projection,
-                    variable_components=['z_index'],
-                    processing_args={
-                        'method': self.config.reference_flatten,
-                        'focus_analyzer': self.focus_analyzer
-                    },
-                    name="Z-Stack Flattening",
-                    input_dir=dirs['input'],  # Use input (which is the workspace)
-                    output_dir=dirs['processed'],  # Output to processed
-                ),
-
-                # Step 2: Process channels
-                Step(
-                    func=getattr(self.config, 'reference_processing', None),
-                    variable_components=['site'],
-                    group_by='channel',
-                    name="Channel Processing"
-                ),
-
-                # Step 3: Create composites
-                Step(
-                    func=self.image_preprocessor.create_composite,
-                    variable_components=['channel'],
-                    group_by='site',
-                    processing_args={'weights': self.config.reference_composite_weights},
-                    name="Composite Creation"
-                )
-            ],
-            well_filter=[well],
-            name=f"Reference Pipeline - {well}"
+        steps = self.create_reference_processing_steps(dirs)
+        self.run_image_processing_pipeline(
+            steps, well, dirs, name=f"Reference Pipeline - {well}"
         )
-
-        # Run the pipeline with microscope handler
-        reference_pipeline.run(
-            well_filter=[well],  # Pass well filter explicitly
-            microscope_handler=self.microscope_handler
-        )
-
-        logger.info(f"Reference pipeline completed for well {well}")
 
     def process_final_images(self, well, dirs):
         """
@@ -276,44 +437,10 @@ class PipelineOrchestrator:
             well: Well identifier
             dirs: Dictionary of directories
         """
-        logger.info("Processing final images for well %s", well)
-
-        # Create final processing pipeline
-        final_pipeline = Pipeline(
-            steps=[
-                # Step 1: Flatten Z-stacks
-                Step(
-                    func=self.image_preprocessor.create_projection,
-                    variable_components=['z_index'],
-                    processing_args={
-                        'method': self.config.stitch_flatten,
-                        'focus_analyzer': self.focus_analyzer
-                    },
-                    name="Z-Stack Flattening",
-                    input_dir=dirs['input'],  # Use processed as input
-                    output_dir=dirs['post_processed'],  # Output to post_processed
-                ),
-
-                # Step 2: Enhance tiles
-                Step(
-                    func=getattr(self.config, 'final_processing', None),
-                    variable_components=['site'],
-                    group_by='channel',
-                    name="Tile Enhancement",
-                )
-            ],
-            #output_dir=dirs['post_processed'],  # Output to post_processed
-            well_filter=[well],
-            name=f"Final Processing Pipeline - {well}"
+        steps = self.create_final_processing_steps(dirs)
+        self.run_image_processing_pipeline(
+            steps, well, dirs, name=f"Final Processing Pipeline - {well}"
         )
-
-        # Run the pipeline with microscope handler
-        final_pipeline.run(
-            well_filter=[well],  # Pass well filter explicitly
-            microscope_handler=self.microscope_handler
-        )
-
-        logger.info("Final processing pipeline completed for well %s", well)
 
     def _setup_directories(self, plate_path, input_dir):
         """
@@ -352,7 +479,6 @@ class PipelineOrchestrator:
         Returns:
             Path: Path to the image directory
         """
-        # Import time here to avoid circular imports
         import time
         start_time = time.time()
 
@@ -498,7 +624,7 @@ class PipelineOrchestrator:
 
         # Stitch each pattern
         all_patterns = []
-        for component, patterns in patterns_by_well[well].items():
+        for _, patterns in patterns_by_well[well].items():
             all_patterns.extend(patterns)
 
         for pattern in all_patterns:
