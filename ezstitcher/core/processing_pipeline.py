@@ -13,7 +13,7 @@ from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
 
-# Import the new pipeline architecture
+# Import the pipeline architecture
 from ezstitcher.core.pipeline import Step, Pipeline
 
 logger = logging.getLogger(__name__)
