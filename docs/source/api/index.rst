@@ -10,6 +10,8 @@ Core Components
    :maxdepth: 2
 
    processing_pipeline
+   pipeline
+   steps
    stitcher
    focus_analyzer
    image_preprocessor
