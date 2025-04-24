@@ -17,7 +17,7 @@ EZStitcher supports the following image file formats:
      - Description
    * - TIFF
      - .tif, .tiff
-     - Tagged Image File Format, the primary format for microscopy images. EZStitcher works with 8-bit, 16-bit, and 32-bit TIFF images.
+     - Tagged Image File Format, the primary format for microscopy images. EZStitcher currently works with 16-bit TIFF images only.
    * - JPEG
      - .jpg, .jpeg
      - Joint Photographic Experts Group format, a compressed image format. Not recommended for scientific images due to lossy compression.
@@ -28,11 +28,7 @@ EZStitcher supports the following image file formats:
 Bit Depth Support
 ~~~~~~~~~~~~~~
 
-EZStitcher supports various bit depths for image processing:
-
-- **8-bit**: Values from 0-255 (uint8)
-- **16-bit**: Values from 0-65535 (uint16) - Recommended for most microscopy images
-- **32-bit float**: Floating-point values (float32) - Used for some specialized processing
+EZStitcher currently supports only 16-bit images (uint16, values from 0-65535). Support for 8-bit and 32-bit images may be added in future versions.
 
 Position Files
 ------------
@@ -49,6 +45,7 @@ Position files are CSV files with the following format:
     ...
 
 Where:
+
 - **filename**: The filename of the tile
 - **x, y**: Pixel coordinates in the final stitched image (floating-point values for subpixel precision)
 
@@ -64,58 +61,10 @@ Alternative format with grid positions:
     ...
 
 Where:
+
 - **file**: The filename of the tile
 - **i, j**: Grid coordinates (column, row)
 - **x, y**: Pixel coordinates in the final stitched image
-
-Configuration Files
-----------------
-
-EZStitcher supports JSON and YAML configuration files:
-
-JSON Example:
-
-.. code-block:: json
-
-    {
-      "reference_channels": ["1", "2"],
-      "well_filter": ["A01", "A02"],
-      "stitcher": {
-        "tile_overlap": 15.0,
-        "max_shift": 75,
-        "margin_ratio": 0.15
-      },
-      "focus_config": {
-        "method": "laplacian",
-        "roi": [100, 100, 200, 200]
-      },
-      "reference_flatten": "max_projection",
-      "stitch_flatten": "best_focus",
-      "additional_projections": ["max", "mean"]
-    }
-
-YAML Example:
-
-.. code-block:: yaml
-
-    reference_channels:
-      - "1"
-      - "2"
-    well_filter:
-      - "A01"
-      - "A02"
-    stitcher:
-      tile_overlap: 15.0
-      max_shift: 75
-      margin_ratio: 0.15
-    focus_config:
-      method: laplacian
-      roi: [100, 100, 200, 200]
-    reference_flatten: max_projection
-    stitch_flatten: best_focus
-    additional_projections:
-      - max
-      - mean
 
 Metadata Formats
 -------------
@@ -161,7 +110,7 @@ HTD files have a similar structure but in a text-based format:
 Opera Phenix Metadata
 ^^^^^^^^^^^^^^^^^
 
-Opera Phenix metadata is stored in XML files (Index.xml) with the following structure:
+Opera Phenix metadata is stored in the Index.xml file:
 
 .. code-block:: xml
 
@@ -170,16 +119,11 @@ Opera Phenix metadata is stored in XML files (Index.xml) with the following stru
         <Plate>
           <PlateID>plate_name</PlateID>
           <PlateTypeName>96well</PlateTypeName>
-          <PlateRows>8</PlateRows>
-          <PlateColumns>12</PlateColumns>
         </Plate>
       </Plates>
       <Images>
         <Image id="r01c01f001p01-ch1sk1fk1fl1">
           <URL>Images/r01c01f001p01-ch1sk1fk1fl1.tiff</URL>
-          <ChannelID>1</ChannelID>
-          <FieldID>1</FieldID>
-          <PlaneID>1</PlaneID>
           <PositionX>0.0</PositionX>
           <PositionY>0.0</PositionY>
           <ImageResolutionX>0.65</ImageResolutionX>
@@ -188,15 +132,10 @@ Opera Phenix metadata is stored in XML files (Index.xml) with the following stru
       </Images>
     </EvaluationInputData>
 
-File Naming Conventions
---------------------
-
-For detailed information about file naming conventions for different microscope types, see the :doc:`microscope_formats` appendix.
-
 Output File Structure
 ------------------
 
-EZStitcher creates the following directory structure during processing:
+EZStitcher creates a dynamic directory structure during processing. By default, it follows this pattern:
 
 .. code-block:: text
 
@@ -206,4 +145,9 @@ EZStitcher creates the following directory structure during processing:
     plate_folder_positions/       # CSV files with stitching positions
     plate_folder_stitched/        # Final stitched images
 
-For detailed information about how EZStitcher organizes and processes files, see the :doc:`../user_guide/file_organization` guide.
+However, the actual directory structure is determined by the specific steps in your pipeline. Each step can specify its own input and output directories, and the pipeline will create them as needed.
+
+File Naming Conventions
+--------------------
+
+For detailed information about file naming conventions for different microscope types, see the :doc:`microscope_formats` appendix.

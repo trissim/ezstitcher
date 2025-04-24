@@ -77,17 +77,16 @@ Post-processing operations may include:
 Positions Directory
 ~~~~~~~~~~~~~~~~~
 
-Contains CSV files with stitching positions for each well and channel:
+Contains CSV files with stitching positions for each well:
 
 .. code-block:: text
 
     plate_folder_positions/
-    ├── A01_w1.csv
-    ├── A01_w2.csv
-    ├── A02_w1.csv
+    ├── A01.csv
+    ├── A02.csv
     └── ...
 
-Each CSV file contains the positions of tiles for a specific well and channel:
+Each CSV file contains the positions of tiles for a specific well. The file may include a channel suffix (e.g., A01_w1.csv) but this is typically set to the reference channel:
 
 .. code-block:: text
 
@@ -137,22 +136,21 @@ For details on how EZStitcher handles Z-stacks, see the :doc:`zstack_handling` g
 Custom File Organization
 ---------------------
 
-If your files don't match the standard patterns, you can customize how EZStitcher finds and processes them:
+If your files don't match the standard patterns, you need to implement a custom microscope handler by extending the abstract base classes in the microscope_interfaces module:
 
 .. code-block:: python
 
-    from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from ezstitcher.core.microscope_interfaces import FilenameParser, MetadataHandler
+    
+    # Create a custom filename parser
+    class CustomFilenameParser(FilenameParser):
+        # Define your pattern as a class attribute
+        PATTERN = r"custom_(?P<well>[A-Z][0-9]{2})_site(?P<site>[0-9]+)_channel(?P<channel>[0-9]+)"
+        
+        # Implement required methods
+        # ...
 
-    # Custom file pattern
-    config = PipelineConfig(
-        file_pattern="custom_{well}_site{site}_channel{channel}.tif"
-    )
-
-    pipeline = PipelineOrchestrator(config)
-    pipeline.run("path/to/plate_folder")
-
-For more advanced customization, see the :doc:`../api/microscope_interfaces` API reference.
+For more details, see the :doc:`../api/microscope_interfaces` API reference and the :doc:`../development/extending` guide.
 
 File Formats
 -----------
