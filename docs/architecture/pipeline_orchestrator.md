@@ -8,13 +8,17 @@ The `PipelineOrchestrator` is the central coordinator in EZStitcher's pipeline a
 
 ```python
 class PipelineOrchestrator:
-    def __init__(self, config: PipelineConfig, plate_path: Optional[Union[str, Path]] = None):
+    def __init__(self, plate_path=None, workspace_path=None, config=None, fs_manager=None, image_preprocessor=None, focus_analyzer=None):
         """
         Initialize the pipeline orchestrator.
 
         Args:
-            config: Pipeline configuration
             plate_path: Path to the plate folder (optional, can be provided later in run())
+            workspace_path: Path to the workspace folder (optional, defaults to plate_path.parent/plate_path.name_workspace)
+            config: Pipeline configuration (optional, a default configuration will be created if not provided)
+            fs_manager: File system manager (optional, a new instance will be created if not provided)
+            image_preprocessor: Image preprocessor (optional, a new instance will be created if not provided)
+            focus_analyzer: Focus analyzer (optional, a new instance will be created if not provided)
         """
         # ...
 ```
@@ -126,7 +130,11 @@ config = PipelineConfig(
 )
 
 # Create orchestrator
-orchestrator = PipelineOrchestrator(config=config, plate_path="path/to/plate")
+# All parameters except plate_path are optional and will be created if not provided
+orchestrator = PipelineOrchestrator(
+    plate_path="path/to/plate",      # Path to the plate folder
+    config=config                    # Pipeline configuration
+)
 
 # Get directories
 dirs = orchestrator.setup_directories()
@@ -139,8 +147,8 @@ position_pipeline = Pipeline(
              func=IP.create_projection,
              variable_components=['z_index'],
              processing_args={'method': 'max_projection'},
-             input_dir=dirs['input'],  
-             output_dir=dirs['processed']),  
+             input_dir=dirs['input'],
+             output_dir=dirs['processed']),
 
         # Step 2: Process channels
         Step(name="Image Enhancement",

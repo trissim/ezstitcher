@@ -52,18 +52,26 @@ def add_step(self, step: Step) -> 'Pipeline':
 The pipeline executes its steps in sequence, passing a context object between them:
 
 ```python
-def run(self, context: 'ProcessingContext') -> 'ProcessingContext':
+def run(self, input_dir=None, output_dir=None, well_filter=None, microscope_handler=None, orchestrator=None, positions_file=None):
     """
-    Run the pipeline with the given context.
+    Execute the pipeline.
 
-    This method executes each step in sequence, passing the context
-    from step to step.
+    This method can either:
+    1. Take individual parameters and create a ProcessingContext internally, or
+    2. Take a pre-configured ProcessingContext object (when called from PipelineOrchestrator)
+
+    The orchestrator parameter is required as it provides access to the microscope handler and other components.
 
     Args:
-        context: The processing context
+        input_dir: Optional input directory override
+        output_dir: Optional output directory override
+        well_filter: Optional well filter override
+        microscope_handler: Optional microscope handler override
+        orchestrator: Optional PipelineOrchestrator instance (required)
+        positions_file: Optional positions file to use for stitching
 
     Returns:
-        The updated processing context
+        The results of the pipeline execution
     """
     # ...
 ```
@@ -113,8 +121,8 @@ pipeline = Pipeline(
              func=IP.create_projection,
              variable_components=['z_index'],
              processing_args={'method': 'max_projection'},
-             input_dir=Path("path/to/input"),  
-             output_dir=Path("path/to/output")),  
+             input_dir=Path("path/to/input"),
+             output_dir=Path("path/to/output")),
 
         # Step 2: Process channels
         Step(name="Image Enhancement",
@@ -132,12 +140,15 @@ pipeline = Pipeline(
 )
 
 # Create a processing context
-from ezstitcher.core.processing_pipeline import ProcessingContext
+from ezstitcher.core.pipeline import ProcessingContext
 context = ProcessingContext(
-    well="A01",
-    microscope_handler=microscope_handler,  # MicroscopeHandler instance
     input_dir=Path("path/to/input"),
-    output_dir=Path("path/to/output")
+    output_dir=Path("path/to/output"),
+    well_filter=["A01", "B02"],
+    orchestrator=orchestrator,  # Reference to the PipelineOrchestrator
+    # Additional attributes can be added as kwargs
+    positions_file=Path("path/to/positions.csv"),
+    custom_parameter=42
 )
 
 # Run the pipeline
