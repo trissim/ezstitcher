@@ -266,27 +266,12 @@ def prepare_patterns_and_functions(patterns, processing_funcs, processing_args=N
             - component_to_funcs: Dictionary mapping component values to processing functions
             - component_to_args: Dictionary mapping component values to processing args
     """
-    # Fast path: If both patterns and processing_funcs are dictionaries with matching keys,
-    # they're already properly structured
-    if (isinstance(patterns, dict) and isinstance(processing_funcs, dict) and
-            set(patterns.keys()).issubset(set(processing_funcs.keys()))):
-        # Check if processing_args is also a dictionary with matching keys
-        if isinstance(processing_args, dict) and set(patterns.keys()).issubset(set(processing_args.keys())):
-            # All three are dictionaries with matching keys
-            return patterns, processing_funcs, processing_args
-        else:
-            # Only patterns and processing_funcs are dictionaries with matching keys
-            # Create a component_to_args dictionary with the same processing_args for all components
-            component_to_args = {comp_value: processing_args for comp_value in patterns.keys()}
-            return patterns, processing_funcs, component_to_args
-
     # Ensure patterns are in a dictionary format
     # If already a dict, use as is; otherwise wrap the list in a dictionary
     grouped_patterns = patterns if isinstance(patterns, dict) else {component: patterns}
 
-    # Determine which processing functions to use for each component
+    # Initialize dictionaries for functions and args
     component_to_funcs = {}
-    # Determine which processing args to use for each component
     component_to_args = {}
 
     for comp_value in grouped_patterns.keys():
