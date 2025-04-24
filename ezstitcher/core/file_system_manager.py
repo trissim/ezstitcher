@@ -230,54 +230,6 @@ class FileSystemManager:
             logger.error(f"Error emptying directory {directory_path}: {e}")
             return False
 
-    @staticmethod
-    def clean_temp_folders(parent_dir: Union[str, Path], base_name: str, keep_suffixes=None) -> None:
-        """
-        Clean up temporary folders created during processing.
-
-        Args:
-            parent_dir (str or Path): Parent directory
-            base_name (str): Base name of the plate folder
-            keep_suffixes (list, optional): List of suffixes to keep
-        """
-        parent_dir = Path(parent_dir)
-        if keep_suffixes is None:
-            keep_suffixes = ['_stitched', '_positions']
-
-        # Find all folders with the base name and a suffix
-        for item in parent_dir.iterdir():
-            if item.is_dir() and item.name.startswith(base_name) and item.name != base_name:
-                # Check if the suffix should be kept
-                suffix = item.name[len(base_name):]
-                if suffix not in keep_suffixes:
-                    logger.info(f"Removing temporary folder: {item}")
-                    import shutil
-                    shutil.rmtree(item)
-
-    @staticmethod
-    def create_output_directories(plate_path, suffixes):
-        """
-        Create output directories for a plate.
-
-        Args:
-            plate_path (str): Path to plate folder
-            suffixes (dict): Dictionary mapping directory types to suffixes
-
-        Returns:
-            dict: Dictionary mapping directory types to Path objects
-        """
-        parent_dir = Path(plate_path).parent
-        plate_name = Path(plate_path).name
-        #parent_dir = Path(parent_dir)
-        dirs = {}
-
-        # Create directories for each suffix
-        for dir_type, suffix in suffixes.items():
-            dir_path = parent_dir / f"{plate_name}{suffix}"
-            FileSystemManager.ensure_directory(dir_path)
-            dirs[dir_type] = dir_path
-
-        return dirs
 
     @staticmethod
     def find_file_recursive(directory: Union[str, Path], filename: str) -> Optional[Path]:
@@ -313,6 +265,37 @@ class FileSystemManager:
         except Exception as e:
             logger.error(f"Error searching for file {filename} in {directory}: {e}")
             return None
+
+    @staticmethod
+    def find_directory_substring_recursive(start_path: Union[str, Path], substring: str) -> Optional[Path]:
+        """
+        Recursively search for a directory containing a substring in its name.
+        Returns the path to the first directory found, or None if not found.
+
+        Args:
+            start_path (str or Path): The directory path to start the search from.
+            substring (str): The substring to search for in directory names.
+
+        Returns:
+            Path or None: Path to the first matching directory, or None if not found.
+        """
+        try:
+            start_path = Path(start_path)
+
+            for root, dirs, files in os.walk(start_path):
+                for dir_name in dirs:
+                    if substring in dir_name:
+                        found_dir_path = Path(root) / dir_name
+                        logger.debug(f"Found directory with substring '{substring}': {found_dir_path}")
+                        return found_dir_path
+
+            # Directory not found
+            logger.debug(f"No directory found containing substring '{substring}' starting from {start_path}")
+            return None
+        except Exception as e:
+            logger.error(f"Error searching for directory with substring '{substring}' in {start_path}: {e}")
+            return None
+
 
     @staticmethod
     def _detect_parser(directory: Union[str, Path]) -> Optional[FilenameParser]:
@@ -532,41 +515,6 @@ class FileSystemManager:
             logger.error(f"Error deleting file {file_path}: {e}")
             return False
 
-    @staticmethod
-    def cleanup_processed_files(processed_files, output_files):
-        """
-        Clean up processed files after they've been used to create output files.
-
-        Args:
-            processed_files (set or list): Set or list of file paths to clean up
-            output_files (list): List of output file paths to preserve
-
-        Returns:
-            int: Number of files successfully removed
-        """
-        removed_count = 0
-
-        # Convert to sets for efficient operations
-        processed_set = set(processed_files)
-        output_set = set(output_files)
-
-        # Only remove files that are in processed_files but not in output_files
-        files_to_remove = processed_set - output_set
-
-        for file_path in files_to_remove:
-            try:
-                path = Path(file_path)
-                if path.exists():
-                    path.unlink()
-                    removed_count += 1
-            except Exception as e:
-                logger.warning("Failed to remove processed file %s: %s", file_path, e)
-
-        if removed_count > 0:
-            logger.info("Cleaned up %d processed files", removed_count)
-
-        return removed_count
-
     #### SMELLY ####
     #### becoming god class ####
     @staticmethod
@@ -599,28 +547,10 @@ class FileSystemManager:
         if target_dir.exists() and overwrite:
             logger.info(f"Removing existing target directory: {target_dir}")
             try:
-                # Use a more robust method to delete the directory
-                # First, try to make all files writable
-                for root, dirs, files in os.walk(target_dir, topdown=False):
-                    for name in files:
-                        file_path = os.path.join(root, name)
-                        try:
-                            os.chmod(file_path, 0o777)
-                        except Exception:
-                            pass
-                    for name in dirs:
-                        dir_path = os.path.join(root, name)
-                        try:
-                            os.chmod(dir_path, 0o777)
-                        except Exception:
-                            pass
-
-                # Then remove the directory
                 shutil.rmtree(target_dir)
             except Exception as e:
                 logger.error(f"Error removing target directory {target_dir}: {e}")
                 logger.info("Continuing without removing the directory...")
-                # Don't return 0, try to continue anyway
 
         # Create target directory
         target_dir.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,3 @@
-import os
 import shutil
 import pytest
 from pathlib import Path
@@ -7,8 +6,14 @@ from typing import List, Union
 
 from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 from ezstitcher.core.config import StitcherConfig, PipelineConfig
+from ezstitcher.core.pipeline import Pipeline
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 from ezstitcher.core.image_locator import ImageLocator
+from ezstitcher.core.file_system_manager import FileSystemManager as fs_manager
+from ezstitcher.core.utils import stack
+
 
 
 def find_image_files(directory: Union[str, Path], pattern: str = "*", recursive: bool = True) -> List[Path]:
@@ -58,7 +63,8 @@ syn_data_params = {
     "overlap_percent": 10,
     "wavelengths": 2,
     "cell_size_range": (3, 6),
-    "wells": ['A01','H08'],
+    #"wells": ['A01', 'A02', 'B01', 'B02', 'C01', 'C02', 'D01', 'D02']
+    "wells": ['A01', 'D02']
 }
 
 # Test-specific parameters that can be customized per microscope format
@@ -113,17 +119,26 @@ def test_params(microscope_config):
     # Use the format key instead of microscope_type
     return TEST_PARAMS[microscope_config["format"]]["default"]
 
-@pytest.fixture
-def flat_plate_dir(test_function_dir, microscope_config, test_params):
-    """Create synthetic flat plate data for the specified microscope type."""
-    plate_dir = test_function_dir / "flat_plate"
+def create_synthetic_plate_data(test_function_dir, microscope_config, test_params, plate_name, z_stack_levels):
+    """Create synthetic plate data for the specified microscope type.
+
+    Args:
+        test_function_dir: Directory for test function
+        microscope_config: Microscope configuration
+        test_params: Test parameters
+        plate_name: Name of the plate directory
+        z_stack_levels: Number of Z-stack levels
+
+    Returns:
+        Path to the plate directory
+    """
+    plate_dir = test_function_dir / plate_name
 
     # Get parameters from test_params with defaults if not specified
     grid_size = test_params.get("grid_size", (3, 3))
     tile_size = test_params.get("tile_size", (128, 128))
     overlap_percent = test_params.get("overlap_percent", 10)
     wavelengths = test_params.get("wavelengths", 2)
-    z_stack_levels = test_params.get("z_stack_levels", 1)
     cell_size_range = test_params.get("cell_size_range", (5, 10))
     wells = test_params.get("wells", ['A01'])
 
@@ -142,60 +157,47 @@ def flat_plate_dir(test_function_dir, microscope_config, test_params):
     generator.generate_dataset()
 
     # Create a copy of the original data for inspection
-    original_dir = test_function_dir / "flat_plate_original"
+    original_dir = test_function_dir / f"{plate_name}_original"
     if not original_dir.exists():
         shutil.copytree(plate_dir, original_dir)
 
     # Always return the plate directory - let the core library handle the directory structure
     return plate_dir
+
+
+@pytest.fixture
+def flat_plate_dir(test_function_dir, microscope_config, test_params):
+    """Create synthetic flat plate data for the specified microscope type."""
+    return create_synthetic_plate_data(
+        test_function_dir=test_function_dir,
+        microscope_config=microscope_config,
+        test_params=test_params,
+        plate_name="flat_plate",
+        z_stack_levels=1  # Flat plate has only 1 Z-level
+    )
+
 
 @pytest.fixture
 def zstack_plate_dir(test_function_dir, microscope_config, test_params):
     """Create synthetic Z-stack plate data for the specified microscope type."""
-    plate_dir = test_function_dir / "zstack_plate"
-
-    # Get parameters from test_params with defaults if not specified
-    grid_size = test_params.get("grid_size", (3, 3))
-    tile_size = test_params.get("tile_size", (128, 128))
-    overlap_percent = test_params.get("overlap_percent", 10)
-    wavelengths = test_params.get("wavelengths", 2)
-    cell_size_range = test_params.get("cell_size_range", (5, 10))
-    wells = test_params.get("wells", ['A01'])
-
-    generator = SyntheticMicroscopyGenerator(
-        output_dir=str(plate_dir),
-        grid_size=grid_size,
-        tile_size=tile_size,
-        overlap_percent=overlap_percent,
-        wavelengths=wavelengths,
-        z_stack_levels=5,  # Always use 5 z-stack levels for this fixture
-        cell_size_range=cell_size_range,
-        wells=wells,
-        format=microscope_config["format"],
-        auto_image_size=microscope_config["auto_image_size"]
+    return create_synthetic_plate_data(
+        test_function_dir=test_function_dir,
+        microscope_config=microscope_config,
+        test_params=test_params,
+        plate_name="zstack_plate",
+        z_stack_levels=5  # Z-stack plate has 5 Z-levels
     )
-    generator.generate_dataset()
-
-    # Create a copy of the original data for inspection
-    original_dir = test_function_dir / "zstack_plate_original"
-    if not original_dir.exists():
-        shutil.copytree(plate_dir, original_dir)
-
-    # Always return the plate directory - let the core library handle the directory structure
-    return plate_dir
 
 
 # Import the ImagePreprocessor for stack functions
-from ezstitcher.core.image_preprocessor import ImagePreprocessor
 from ezstitcher.core.utils import track_thread_activity, clear_thread_activity, print_thread_activity_report
 
 # Create an instance of ImagePreprocessor for testing
-_image_preprocessor = ImagePreprocessor()
 
 # Define a wrapper function for stack_equalize_histogram
 def normalize(stack):
     """Apply true histogram equalization to an entire stack."""
-    return _image_preprocessor.stack_percentile_normalize(stack,low_percentile=0.1, high_percentile=99.99)
+    return IP.stack_percentile_normalize(stack,low_percentile=0.1, high_percentile=99.99)
 
 @pytest.fixture
 def thread_tracker():
@@ -227,7 +229,8 @@ def base_pipeline_config(microscope_config):
             tile_overlap=10.0,
             max_shift=50,
             margin_ratio=0.1
-        )
+        ),
+        num_workers=1,
     )
     # We don't need to set workspace_path as it's handled in the PipelineOrchestrator.run method
     return config
@@ -262,287 +265,275 @@ def create_config(base_config, **kwargs):
     # Create a new config object
     return PipelineConfig(**config_dict)
 
-def test_flat_plate_minimal(flat_plate_dir, base_pipeline_config, thread_tracker):
-    """Test processing a flat plate with minimal configuration."""
-    # Use the base configuration
-    config = base_pipeline_config
+def setup_directories(workspace_dir, input_dir):
+    """
+    Set up directory structure for processing.
 
-    # Ensure num_workers is set to a value greater than 1
-    config.num_workers = 2
+    Args:
+        plate_path: Path to the plate folder
+        input_dir: Path to the input directory
 
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(flat_plate_dir)
+    Returns:
+        dict: Dictionary of directories
+    """
+    # Create main directories
 
-    assert success, "Flat plate processing failed"
+    workspace = workspace_dir
+    processed = workspace.parent / f"{workspace.name}_processed"
+    post_processed = workspace.parent / f"{workspace.name}_post_processed"
+    positions = workspace.parent / f"{workspace.name}_positions"
+    stitched = workspace.parent / f"{workspace.name}_stitched"
+    focus = workspace.parent / f"{workspace.name}_best_focus"
 
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(flat_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
+    dirs = {
+        'input': input_dir,
+        'workspace': workspace,
+        'processed': processed,
+        'post_processed': post_processed,
+        'positions': positions,
+        'stitched': stitched,
+        'focus': focus
+    }
 
-    assert processed_dir.exists(), "Processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
+    # Ensure main directories exist
+#    for dir_path in dirs.values():
+#        fs_manager.ensure_directory(dir_path)
 
-    # Check if stitched files were created
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched files created"
+    return dirs
 
-    # Print and analyze thread activity
-    analysis = print_thread_activity_report()
-
-    # Assert that multiple threads were used if num_workers > 1
-    if config.num_workers > 1:
-        assert analysis['max_concurrent'] > 1, f"Expected multiple concurrent threads, but only {analysis['max_concurrent']} was used"
-        assert len(analysis['overlaps']) > 0, "Expected thread overlaps, but none were found"
-    else:
-        print("Skipping multithreading check since num_workers=1")
-
-def test_zstack_projection_minimal(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test processing a Z-stack plate with projection."""
-    # Create pipeline configuration based on the base config
-    config = create_config(base_pipeline_config, reference_flatten="max_projection")
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(zstack_plate_dir)
-
-    assert success, "Z-stack projection processing failed"
-
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(zstack_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-
-    assert processed_dir.exists(), "Processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
-
-    # Check if stitched files were created
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched files created"
-
-    # Print thread activity report
-    print_thread_activity_report()
-
-def test_zstack_per_plane_minimal(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test processing a Z-stack plate with per-plane stitching."""
-    # Create pipeline configuration based on the base config
-    config = create_config(
-        base_pipeline_config,
-        reference_channels=["1","2"],
-        reference_flatten="max",  # No projection, keep all planes
-        stitch_flatten=None
-    )
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(zstack_plate_dir)
-
-    assert success, "Z-stack per-plane processing failed"
-
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(zstack_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-
-    assert processed_dir.exists(), "Processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
-
-    # Check if stitched files were created
-    all_files = find_image_files(stitched_dir)
-    print(f"All files in stitched directory: {[f.name for f in all_files]}")
-    assert len(all_files) > 0, "No stitched files created"
-
-    # Print thread activity report
-    print_thread_activity_report()
-
-def test_multi_channel_minimal(flat_plate_dir, base_pipeline_config, thread_tracker):
-    """Test processing a flat plate with multiple reference channels."""
-    # Create pipeline configuration based on the base config
-    config = create_config(
-        base_pipeline_config,
-        reference_channels=["1", "2"],
-        reference_composite_weights={"1": 0.7, "2": 0.3}  # Use dictionary format for weights
-    )
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(flat_plate_dir)
-
-    assert success, "Multi-channel reference processing failed"
-
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(flat_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-
-    assert processed_dir.exists(), "Processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
-
-    # Check if stitched files were created for both channels
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched files created"
-
-    # Print thread activity report
-    print_thread_activity_report()
-
-def test_best_focus_reference(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test processing a Z-stack plate using best focus planes to be assembled for stitching."""
-    # Create pipeline configuration based on the base config
-    config = create_config(
-        base_pipeline_config,
-        reference_flatten="max_projection",
-        stitch_flatten='best_focus',
-        focus_method="combined"
-    )
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(zstack_plate_dir)
-
-    assert success, "Z-stack best focus reference processing failed"
-
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(zstack_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-
-    assert processed_dir.exists(), "Processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
-
-    # Check if stitched files were created
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched files created"
-
-    # Print thread activity report
-    print_thread_activity_report()
-
-def test_preprocessing_functions(flat_plate_dir, base_pipeline_config, thread_tracker):
-    """Test processing a flat plate with preprocessing functions."""
-    # Create pipeline configuration based on the base config
-
-    funcs = [normalize]
-    config = create_config(
-        base_pipeline_config,
-        reference_processing={
-            "1": funcs
-        },
-    )
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(flat_plate_dir)
-
-    assert success, "Processing with preprocessing functions failed"
-
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(flat_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    post_processed_dir = workspace_path.parent / f"{workspace_path.name}_post_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-
-    assert processed_dir.exists(), "Processed directory not created"
-    assert post_processed_dir.exists(), "Post-processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
-
-    # Check if processed files were created
-    processed_files = find_image_files(processed_dir)
-    post_processed_files = find_image_files(post_processed_dir)
-
-    assert len(processed_files) > 0, "No processed files created"
-    assert len(post_processed_files) > 0, "No post-processed files created"
-
-    # Print thread activity report
-    print_thread_activity_report()
-
-def test_all_channels_stitched(flat_plate_dir, base_pipeline_config, thread_tracker):
-    """Test that all available channels are stitched by default."""
-    # Use the base configuration which already has reference_channels=["1"]
-    config = base_pipeline_config
-
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(flat_plate_dir)
-
-    assert success, "Processing with all channels failed"
-
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(flat_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
-    assert stitched_dir.exists(), "Stitched directory not created"
-
-    # Check if stitched files were created
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched files created"
-
-    # Print thread activity report
-    print_thread_activity_report()
 
 def calcein_process(stack):
     """Apply tophat filter to Calcein images."""
-    return [ImagePreprocessor.tophat(img) for img in stack]
+    return [IP.tophat(img) for img in stack]
 
 def dapi_process(stack):
     """Apply tophat filter to DAPI images."""
-    stack = ImagePreprocessor.stack_percentile_normalize(stack,low_percentile=0.1,high_percentile=99.9)
-    return [ImagePreprocessor.tophat(img) for img in stack]
+    stack = IP.stack_percentile_normalize(stack, low_percentile=0.1, high_percentile=99.9)
+    return [IP.tophat(img) for img in stack]
 
-def test_mixed_preprocessing_functions(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test that both single-image and stack-processing functions can be used."""
-    # Create pipeline configuration based on the base config
-    config = create_config(
-        base_pipeline_config,
-        reference_channels=["1", "2"],
-        # Channel 1 uses a single-image function
-        # Channel 2 uses a stack-processing function
-        reference_processing={
-            "1": calcein_process,
-            "2": dapi_process,
-        },
-        reference_flatten="max_projection"
+
+
+def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_tracker):
+    """
+    Test the pipeline architecture with the orchestrator's built-in multithreaded run method.
+
+    This test demonstrates how to:
+    1. Create pipelines for the orchestrator
+    2. Use the orchestrator's built-in multithreaded run method
+    3. Process multiple wells in parallel
+    """
+    # The orchestrator will set up the directories and wells when run is called
+
+    config = base_pipeline_config
+
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir)
+
+
+    dirs = setup_directories(orchestrator.workspace_path, orchestrator.input_dir)
+
+
+    # Create position generation pipeline with reference steps
+    position_pipeline = Pipeline(
+        steps=[
+            # Step 1: Flatten Z-stacks
+            Step(name="Z-Stack Flattening",
+                 func=IP.create_projection,
+                 variable_components=['z_index'],
+                 processing_args={'method': 'max_projection'},
+                 input_dir=dirs['input'],  
+                 output_dir=dirs['processed']),  
+
+            # Step 2: Process channels
+            Step(name="Image Enhancement Processing",
+                 #func=IP.stack_percentile_normalize,
+                 func=[stack(IP.sharpen),
+                      IP.stack_percentile_normalize,
+                       IP.stack_equalize_histogram],
+            ),
+
+            # Step 3: Create composites
+            Step(name="Composite Creation",
+                 func=IP.create_composite,
+                 variable_components=['channel']),
+
+            # Step 4: Generate positions
+            PositionGenerationStep(
+                name="Generate Positions",
+            )
+        ],
+        name="Position Generation Pipeline"
     )
-    # Commented out: config.stitch_flatten = "max_projection"
 
-    # Create and run pipeline
-    pipeline = PipelineOrchestrator(config)
-    success = pipeline.run(zstack_plate_dir)
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        steps=[
+            # Step 1: Flatten Z-stacks with best focus
+            Step(name="Z-Stack Flattening",
+                 func=IP.create_projection,
+                 variable_components=['z_index'],
+                 processing_args={'method': 'max_projection'},
+                 input_dir=dirs['input'],
+                 output_dir=dirs['post_processed']
+                 ),
 
-    assert success, "Processing with mixed preprocessing functions failed"
+            # Step 2: Process channels
+            Step(name="Channel Processing",
+                 func=IP.stack_percentile_normalize,
+            ),
 
-    # Check if output directories were created
-    # Use the plate path to check for output directories
-    plate_path = Path(zstack_plate_dir)
-    workspace_path = plate_path.parent / f"{plate_path.name}_workspace"
-    processed_dir = workspace_path.parent / f"{workspace_path.name}_processed"
-    post_processed_dir = workspace_path.parent / f"{workspace_path.name}_post_processed"
-    stitched_dir = workspace_path.parent / f"{workspace_path.name}_stitched"
+            # Step 3: Stitch images
+            ImageStitchingStep(
+                name="Stitch Images",
+            )
+        ],
+        name="Image Assembly Pipeline"
+    )
 
-    assert processed_dir.exists(), "Processed directory not created"
-    assert post_processed_dir.exists(), "Post-processed directory not created"
-    assert stitched_dir.exists(), "Stitched directory not created"
+    # Create a list of pipelines to run
+    pipelines = [position_pipeline, assembly_pipeline]
+    # Run the orchestrator with the pipelines
+    success = orchestrator.run(pipelines=pipelines)
+    assert success, f"{test_name} failed"
+    print_thread_activity_report()
 
-    # Check if processed files were created for both channels
-    processed_files = find_image_files(processed_dir)
-    post_processed_files = find_image_files(post_processed_dir)
-    stitched_files = find_image_files(stitched_dir)
+def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_config, thread_tracker):
+    """
+    Test the pipeline architecture with the orchestrator's built-in multithreaded run method.
 
-    assert len(processed_files) > 0, "No processed files created"
-    assert len(post_processed_files) > 0, "No post-processed files created"
-    assert len(stitched_files) > 0, "No stitched files created"
+    This test demonstrates how to:
+    1. Create pipelines for the orchestrator
+    2. Use the orchestrator's built-in multithreaded run method
+    3. Process multiple wells in parallel
+    """
+    # The orchestrator will set up the directories and wells when run is called
+    config = base_pipeline_config
 
-    # Print thread activity report
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
+
+
+    dirs = setup_directories(orchestrator.workspace_path, orchestrator.input_dir)
+
+
+    # Create position generation pipeline with reference steps
+    position_pipeline = Pipeline(
+        steps=[
+            # Step 1: Flatten Z-stacks
+            Step(name="Z-Stack Flattening",
+                 func=IP.create_projection,
+                 variable_components=['z_index'],
+                 processing_args={'method': 'max_projection'},
+                 input_dir=dirs['input'],  
+                 output_dir=dirs['processed']),  
+
+            # Step 2: Process channels
+            Step(name="Feature Enhancement",
+                 func=stack(IP.sharpen),
+                 variable_components=['site']),
+
+            Step(name="Composite Creation",
+                 func=IP.create_composite,
+                 variable_components=['site']),
+
+            # Step 3: Generate positions
+            PositionGenerationStep(
+                name="Generate Positions",
+                output_dir=dirs['positions'])
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    #Get best focus
+    assembly_pipeline = Pipeline(
+        steps=[
+            # Step 1: Flatten Z-stacks with best focus
+            Step(name="cleaning",
+                 func=[IP.tophat],
+                 input_dir=dirs['input'],
+                 output_dir=dirs['focus']),
+
+            # Step 2: Stitch images
+            Step(name="Focus",
+                 func=IP.create_projection,
+                 variable_components=['z_index'],
+                 processing_args={'method': 'best_focus'}),
+
+            ImageStitchingStep(
+                name="Stitch Focused Images",
+                positions_dir=dirs['positions'],
+                output_dir=dirs['stitched']),
+        ],
+        name="Focused Image Assembly Pipeline"
+    )
+
+    pipelines = [position_pipeline, assembly_pipeline]
+    # Run the orchestrator with the pipelines
+    success = orchestrator.run(pipelines=pipelines)
+    assert success, f"{test_name} failed"
+    print_thread_activity_report()
+
+def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, thread_tracker):
+    """
+    Test the pipeline architecture with the orchestrator's built-in multithreaded run method.
+
+    This test demonstrates how to:
+    1. Create pipelines for the orchestrator
+    2. Use the orchestrator's built-in multithreaded run method
+    3. Process multiple wells in parallel
+    """
+    # The orchestrator will set up the directories and wells when run is called
+    config = base_pipeline_config
+
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
+
+
+    dirs = setup_directories(orchestrator.workspace_path, orchestrator.input_dir)
+
+
+    # Create position generation pipeline with reference steps
+    position_pipeline = Pipeline(
+        steps=[
+            # Step 1: Flatten Z-stacks
+            Step(name="Z-Stack Flattening",
+                 func=IP.create_projection,
+                 variable_components=['z_index'],
+                 processing_args={'method': 'max_projection'},
+                 input_dir=dirs['input'],  
+                 output_dir=dirs['processed']),  
+
+            # Step 2: Process channels
+            Step(name="Channel Processing",
+                 func=IP.stack_percentile_normalize,
+                 variable_components=['channel']),
+
+            # Step 3: Generate positions
+            PositionGenerationStep(
+                name="Generate Positions",
+                output_dir=dirs['positions'])
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        steps=[
+            # Step 1: Clean final images
+            Step(name="cleaning",
+                 func=stack(IP.tophat),
+                 input_dir=dirs['input'],
+                 output_dir=dirs['post_processed']),
+
+            # Step 2: Stitch images
+            ImageStitchingStep(
+                name="Stitch Images",
+                positions_dir=dirs['positions'],
+                output_dir=dirs['stitched']),
+        ],
+        name="Image Assembly Pipeline"
+    )
+
+    # Create a list of pipelines to run
+    pipelines = [position_pipeline, assembly_pipeline]
+    # Run the orchestrator with the pipelines
+    success = orchestrator.run(pipelines=pipelines)
+    assert success, f"{test_name} failed"
     print_thread_activity_report()

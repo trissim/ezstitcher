@@ -409,30 +409,6 @@ class ImagePreprocessor:
         # Convert to uint16
         return equalized_stack.astype(np.uint16)
 
-    @staticmethod
-    def apply_function_to_stack(z_stack, func):
-        """
-        Apply a function to a Z-stack, handling both stack and single-image functions.
-
-        Args:
-            z_stack: Z-stack of images
-            func: Function to apply
-
-        Returns:
-            Processed Z-stack as a list of images, even if there's only one image
-        """
-        try:
-            # Try to apply to the whole stack
-            result = func(z_stack)
-
-            # If result is a list, return it; otherwise wrap in a list
-            return result if isinstance(result, list) else [result]
-
-        except Exception:
-            pass
-
-        # Apply to each image individually
-        return [func(img) for img in z_stack]
 
     @staticmethod
     def create_projection(stack, method="max_projection", focus_analyzer=None):
