@@ -5,7 +5,7 @@ This module contains the Step class and its specialized subclasses for
 different types of processing operations.
 """
 
-from typing import Dict, List, Union, Callable, Any, TypeVar, Optional
+from typing import Dict, List, Union, Callable, Any, TypeVar, Optional, Sequence
 import logging
 from pathlib import Path
 import numpy as np
@@ -56,7 +56,7 @@ class Step:
         input_dir: str = None,
         output_dir: str = None,
         well_filter: WellFilter = None,
-        processing_args: Dict[str, Any] = None,
+        processing_args: Union[Dict[str, Any], List[Dict[str, Any]]] = None,
         name: str = None
     ):
         """
@@ -69,7 +69,9 @@ class Step:
             input_dir: The input directory
             output_dir: The output directory
             well_filter: Wells to process
-            processing_args: Additional arguments to pass to the processing function
+            processing_args: Additional arguments to pass to the processing function.
+                Can be a single dictionary (applied to all functions) or a list of dictionaries
+                (matched with the functions in the func list)
             name: Human-readable name for the step
         """
         self.func = func
@@ -138,14 +140,15 @@ class Step:
             logger.info("Processing well: %s", well)
             well_results = {}
 
-            # Prepare patterns and functions
-            grouped_patterns, component_to_funcs = prepare_patterns_and_functions(
-                patterns, self.func, component=self.group_by
+            # Prepare patterns, functions, and args
+            grouped_patterns, component_to_funcs, component_to_args = prepare_patterns_and_functions(
+                patterns, self.func, self.processing_args, component=self.group_by
             )
 
             # Process each component
             for component_value, component_patterns in grouped_patterns.items():
                 component_func = component_to_funcs[component_value]
+                component_args = component_to_args[component_value]
                 output_files = []
 
                 # Process each pattern
@@ -164,8 +167,15 @@ class Step:
                     if not images:
                         continue  # Skip if no valid images found
 
+                    # Process the images with component-specific args
+                    # Save the current processing_args
+                    original_args = self.processing_args
+                    # Set component-specific args temporarily
+                    self.processing_args = component_args
                     # Process the images
                     images = self._apply_processing(images, func=component_func)
+                    # Restore original args
+                    self.processing_args = original_args
 
                     # Save images and get output files
                     pattern_files = self._save_images(input_dir, output_dir, images, matching_files)
@@ -221,42 +231,77 @@ class Step:
             return []
 
         processing_func = func if func is not None else self.func
-        args_to_pass = self.processing_args or {}
 
         try:
             # Case 1: List of functions - apply sequentially
             if isinstance(processing_func, list):
                 processed_images = images
-                for f in processing_func:
-                    processed_images = self._apply_processing(processed_images, func=f)
-                    # Ensure all images are 2D after each function application
-                    processed_images = [self._ensure_2d(img) for img in processed_images]
+
+                # Check if processing_args is a list matching the functions
+                if isinstance(self.processing_args, list) and len(self.processing_args) > 0:
+                    # Apply each function with its corresponding args
+                    for i, f in enumerate(processing_func):
+                        # Get args for this function (use empty dict if index out of range)
+                        func_args = self.processing_args[i] if i < len(self.processing_args) else {}
+                        # Apply the function with its specific args
+                        result = self._apply_single_function(processed_images, f, func_args)
+                        processed_images = [self._ensure_2d(img) for img in result]
+                else:
+                    # Use the same args for all functions
+                    args_to_pass = self.processing_args or {}
+                    for f in processing_func:
+                        result = self._apply_single_function(processed_images, f, args_to_pass)
+                        processed_images = [self._ensure_2d(img) for img in result]
+
                 return processed_images
 
             # Case 2: Single callable function
-            elif callable(processing_func):
-                result = processing_func(images, **args_to_pass)
+            if callable(processing_func):
+                args_to_pass = self.processing_args or {}
+                if isinstance(args_to_pass, list) and len(args_to_pass) > 0:
+                    # If processing_args is a list but func is a single function, use the first item
+                    args_to_pass = args_to_pass[0]
 
-                # Handle different return types
-                if isinstance(result, list):
-                    return [self._ensure_2d(img) for img in result]
-                if isinstance(result, np.ndarray):
-                    logger.warning("Function %s returned a single image instead of a list. Wrapping it.",
-                                  getattr(processing_func, '__name__', 'unknown'))
-                    return [self._ensure_2d(result)]
-
-                # Unexpected return type
-                logger.error("Function %s returned an unexpected type (%s). Returning original images.",
-                            getattr(processing_func, '__name__', 'unknown'), type(result).__name__)
-                return images
+                return self._apply_single_function(images, processing_func, args_to_pass)
 
             # Case 3: Invalid function
-            else:
-                logger.warning("No valid processing function provided. Returning original images.")
-                return images
+            logger.warning("No valid processing function provided. Returning original images.")
+            return images
 
         except Exception as e:
             func_name = getattr(processing_func, '__name__', str(processing_func))
+            logger.exception("Error applying processing function %s: %s", func_name, e)
+            return images
+
+    def _apply_single_function(self, images: List[np.ndarray], func: Callable, args: Dict[str, Any]) -> List[np.ndarray]:
+        """Apply a single processing function with specific args.
+
+        Args:
+            images: List of images to process
+            func: Processing function to apply
+            args: Arguments to pass to the function
+
+        Returns:
+            List of processed images
+        """
+        try:
+            result = func(images, **args)
+
+            # Handle different return types
+            if isinstance(result, list):
+                return result
+            if isinstance(result, np.ndarray):
+                logger.warning("Function %s returned a single image instead of a list. Wrapping it.",
+                              getattr(func, '__name__', 'unknown'))
+                return [result]
+
+            # Unexpected return type
+            logger.error("Function %s returned an unexpected type (%s). Returning original images.",
+                        getattr(func, '__name__', 'unknown'), type(result).__name__)
+            return images
+
+        except Exception as e:
+            func_name = getattr(func, '__name__', str(func))
             logger.exception("Error applying processing function %s: %s", func_name, e)
             return images
 

@@ -1,16 +1,15 @@
+===========
 User Guide
-==========
+===========
+
+This user guide provides a comprehensive overview of EZStitcher, from basic concepts to advanced usage.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Contents:
 
-   file_organization
-   configuration
-   microscope_support
-   image_processing
-   zstack_handling
-   focus_detection
-   stitching
-
-.. include:: ../user_guide.rst
-   :start-line: 4
+   introduction
+   core_concepts
+   basic_usage
+   intermediate_usage
+   advanced_usage

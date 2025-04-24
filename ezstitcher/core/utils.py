@@ -245,29 +245,40 @@ def print_thread_activity_report():
 import numpy as np
 
 
-def prepare_patterns_and_functions(patterns, processing_funcs, component='default'):
+def prepare_patterns_and_functions(patterns, processing_funcs, processing_args=None, component='default'):
     """
-    Prepare patterns and processing functions for processing.
+    Prepare patterns, processing functions, and processing args for processing.
 
-    This function handles two main tasks:
+    This function handles three main tasks:
     1. Ensuring patterns are in a component-keyed dictionary format
     2. Determining which processing functions to use for each component
+    3. Determining which processing args to use for each component
 
     Args:
         patterns (list or dict): Patterns to process, either as a flat list or grouped by component
         processing_funcs (callable, list, dict, optional): Processing functions to apply
+        processing_args (dict, list, or None): Arguments to pass to processing functions
         component (str): Component name for grouping (only used for clarity in the result)
 
     Returns:
-        tuple: (grouped_patterns, component_to_funcs)
+        tuple: (grouped_patterns, component_to_funcs, component_to_args)
             - grouped_patterns: Dictionary mapping component values to patterns
             - component_to_funcs: Dictionary mapping component values to processing functions
+            - component_to_args: Dictionary mapping component values to processing args
     """
     # Fast path: If both patterns and processing_funcs are dictionaries with matching keys,
-    # they're already properly structured, so return them as is
+    # they're already properly structured
     if (isinstance(patterns, dict) and isinstance(processing_funcs, dict) and
             set(patterns.keys()).issubset(set(processing_funcs.keys()))):
-        return patterns, processing_funcs
+        # Check if processing_args is also a dictionary with matching keys
+        if isinstance(processing_args, dict) and set(patterns.keys()).issubset(set(processing_args.keys())):
+            # All three are dictionaries with matching keys
+            return patterns, processing_funcs, processing_args
+        else:
+            # Only patterns and processing_funcs are dictionaries with matching keys
+            # Create a component_to_args dictionary with the same processing_args for all components
+            component_to_args = {comp_value: processing_args for comp_value in patterns.keys()}
+            return patterns, processing_funcs, component_to_args
 
     # Ensure patterns are in a dictionary format
     # If already a dict, use as is; otherwise wrap the list in a dictionary
@@ -275,6 +286,8 @@ def prepare_patterns_and_functions(patterns, processing_funcs, component='defaul
 
     # Determine which processing functions to use for each component
     component_to_funcs = {}
+    # Determine which processing args to use for each component
+    component_to_args = {}
 
     for comp_value in grouped_patterns.keys():
         # Get functions for this component
@@ -288,7 +301,15 @@ def prepare_patterns_and_functions(patterns, processing_funcs, component='defaul
             # Use the same function for all components
             component_to_funcs[comp_value] = processing_funcs
 
-    return grouped_patterns, component_to_funcs
+        # Get args for this component
+        if isinstance(processing_args, dict) and comp_value in processing_args:
+            # Direct mapping for this component
+            component_to_args[comp_value] = processing_args[comp_value]
+        else:
+            # Use the same args for all components
+            component_to_args[comp_value] = processing_args
+
+    return grouped_patterns, component_to_funcs, component_to_args
 
 
 def stack(single_image_func: Callable) -> Callable[[List[np.ndarray], Optional[Dict[str, Any]]], List[np.ndarray]]:

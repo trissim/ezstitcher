@@ -24,7 +24,6 @@ Key Features
    :caption: Getting Started
 
    getting_started/installation
-   getting_started/quickstart
    getting_started/concepts
 
 .. toctree::
