@@ -115,29 +115,7 @@ ProcessingContext
 
       :type: dict
 
-ImageStitchingStep
-----------------
+Specialized Step Classes
+--------------------
 
-.. py:class:: ImageStitchingStep(name="Image Stitching", input_dir=None, positions_dir=None, output_dir=None, processing_args=None)
-
-   A specialized Step for stitching images.
-
-   :param name: Name of the step
-   :type name: str
-   :param input_dir: Input directory
-   :type input_dir: str or Path
-   :param positions_dir: Directory containing position files
-   :type positions_dir: str or Path
-   :param output_dir: Output directory
-   :type output_dir: str or Path
-   :param processing_args: Additional arguments for the processing function
-   :type processing_args: dict
-
-   .. py:method:: process(context)
-
-      Stitch images using the positions file from the context.
-
-      :param context: The processing context
-      :type context: :class:`ProcessingContext`
-      :return: The updated processing context
-      :rtype: :class:`ProcessingContext`
+For documentation on specialized step classes like ``ImageStitchingStep``, see :doc:`steps`.

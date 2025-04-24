@@ -62,3 +62,36 @@ PositionGenerationStep
       :type context: :class:`~ezstitcher.core.pipeline.ProcessingContext`
       :return: The updated processing context
       :rtype: :class:`~ezstitcher.core.pipeline.ProcessingContext`
+
+ImageStitchingStep
+----------------
+
+.. py:class:: ImageStitchingStep(name="Image Stitching", input_dir=None, positions_dir=None, output_dir=None, processing_args=None)
+
+   A specialized Step for stitching images using position files.
+
+   :param name: Name of the step
+   :type name: str
+   :param input_dir: Input directory containing images to stitch
+   :type input_dir: str or Path
+   :param positions_dir: Directory containing position files (optional, can be provided in context)
+   :type positions_dir: str or Path
+   :param output_dir: Output directory for stitched images
+   :type output_dir: str or Path
+   :param processing_args: Additional arguments for the stitching function
+   :type processing_args: dict
+
+   .. py:method:: process(context)
+
+      Stitch images using the positions file from the context.
+
+      This step:
+      1. Locates the positions file for the current well
+      2. Loads images according to the positions file
+      3. Stitches the images together
+      4. Saves the stitched image to the output directory
+
+      :param context: The processing context
+      :type context: :class:`~ezstitcher.core.pipeline.ProcessingContext`
+      :return: The updated processing context
+      :rtype: :class:`~ezstitcher.core.pipeline.ProcessingContext`
