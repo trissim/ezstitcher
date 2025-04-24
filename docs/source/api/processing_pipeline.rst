@@ -14,14 +14,22 @@ For a detailed overview of the pipeline architecture, see :doc:`../development/p
 PipelineOrchestrator
 -------------------
 
-.. py:class:: PipelineOrchestrator(config=None, plate_path=None)
+.. py:class:: PipelineOrchestrator(plate_path=None, workspace_path=None, config=None, fs_manager=None, image_preprocessor=None, focus_analyzer=None)
 
    The central coordinator that manages the execution of multiple pipelines across wells.
 
-   :param config: Configuration for the pipeline orchestrator
-   :type config: :class:`~ezstitcher.core.config.PipelineConfig`
    :param plate_path: Path to the plate folder (optional, can be provided later in run())
    :type plate_path: str or Path
+   :param workspace_path: Path to the workspace folder (optional, defaults to plate_path.parent/plate_path.name_workspace)
+   :type workspace_path: str or Path
+   :param config: Configuration for the pipeline orchestrator
+   :type config: :class:`~ezstitcher.core.config.PipelineConfig`
+   :param fs_manager: File system manager (optional, a new instance will be created if not provided)
+   :type fs_manager: :class:`~ezstitcher.core.file_system_manager.FileSystemManager`
+   :param image_preprocessor: Image preprocessor (optional, a new instance will be created if not provided)
+   :type image_preprocessor: :class:`~ezstitcher.core.image_preprocessor.ImagePreprocessor`
+   :param focus_analyzer: Focus analyzer (optional, a new instance will be created if not provided)
+   :type focus_analyzer: :class:`~ezstitcher.core.focus_analyzer.FocusAnalyzer`
 
    .. py:method:: run(plate_path=None, pipelines=None)
 
@@ -108,14 +116,31 @@ Pipeline
       :return: Self, for method chaining
       :rtype: :class:`Pipeline`
 
-   .. py:method:: run(context)
+   .. py:method:: run(input_dir=None, output_dir=None, well_filter=None, microscope_handler=None, orchestrator=None, positions_file=None)
 
-      Run the pipeline with the given context.
+      Execute the pipeline.
 
-      :param context: The processing context
-      :type context: :class:`ProcessingContext`
-      :return: The updated processing context
-      :rtype: :class:`ProcessingContext`
+      This method can either:
+
+      1. Take individual parameters and create a ProcessingContext internally, or
+      2. Take a pre-configured ProcessingContext object (when called from PipelineOrchestrator)
+
+      The orchestrator parameter is required as it provides access to the microscope handler and other components.
+
+      :param input_dir: Optional input directory override
+      :type input_dir: str or Path
+      :param output_dir: Optional output directory override
+      :type output_dir: str or Path
+      :param well_filter: Optional well filter override
+      :type well_filter: list
+      :param microscope_handler: Optional microscope handler override
+      :type microscope_handler: :class:`~ezstitcher.core.microscope_interfaces.MicroscopeHandler`
+      :param orchestrator: Optional PipelineOrchestrator instance (required)
+      :type orchestrator: :class:`PipelineOrchestrator`
+      :param positions_file: Optional positions file to use for stitching
+      :type positions_file: str or Path
+      :return: The results of the pipeline execution
+      :rtype: dict
 
    .. py:attribute:: input_dir
 
@@ -160,9 +185,9 @@ Step
       Process the step with the given context.
 
       :param context: The processing context
-      :type context: :class:`ProcessingContext`
+      :type context: :class:`~ezstitcher.core.pipeline.ProcessingContext`
       :return: The updated processing context
-      :rtype: :class:`ProcessingContext`
+      :rtype: :class:`~ezstitcher.core.pipeline.ProcessingContext`
 
 PositionGenerationStep
 ---------------------
@@ -185,9 +210,62 @@ PositionGenerationStep
       Generate positions for stitching and store them in the context.
 
       :param context: The processing context
-      :type context: :class:`ProcessingContext`
+      :type context: :class:`~ezstitcher.core.pipeline.ProcessingContext`
       :return: The updated processing context
-      :rtype: :class:`ProcessingContext`
+      :rtype: :class:`~ezstitcher.core.pipeline.ProcessingContext`
+
+.. module:: ezstitcher.core.pipeline
+
+ProcessingContext
+---------------
+
+.. py:class:: ProcessingContext(input_dir=None, output_dir=None, well_filter=None, config=None, **kwargs)
+
+   Maintains state during pipeline execution.
+
+   The ProcessingContext holds input/output directories, well filter, configuration,
+   and results during pipeline execution. It serves as a communication mechanism
+   between steps in a pipeline, allowing each step to access and modify shared state.
+
+   :param input_dir: The input directory
+   :type input_dir: str or Path
+   :param output_dir: The output directory
+   :type output_dir: str or Path
+   :param well_filter: Wells to process
+   :type well_filter: list
+   :param config: Configuration parameters
+   :type config: dict
+   :param **kwargs: Additional context attributes that will be added to the context
+
+   .. py:attribute:: input_dir
+
+      The input directory for processing.
+
+      :type: Path or None
+
+   .. py:attribute:: output_dir
+
+      The output directory for processing results.
+
+      :type: Path or None
+
+   .. py:attribute:: well_filter
+
+      List of wells to process.
+
+      :type: list or None
+
+   .. py:attribute:: config
+
+      Configuration parameters.
+
+      :type: dict
+
+   .. py:attribute:: results
+
+      Processing results.
+
+      :type: dict
 
 ImageStitchingStep
 ----------------
@@ -212,6 +290,6 @@ ImageStitchingStep
       Stitch images using the positions file from the context.
 
       :param context: The processing context
-      :type context: :class:`ProcessingContext`
+      :type context: :class:`~ezstitcher.core.pipeline.ProcessingContext`
       :return: The updated processing context
-      :rtype: :class:`ProcessingContext`
+      :rtype: :class:`~ezstitcher.core.pipeline.ProcessingContext`

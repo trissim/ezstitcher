@@ -50,15 +50,26 @@ The ``PipelineOrchestrator`` is the central coordinator that manages the executi
 
     from ezstitcher.core.config import PipelineConfig
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from ezstitcher.core.file_system_manager import FileSystemManager
+    from ezstitcher.core.image_preprocessor import ImagePreprocessor
+    from ezstitcher.core.focus_analyzer import FocusAnalyzer
 
     # Create configuration
     config = PipelineConfig(
-        reference_channels=["1"],
-        num_workers=2  # Use 2 worker threads
+        reference_channels=["1"],  # Use channel 1 as reference
+        num_workers=2              # Use 2 worker threads
     )
 
-    # Create orchestrator
-    orchestrator = PipelineOrchestrator(config=config, plate_path="path/to/plate")
+    # Create orchestrator with full parameter set
+    # All parameters except config are optional and will be created if not provided
+    orchestrator = PipelineOrchestrator(
+        plate_path="path/to/plate",                # Path to the plate folder
+        workspace_path="path/to/workspace",        # Path to the workspace folder (optional)
+        config=config,                             # Pipeline configuration
+        fs_manager=FileSystemManager(),            # File system manager (optional)
+        image_preprocessor=ImagePreprocessor(),    # Image preprocessor (optional)
+        focus_analyzer=FocusAnalyzer()             # Focus analyzer (optional)
+    )
 
     # Run the orchestrator with pipelines
     success = orchestrator.run(pipelines=[pipeline1, pipeline2])
@@ -74,7 +85,7 @@ A ``Pipeline`` is a sequence of processing steps that are executed in order. It 
 
 .. code-block:: python
 
-    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.pipeline import Pipeline, ProcessingContext
     from ezstitcher.core.steps import Step
 
     # Create a pipeline with steps
@@ -86,7 +97,25 @@ A ``Pipeline`` is a sequence of processing steps that are executed in order. It 
     # Add a step to the pipeline
     pipeline.add_step(step4)
 
-    # Run the pipeline with a context
+    # Method 1: Run the pipeline with individual parameters
+    # The pipeline will create a ProcessingContext internally
+    results = pipeline.run(
+        input_dir="path/to/input",
+        output_dir="path/to/output",
+        well_filter=["A01", "B02"],
+        orchestrator=orchestrator,  # Required - provides access to microscope_handler
+        positions_file="path/to/positions.csv"  # Optional
+    )
+
+    # Method 2: Run the pipeline with a pre-configured context
+    # This is typically used when the pipeline is run from the PipelineOrchestrator
+    context = ProcessingContext(
+        input_dir="path/to/input",
+        output_dir="path/to/output",
+        well_filter=["A01", "B02"],
+        orchestrator=orchestrator,
+        positions_file="path/to/positions.csv"
+    )
     result_context = pipeline.run(context)
 
 Step
@@ -129,24 +158,47 @@ The pipeline architecture supports three patterns for processing functions:
    .. code-block:: python
 
        # Single function
-       step = Step(func=IP.stack_percentile_normalize)
+       # This applies the same function to all images
+       step = Step(
+           name="Normalize Images",
+           func=IP.stack_percentile_normalize,  # Single function to apply
+           variable_components=['channel'],     # Process each channel separately
+           processing_args={                    # Additional arguments for the function
+               'low_percentile': 0.1,
+               'high_percentile': 99.9
+           }
+       )
 
 2. **List of Functions**: A sequence of functions applied one after another to the images
 
    .. code-block:: python
 
        # List of functions
-       step = Step(func=[stack(IP.sharpen), IP.stack_percentile_normalize])
+       # This applies multiple functions in sequence
+       step = Step(
+           name="Enhance Images",
+           func=[
+               stack(IP.sharpen),              # First sharpen the images
+               IP.stack_percentile_normalize   # Then normalize the intensities
+           ],
+           variable_components=['channel'],    # Process each channel separately
+           group_by='site'                     # Group by site for processing
+       )
 
 3. **Dictionary of Functions**: A mapping from component values (like channel numbers) to functions or lists of functions
 
    .. code-block:: python
 
        # Dictionary of functions
+       # This applies different functions to different channels
        step = Step(
-           func={"1": process_dapi, "2": process_calcein},
-           variable_components=['channel'],
-           group_by='channel'
+           name="Channel-Specific Processing",
+           func={
+               "1": process_dapi,      # Apply process_dapi to channel 1
+               "2": process_calcein    # Apply process_calcein to channel 2
+           },
+           variable_components=['channel'],  # Process each channel separately
+           group_by='channel'               # Group by channel for channel-specific processing
        )
 
 This flexibility allows for complex processing workflows to be built from simple, reusable components.
@@ -159,8 +211,43 @@ The relationship between the components is hierarchical:
 1. The ``PipelineOrchestrator`` manages multiple ``Pipeline`` instances
 2. Each ``Pipeline`` contains multiple ``Step`` instances
 3. Each ``Step`` applies processing functions to images
+4. The ``ProcessingContext`` facilitates communication between steps
 
 The ``PipelineOrchestrator`` handles the high-level coordination, such as well detection and multithreading, while the ``Pipeline`` and ``Step`` classes handle the actual image processing.
+
+ProcessingContext
+^^^^^^^^^^^^^^^
+
+The ``ProcessingContext`` is a crucial component that maintains state during pipeline execution. It:
+
+- Holds input/output directories, well filter, and configuration
+- Stores processing results
+- Serves as a communication mechanism between steps
+- Can be extended with additional attributes via kwargs
+
+.. code-block:: python
+
+    from ezstitcher.core.pipeline import ProcessingContext
+
+    # Create a processing context
+    context = ProcessingContext(
+        input_dir="path/to/input",
+        output_dir="path/to/output",
+        well_filter=["A01", "B02"],
+        orchestrator=orchestrator,  # Reference to the PipelineOrchestrator
+        # Additional attributes can be added as kwargs
+        positions_file="path/to/positions.csv",
+        custom_parameter=42
+    )
+
+    # Access attributes
+    print(context.input_dir)
+    print(context.custom_parameter)  # Custom attributes are accessible directly
+
+    # Steps can add results to the context
+    context.results["step1"] = {"processed_files": 10}
+
+When a pipeline runs, it creates a ProcessingContext (or uses one provided) and passes it from step to step. Each step can read from and write to the context, allowing for flexible data flow through the pipeline.
 
 Example Workflow
 --------------
