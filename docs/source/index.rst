@@ -31,13 +31,7 @@ Key Features
    :maxdepth: 2
    :caption: User Guide
 
-   user_guide/file_organization
-   user_guide/configuration
-   user_guide/microscope_support
-   user_guide/image_processing
-   user_guide/zstack_handling
-   user_guide/focus_detection
-   user_guide/stitching
+   user_guide/index
 
 .. toctree::
    :maxdepth: 2

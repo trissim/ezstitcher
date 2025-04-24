@@ -8,6 +8,7 @@ This section provides information for developers who want to contribute to EZSti
 
    architecture
    pipeline_architecture
+   pipeline_refactoring
    extending
    testing
    contributing
