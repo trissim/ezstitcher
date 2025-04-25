@@ -67,7 +67,9 @@ tests/integration/tests_data/
 # Coverage reports
 .coverage
 coverage.xml
+coverage.json
 htmlcov/
+coverage_html/
 
 # Examples directory (if you want to ignore it)
 examples/
