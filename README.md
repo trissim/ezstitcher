@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png" alt="EZStitcher Logo" width="400"/>
+  <img src="https://raw.githubusercontent.com/trissim/ezstitcher/main/https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png" alt="EZStitcher Logo" width="400"/>
 </div>
 
 # EZStitcher
