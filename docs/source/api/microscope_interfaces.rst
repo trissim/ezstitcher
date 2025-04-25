@@ -5,6 +5,8 @@ Microscope Interfaces
 
 This module provides abstract base classes for handling microscope-specific functionality, including filename parsing and metadata handling.
 
+For detailed information on how to extend EZStitcher with support for new microscope types, see :ref:`extending-microscope-types` in the :doc:`../development/extending` guide.
+
 MicroscopeHandler
 -----------------
 

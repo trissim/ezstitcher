@@ -6,19 +6,21 @@ EZStitcher is built on a modular, object-oriented architecture that separates co
 Core Components
 ---------------
 
-.. image:: ../images/architecture.png
-   :alt: EZStitcher Architecture
+.. image:: ../_static/architecture_overview.png
+   :alt: EZStitcher Architecture Overview
    :width: 600px
 
 PipelineOrchestrator
 ^^^^^^^^^^^^^^^^^^^^^
 
-The central coordinator that manages the entire processing workflow. It:
+The central coordinator that manages the execution of multiple pipelines across wells. It:
 
 - Initializes and configures all other components
-- Manages the flow of data through the pipeline
-- Handles high-level operations like well filtering
-- Coordinates the processing of reference and final images
+- Manages the flow of data through the pipelines
+- Handles high-level operations like well filtering and multithreading
+- Coordinates the execution of pipelines for each well
+
+For detailed information on the pipeline architecture, see :doc:`../concepts/architecture_overview`.
 
 MicroscopeHandler
 ^^^^^^^^^^^^^^^^^
@@ -50,8 +52,8 @@ Provides multiple focus detection algorithms for Z-stacks. It:
 - Supports region of interest (ROI) based focus detection
 - Combines multiple metrics for robust focus detection
 
-ImagePreprocessor
-^^^^^^^^^^^^^^^^^
+ImageProcessor
+^^^^^^^^^^^^^^
 
 Handles image normalization, filtering, and compositing. It:
 
@@ -120,10 +122,10 @@ The directory structure of the EZStitcher codebase is as follows:
     │   ├── file_system_manager.py
     │   ├── focus_analyzer.py
     │   ├── image_locator.py
-    │   ├── image_preprocessor.py
+    │   ├── image_processor.py
     │   ├── main.py            # Main entry point
     │   ├── microscope_interfaces.py
-    │   ├── processing_pipeline.py
+    │   ├── pipeline_orchestrator.py
     │   └── stitcher.py
     ├── microscopes/           # Microscope-specific implementations
     │   ├── __init__.py

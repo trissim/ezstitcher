@@ -11,7 +11,7 @@ __version__ = "0.1.0"
 
 # Import classes for instance-based API
 from ezstitcher.core import (
-    ImagePreprocessor,
+    ImageProcessor,
     FocusAnalyzer,
     Stitcher,
     PipelineOrchestrator
@@ -21,6 +21,5 @@ from ezstitcher.core import (
 from ezstitcher.core import (
     StitcherConfig,
     FocusAnalyzerConfig,
-    ImagePreprocessorConfig,
     PipelineConfig
 )

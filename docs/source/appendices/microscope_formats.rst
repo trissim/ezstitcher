@@ -1,7 +1,11 @@
+.. _microscope-formats:
+
 Microscope Formats
 ==================
 
 This page describes the file naming conventions and directory structures for different microscope types supported by EZStitcher.
+
+.. _microscope-imagexpress:
 
 ImageXpress
 -----------
@@ -77,6 +81,8 @@ The metadata contains information about:
 
 Pixel size information is typically stored in the TIFF files themselves.
 
+.. _microscope-opera-phenix:
+
 Opera Phenix
 ------------
 
@@ -88,20 +94,19 @@ Opera Phenix microscopes use the following file naming convention:
 
 For example:
 
-- ``r01c01f001p01-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 1
-- ``r01c01f001p01-ch2sk1fk1fl1.tiff``: Well A01, Channel 2, Field 1, Plane 1
-- ``r01c01f002p01-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 2, Plane 1
-- ``r01c01f001p02-ch1sk1fk1fl1.tiff``: Well A01, Channel 1, Field 1, Plane 2
+- ``r01c01f001p01-ch1sk1fk1fl1.tiff``: Well R01C01, Channel 1, Field 1, Plane 1
+- ``r01c01f001p01-ch2sk1fk1fl1.tiff``: Well R01C01, Channel 2, Field 1, Plane 1
+- ``r01c01f002p01-ch1sk1fk1fl1.tiff``: Well R01C01, Channel 1, Field 2, Plane 1
+- ``r01c01f001p02-ch1sk1fk1fl1.tiff``: Well R01C01, Channel 1, Field 1, Plane 2
 
 Components:
 
-- ``r<row>``: Row number (r01 = A, r02 = B, etc.)
-- ``c<col>``: Column number (c01, c02, etc.)
-- ``ch<channel>``: Channel number (ch1, ch2, etc.)
+- ``r<row>c<col>``: Well identifier (r01c01 = R01C01, r02c03 = R02C03, etc.)
 - ``f<field>``: Field/site number (f001, f002, etc.)
 - ``p<plane>``: Z-plane number (p01, p02, etc.)
+- ``ch<channel>``: Channel number (ch1, ch2, etc.)
 
-Note: The suffixes ``sk1``, ``fk1``, and ``fl1`` are fixed values that represent sequence ID, timepoint ID, and flim ID respectively. These are always expected to be 1 and are not supported as variable components.
+Note: The prefixes ``r``, ``c``, ``f``, ``p``, and ``ch`` are fixed parts of the filename format and should always be lowercase. The suffixes ``sk1``, ``fk1``, and ``fl1`` are fixed values that represent sequence ID, timepoint ID, and flim ID respectively. These are always expected to be 1 and are not supported as variable components.
 
 Directory Structure
 ^^^^^^^^^^^^^^^^^^^
@@ -112,9 +117,9 @@ Opera Phenix typically organizes files in the following structure:
 
     plate_folder/
     ├── Images/
-    │   ├── r01c01f01p01-ch1sk1fk1fl1.tiff
-    │   ├── r01c01f02p01-ch1sk1fk1fl1.tiff
-    │   ├── r01c01f03p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f001p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f002p01-ch1sk1fk1fl1.tiff
+    │   ├── r01c01f003p01-ch1sk1fk1fl1.tiff
     │   └── ...
     ├── Index.xml
     └── ...
@@ -132,6 +137,8 @@ The metadata contains information about:
 - Image resolution (pixel size)
 - Position coordinates for each field
 - Acquisition settings
+
+.. _microscope-automatic-detection:
 
 Automatic Detection
 -------------------
@@ -154,6 +161,8 @@ The detection algorithm:
 3. Samples image filenames and tries to parse them with different parsers
 4. Selects the most likely microscope type based on the results
 
+.. _microscope-adding-support:
+
 Adding Support for New Microscopes
 ----------------------------------
 
@@ -164,6 +173,8 @@ To add support for a new microscope type:
 3. Register the new microscope type in `ezstitcher/microscopes/__init__.py`
 
 See the :doc:`../development/extending` section for details.
+
+.. _microscope-comparison:
 
 Comparison of Microscope Formats
 --------------------------------
@@ -180,16 +191,16 @@ Comparison of Microscope Formats
      - .tiff
    * - Well Format
      - A01, B02, etc.
-     - r01c01, r02c02, etc.
+     - R01C01, R02C02, etc. (stored as r01c01, r02c02 in filenames)
    * - Channel Identifier
      - w1, w2, etc.
-     - ch1, ch2, etc.
+     - ch1, ch2, etc. (lowercase 'ch')
    * - Site/Field Identifier
      - s1, s2, etc.
-     - f1, f2, etc.
+     - f1, f2, etc. (lowercase 'f')
    * - Z-Stack Organization
      - ZStep folders or _z suffix
-     - p1, p2, etc. in filename
+     - p1, p2, etc. in filename (lowercase 'p')
    * - Metadata Format
      - HTD files with SiteRows/SiteColumns
      - XML with PositionX/Y coordinates

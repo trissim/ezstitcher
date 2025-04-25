@@ -68,94 +68,195 @@ For detailed installation instructions, including troubleshooting common issues,
 
 ## Usage Examples
 
-### Quick Start
+### Pipeline Architecture
+
+EZStitcher uses a flexible pipeline architecture composed of three main components:
+
+1. **PipelineOrchestrator**: Coordinates the execution of multiple pipelines across wells
+2. **Pipeline**: A sequence of processing steps
+3. **Step**: A single processing operation (with specialized subclasses)
 
 ```python
-# Simple function-based API for common tasks
-from ezstitcher.core.main import process_plate
-
-# Process a plate folder with automatic microscope detection
-process_plate('path/to/plate_folder', reference_channels=["1"])
-```
-
-### Object-Oriented Pipeline
-
-```python
-from ezstitcher.core.config import PipelineConfig, StitcherConfig
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-
-# Create configuration
-config = PipelineConfig(
-    reference_channels=["1", "2"],  # Use channels 1 and 2 as reference
-    well_filter=["A01", "B02"],    # Only process these wells
-    stitcher=StitcherConfig(
-        tile_overlap=10.0,         # 10% overlap between tiles
-        max_shift=50               # Maximum shift in pixels
-    )
-)
-
-# Create and run the pipeline
-pipeline = PipelineOrchestrator(config)
-pipeline.run("path/to/plate_folder")
-```
-
-### Z-Stack Processing
-
-```python
-from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-
-# Configure Z-stack processing
-config = PipelineConfig(
-    reference_channels=["1"],
-    reference_flatten="max",       # Use max projection for reference
-    stitch_flatten="best_focus",   # Use best focus for final images
-    focus_config=FocusAnalyzerConfig(
-        method="combined",         # Combined focus metrics
-        roi=(100, 100, 200, 200)  # Optional ROI for focus detection
-    )
-)
-
-# Create and run the pipeline
-pipeline = PipelineOrchestrator(config)
-pipeline.run("path/to/plate_folder")
-```
-
-### Custom Image Preprocessing
-
-```python
-import numpy as np
 from ezstitcher.core.config import PipelineConfig
 from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+from ezstitcher.core.pipeline import Pipeline
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+from ezstitcher.core.utils import stack
 
-# Define custom preprocessing functions
-def enhance_contrast(image):
-    """Enhance contrast using percentile normalization."""
-    p_low, p_high = np.percentile(image, (2, 98))
-    return np.clip((image - p_low) * (65535 / (p_high - p_low)), 0, 65535).astype(np.uint16)
-
-# Configure with custom preprocessing
+# Create configuration with worker settings
+# - num_workers: Number of worker threads for parallel processing
+# - reference_composite_weights: Weights for creating composite images for position generation
 config = PipelineConfig(
-    reference_channels=["1"],
-    preprocessing_funcs={"1": enhance_contrast}
+    reference_composite_weights={"1": 1.0},  # Use channel 1 for position generation
+    num_workers=2                           # Use 2 worker threads for parallel processing
 )
 
-# Create and run the pipeline
-pipeline = PipelineOrchestrator(config)
-pipeline.run("path/to/plate_folder")
+# Create orchestrator with configuration and plate path
+# The orchestrator manages the execution of pipelines across wells
+orchestrator = PipelineOrchestrator(config=config, plate_path="path/to/plate")
+
+# The orchestrator automatically creates a workspace directory with symlinks to protect original data
+# Steps will create their output directories as needed
+
+# Create position generation pipeline
+# This pipeline processes images and generates position files for stitching
+position_pipeline = Pipeline(
+    steps=[
+        # Step 1: Flatten Z-stacks using maximum projection
+        # This reduces 3D z-stacks to 2D images for position calculation
+        Step(name="Z-Stack Flattening",
+             func=(IP.create_projection, {'method': 'max_projection'}),  # Function with parameters
+             variable_components=['z_index'],  # Process each z-index separately
+             input_dir=dirs['input'],
+             output_dir=dirs['processed']),
+
+        # Step 2: Enhance images for better feature detection
+        # Apply sharpening followed by normalization to improve contrast
+        Step(name="Image Enhancement",
+             func=[stack(IP.sharpen),           # First sharpen the images
+                  IP.stack_percentile_normalize],  # Then normalize intensity
+        ),
+
+        # Step 3: Generate position files for stitching
+        # This specialized step calculates the relative positions of tiles
+        PositionGenerationStep(
+            output_dir=dirs['positions']  # Save position files here
+        )
+    ],
+    name="Position Generation Pipeline"
+)
+
+# Create image assembly pipeline
+# This pipeline processes and stitches images using the generated positions
+assembly_pipeline = Pipeline(
+    steps=[
+        # Step 1: Flatten Z-stacks for final images
+        # This reduces 3D z-stacks to 2D images for final stitching
+        Step(name="Z-Stack Flattening",
+             func=(IP.create_projection, {'method': 'max_projection'}),  # Function with parameters
+             variable_components=['z_index'],  # Process each z-index separately
+             input_dir=dirs['input'],
+             output_dir=dirs['post_processed']
+        ),
+
+        # Step 2: Normalize channel intensities
+        # This improves image quality and consistency across tiles
+        Step(name="Channel Processing",
+             func=IP.stack_percentile_normalize,  # Normalize intensity based on percentiles
+        ),
+
+        # Step 3: Stitch images using the generated positions
+        # This specialized step combines tiles into a single large image
+        ImageStitchingStep(
+            name="Stitch Images",
+            positions_dir=dirs['positions'],  # Use position files from here
+            output_dir=dirs['stitched']       # Save stitched images here
+        )
+    ],
+    name="Image Assembly Pipeline"
+)
+
+# Run the orchestrator with both pipelines
+# The pipelines will be executed sequentially for each well
+success = orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 ```
 
-For more examples, including command-line usage and advanced configurations, see the [Examples](docs/examples.md) documentation.
+### Z-Stack Processing with Best Focus
+
+```python
+# Create best focus pipeline
+focus_pipeline = Pipeline(
+    steps=[
+        # Step 1: Clean images for focus detection
+        Step(name="Cleaning",
+             func=[IP.tophat],
+             input_dir=dirs['input'],
+             output_dir=dirs['focus']),
+
+        # Step 2: Apply best focus
+        Step(name="Focus",
+             func=(IP.create_projection, {'method': 'best_focus'}),
+             variable_components=['z_index']),
+
+        # Step 3: Stitch focused images
+        ImageStitchingStep(
+            positions_dir=dirs['positions'],
+            output_dir=dirs['stitched']),
+    ],
+    name="Focused Image Assembly Pipeline"
+)
+```
+
+### Channel-Specific Processing
+
+```python
+# Define channel-specific processing functions
+def process_dapi(stack):
+    """Process DAPI channel images."""
+    stack = IP.stack_percentile_normalize(stack, low_percentile=0.1, high_percentile=99.9)
+    return [IP.tophat(img) for img in stack]
+
+def process_calcein(stack):
+    """Process Calcein channel images."""
+    return [IP.tophat(img) for img in stack]
+
+# Create pipeline with channel-specific processing
+pipeline = Pipeline(
+    steps=[
+        # Step with channel-specific processing
+        Step(name="Channel Processing",
+             func={"1": process_dapi, "2": process_calcein},  # Dictionary mapping channels to functions
+             variable_components=['channel'],
+             group_by='channel'  # Group by channel for channel-specific processing
+        )
+    ],
+    name="Channel-Specific Processing Pipeline"
+)
+```
+
+For more examples, see the [User Guide](docs/source/user_guide/index.rst) which contains comprehensive usage examples.
 
 ## Architecture
 
 EZStitcher is built on a modular, object-oriented architecture that separates concerns and enables flexible workflows.
 
+### Pipeline Architecture
+
+The pipeline architecture is composed of three main components:
+
+1. **PipelineOrchestrator**: Coordinates the execution of multiple pipelines across wells
+2. **Pipeline**: A sequence of processing steps
+3. **Step**: A single processing operation (with specialized subclasses)
+
+This hierarchical design allows for complex workflows to be built from simple, reusable components.
+
+```
+┌─────────────────────────────────────────┐
+│            PipelineOrchestrator         │
+│                                         │
+│  ┌─────────┐    ┌─────────┐             │
+│  │ Pipeline│    │ Pipeline│    ...      │
+│  │         │    │         │             │
+│  │ ┌─────┐ │    │ ┌─────┐ │             │
+│  │ │Step │ │    │ │Step │ │             │
+│  │ └─────┘ │    │ └─────┘ │             │
+│  │ ┌─────┐ │    │ ┌─────┐ │             │
+│  │ │Step │ │    │ │Step │ │             │
+│  │ └─────┘ │    │ └─────┘ │             │
+│  │   ...   │    │   ...   │             │
+│  └─────────┘    └─────────┘             │
+└─────────────────────────────────────────┘
+```
+
+The pipeline architecture supports three patterns for processing functions:
+
+1. **Single Function**: A callable that takes a list of images and returns a list of processed images
+2. **List of Functions**: A sequence of functions applied one after another to the images
+3. **Dictionary of Functions**: A mapping from component values (like channel numbers) to functions or lists of functions
+
 ### Core Components
 
-<img src="docs/images/architecture.png" alt="EZStitcher Architecture" width="600"/>
-
-- **PipelineOrchestrator**: Central coordinator that manages the entire processing workflow
 - **MicroscopeHandler**: Handles microscope-specific functionality through composition
 - **Stitcher**: Performs image stitching with subpixel precision
 - **FocusAnalyzer**: Provides multiple focus detection algorithms for Z-stacks
@@ -168,14 +269,17 @@ EZStitcher is built on a modular, object-oriented architecture that separates co
 Each component has a corresponding configuration class that encapsulates its settings:
 
 ```python
-from ezstitcher.core.config import PipelineConfig
+from ezstitcher.core.config import PipelineConfig, StitcherConfig
 
 # Create a configuration with sensible defaults
-config = PipelineConfig()
-
-# Override specific settings
-config.reference_channels = ["1", "2"]
-config.well_filter = ["A01", "B02"]
+config = PipelineConfig(
+    reference_composite_weights={"1": 0.5, "2": 0.5},  # Use channels 1 and 2 with equal weights
+    num_workers=2,
+    stitcher=StitcherConfig(
+        tile_overlap=10.0,
+        max_shift=50
+    )
+)
 ```
 
 ### Microscope Support

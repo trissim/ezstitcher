@@ -73,3 +73,6 @@ docs/build/
 *.tmp
 
 # Keep this section for any future deprecated files
+
+# Planning documents
+plans/

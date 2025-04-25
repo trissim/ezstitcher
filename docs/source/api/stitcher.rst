@@ -5,6 +5,15 @@ Stitcher
 
 This module contains the Stitcher class for handling image stitching operations.
 
+For comprehensive information about the stitching process, including:
+
+* Position generation
+* Image assembly
+* Typical stitching workflows
+* Best practices for stitching
+
+See :ref:`image-stitching-step` in the :doc:`../concepts/specialized_steps` documentation.
+
 Stitcher
 -------
 

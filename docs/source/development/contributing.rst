@@ -79,9 +79,9 @@ Code Style
 
 EZStitcher follows these code style guidelines:
 
-- **PEP 8**: Follow the [PEP 8](https://www.python.org/dev/peps/pep-0008/) style guide
-- **Black**: Use [Black](https://black.readthedocs.io/) for code formatting
-- **isort**: Use [isort](https://pycqa.github.io/isort/) for import sorting
+- **PEP 8**: Follow the `PEP 8 <https://www.python.org/dev/peps/pep-0008/>`_ style guide
+- **Black**: Use `Black <https://black.readthedocs.io/>`_ for code formatting
+- **isort**: Use `isort <https://pycqa.github.io/isort/>`_ for import sorting
 - **Docstrings**: Use Google-style docstrings
 - **Type Hints**: Use type hints for function and method signatures
 

@@ -9,10 +9,13 @@ Core Components
 .. toctree::
    :maxdepth: 2
 
-   processing_pipeline
+   pipeline_orchestrator
+   pipeline
+   steps
    stitcher
    focus_analyzer
-   image_preprocessor
+   image_processor
+   image_processing_operations
    file_system_manager
    image_locator
 

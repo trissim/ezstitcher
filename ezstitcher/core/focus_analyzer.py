@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import logging
-from ezstitcher.core.config import FocusConfig
+from ezstitcher.core.config import FocusAnalyzerConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class FocusAnalyzer:
     the best focused image in a Z-stack. It uses the FileSystemManager for
     image handling to avoid code duplication.
     """
-    def __init__(self, config: FocusConfig):
+    def __init__(self, config: FocusAnalyzerConfig):
         self.config = config
         self.fs_manager = FileSystemManager()
 

@@ -1,30 +1,24 @@
 """
-# Set environment variables to force single-threaded operation in Ashlar
-# This is necessary to avoid conflicts when running in a multithreaded environment
 Stitcher module for ezstitcher.
 
 This module contains the Stitcher class for handling image stitching operations.
 """
 
 import re
+import os
 import logging
-import numpy as np
-import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union, Any
+from typing import List, Optional, Union
 from scipy.ndimage import shift as subpixel_shift
 
+import numpy as np
+import pandas as pd
 from ashlar import fileseries, reg
 
 from ezstitcher.core.config import StitcherConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
-from ezstitcher.core.image_preprocessor import create_linear_weight_mask
+from ezstitcher.core.image_processor import create_linear_weight_mask
 from ezstitcher.core.microscope_interfaces import FilenameParser
-
-import os
-#os.environ['OPENBLAS_NUM_THREADS'] = '1'
-#os.environ['MKL_NUM_THREADS'] = '1'
-#os.environ['OMP_NUM_THREADS'] = '1'
 
 logger = logging.getLogger(__name__)
 
@@ -135,9 +129,7 @@ class Stitcher:
             max_shift = self.config.max_shift
             pixel_size = self.config.pixel_size
 
-            # Log warning if deprecated parameters are used
-            if self.config.tile_overlap_x is not None or self.config.tile_overlap_y is not None:
-                logger.warning("tile_overlap_x and tile_overlap_y are deprecated. Using tile_overlap for both directions.")
+            # Deprecated code removed - we now only use tile_overlap
 
             # Convert overlap from percentage to fraction
             overlap = tile_overlap / 100.0
@@ -290,7 +282,9 @@ class Stitcher:
 
             # Ensure output directory exists
             output_path = Path(output_path)
-            self.fs_manager.ensure_directory(output_path.parent)
+            output_dir = output_path.parent
+            self.fs_manager.ensure_directory(output_dir)
+            logger.info("Ensured output directory exists: %s", output_dir)
 
             # Parse CSV file
             pos_entries = self.parse_positions_csv(positions_path)
