@@ -4,7 +4,7 @@ File Formats
 This appendix provides technical specifications for file formats and directory structures supported by EZStitcher.
 
 Image File Formats
-----------------
+------------------
 
 EZStitcher supports the following image file formats:
 
@@ -26,12 +26,12 @@ EZStitcher supports the following image file formats:
      - Portable Network Graphics format, a lossless compressed image format.
 
 Bit Depth Support
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 EZStitcher currently supports only 16-bit images (uint16, values from 0-65535). Support for 8-bit and 32-bit images may be added in future versions.
 
 Position Files
-------------
+--------------
 
 Position files are CSV files with the following format:
 
@@ -67,12 +67,12 @@ Where:
 - **x, y**: Pixel coordinates in the final stitched image
 
 Metadata Formats
--------------
+---------------
 
 EZStitcher extracts metadata from microscope-specific files:
 
 ImageXpress Metadata
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 ImageXpress metadata is stored in HTD files (text-based) or XML files with the following structure:
 
@@ -108,7 +108,7 @@ HTD files have a similar structure but in a text-based format:
     ...
 
 Opera Phenix Metadata
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 Opera Phenix metadata is stored in the Index.xml file:
 
@@ -133,21 +133,21 @@ Opera Phenix metadata is stored in the Index.xml file:
     </EvaluationInputData>
 
 Output File Structure
-------------------
+-------------------
 
 EZStitcher creates a dynamic directory structure during processing. By default, it follows this pattern:
 
 .. code-block:: text
 
     plate_folder/                 # Original data
-    plate_folder_processed/       # Processed individual tiles
-    plate_folder_post_processed/  # Post-processed images
-    plate_folder_positions/       # CSV files with stitching positions
-    plate_folder_stitched/        # Final stitched images
+    plate_folder_workspace/       # Workspace with symlinks to original images
+    plate_folder_workspace_out/   # Processed individual tiles
+    plate_folder_workspace_positions/  # CSV files with stitching positions
+    plate_folder_workspace_stitched/   # Final stitched images
 
 However, the actual directory structure is determined by the specific steps in your pipeline. Each step can specify its own input and output directories, and the pipeline will create them as needed.
 
 File Naming Conventions
---------------------
+---------------------
 
 For detailed information about file naming conventions for different microscope types, see the :doc:`microscope_formats` appendix.

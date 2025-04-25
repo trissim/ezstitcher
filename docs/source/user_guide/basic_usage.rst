@@ -62,17 +62,15 @@ Now, create a pipeline with three steps. EZStitcher's dynamic directory resoluti
                 output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"  # Intermediate output directory
             ),
 
-            # Step 2: Generate positions for stitching
+            # Generate positions for stitching
             # No need to specify directories - automatically uses previous step's output
-            PositionGenerationStep(
-                name="Generate Positions"
-            ),
+            PositionGenerationStep(),
 
-            # Step 3: Stitch images
-            # No need to specify directories - automatically uses previous step's output
-            # and the pipeline's output directory
+            # Stitch images
+            # By default, uses previous step's output directory (processed images)
+            # Uncomment the input_dir line to use original images for stitching instead
             ImageStitchingStep(
-                name="Stitch Images"
+                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
             )
         ],
         name="Basic Processing Pipeline"
@@ -127,6 +125,7 @@ Here's how directory resolution works:
 
 * Specialized steps like `PositionGenerationStep` and `ImageStitchingStep` have additional logic:
   - `PositionGenerationStep` automatically creates a positions directory if needed
+  - `ImageStitchingStep` follows the standard directory resolution logic, using the previous step's output directory as its input
   - `ImageStitchingStep` automatically finds the positions directory if not specified
 
 This system ensures that data flows coherently through the pipeline, with each step's output feeding into the next step's input.
@@ -334,17 +333,15 @@ Create a Python script with your pipeline configuration:
                     output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"  # Intermediate output directory
                 ),
 
-                # Step 2: Generate positions
+                # Generate positions for stitching
                 # No need to specify directories - automatically uses previous step's output
-                PositionGenerationStep(
-                    name="Generate Positions"
-                ),
+                PositionGenerationStep(),
 
-                # Step 3: Stitch images
-                # No need to specify directories - automatically uses previous step's output
-                # and the pipeline's output directory
+                # Stitch images
+                # By default, uses previous step's output directory (processed images)
+                # Uncomment the input_dir line to use original images for stitching instead
                 ImageStitchingStep(
-                    name="Stitch Images"
+                    # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
                 )
             ],
             name="Basic Processing Pipeline"

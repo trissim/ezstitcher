@@ -28,9 +28,9 @@ When you run a pipeline, EZStitcher creates a directory structure as steps are e
 
     /path/to/plate/                  # Original plate path
     /path/to/plate_workspace/        # Workspace with symlinks to original images
-    /path/to/plate_workspace/_out/   # Processed images (configurable suffix)
-    /path/to/plate_workspace/_positions/  # Position files for stitching (configurable suffix)
-    /path/to/plate_workspace/_stitched/   # Stitched images (configurable suffix)
+    /path/to/plate_workspace_out/    # Processed images (configurable suffix)
+    /path/to/plate_workspace_positions/  # Position files for stitching (configurable suffix)
+    /path/to/plate_workspace_stitched/   # Stitched images (configurable suffix)
 
 This structure ensures that:
 
@@ -69,7 +69,8 @@ EZStitcher automatically resolves directories for steps in a pipeline, minimizin
 
 4. **ImageStitchingStep Behavior**:
    - The ``ImageStitchingStep`` follows the standard directory resolution logic, using the previous step's output directory as its input
-   - By default, its output directory is set to ``{workspace_path}/_stitched``
+   - You can explicitly set ``input_dir=orchestrator.workspace_path`` to use original images for stitching instead of processed images
+   - By default, its output directory is set to ``{workspace_path}_stitched``
    - This ensures stitched images are saved separately from processed individual tiles
 
 Example Directory Flow
@@ -87,20 +88,21 @@ Here's an example of how directories flow through a pipeline:
 
     Step 1 (Z-Stack Flattening):
       input_dir = /data/plates/plate1_workspace
-      output_dir = /data/plates/plate1_workspace/_out  # New directory to protect workspace
+      output_dir = /data/plates/plate1_workspace_out  # New directory to protect workspace
 
     Step 2 (Channel Processing):
-      input_dir = /data/plates/plate1_workspace/_out
-      output_dir = /data/plates/plate1_workspace/_out  # In-place processing
+      input_dir = /data/plates/plate1_workspace_out
+      output_dir = /data/plates/plate1_workspace_out  # In-place processing
 
     Step 3 (Position Generation):
-      input_dir = /data/plates/plate1_workspace/_out
-      output_dir = /data/plates/plate1_workspace/_positions  # New directory for position files
+      input_dir = /data/plates/plate1_workspace_out
+      output_dir = /data/plates/plate1_workspace_positions  # New directory for position files
 
     Step 4 (Image Stitching):
-      input_dir = /data/plates/plate1_workspace/_positions  # Uses previous step's output
-      positions_dir = /data/plates/plate1_workspace/_positions  # Same as input_dir
-      output_dir = /data/plates/plate1_workspace/_stitched  # New directory for stitched images
+      input_dir = /data/plates/plate1_workspace_positions  # Uses previous step's output by default
+      # Alternative: input_dir = /data/plates/plate1_workspace  # Can be set to use original images instead
+      positions_dir = /data/plates/plate1_workspace_positions  # Same as input_dir
+      output_dir = /data/plates/plate1_workspace_stitched  # New directory for stitched images
 
 This automatic directory resolution simplifies pipeline creation and ensures a consistent directory structure.
 
@@ -145,19 +147,13 @@ When initializing steps, follow these best practices for directory specification
 
    .. code-block:: python
 
-       # Position generation step
-       position_step = PositionGenerationStep(
-           name="Generate Positions"
-           # input_dir is automatically set to previous step's output_dir
-           # output_dir is automatically determined
-       )
+       # Directories are automatically determined
+       position_step = PositionGenerationStep()
 
-       # Image stitching step
+       # Directories are automatically determined
        stitch_step = ImageStitchingStep(
-           name="Stitch Images"
-           # input_dir is automatically set to previous step's output_dir
-           # positions_dir is automatically determined
-           # output_dir is automatically determined
+           # Uncomment to use original images instead of processed images:
+           # input_dir=orchestrator.workspace_path
        )
 
 4. **Common Mistakes to Avoid**:
@@ -200,7 +196,6 @@ You can create custom directory structures by explicitly specifying output direc
 
             # Image stitching step: Save to a specific directory
             ImageStitchingStep(
-                name="Stitch Images",
                 # input_dir is automatically set to the previous step's output_dir
                 # positions_dir is automatically determined
                 output_dir=Path("/custom/output/path/stitched")
@@ -222,14 +217,12 @@ For more control over the ImageStitchingStep directories:
 
             # Custom position generation step
             PositionGenerationStep(
-                name="Generate Positions",
                 # input_dir is automatically set
                 output_dir=Path("/custom/positions")  # Custom positions directory
             ),
 
             # Custom image stitching step
             ImageStitchingStep(
-                name="Stitch Images",
                 input_dir=Path("/custom/input"),  # Custom input directory
                 positions_dir=Path("/custom/positions"),  # Custom positions directory
                 output_dir=Path("/custom/stitched")  # Custom output directory
@@ -282,8 +275,8 @@ EZStitcher allows you to configure the directory suffixes used for different typ
         steps=[
             # Steps will use the custom suffixes for their output directories
             Step(name="First Step", func=IP.stack_percentile_normalize, input_dir=orchestrator.workspace_path),
-            PositionGenerationStep(name="Generate Positions"),
-            ImageStitchingStep(name="Stitch Images")
+            PositionGenerationStep(),
+            ImageStitchingStep()
         ]
     )
 
