@@ -11,7 +11,7 @@ from pathlib import Path
 from ezstitcher.core.config import PipelineConfig
 
 # Import the pipeline orchestrator
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 
 def apply_nested_overrides(config_obj, overrides):
     """
