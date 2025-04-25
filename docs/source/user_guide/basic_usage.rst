@@ -7,7 +7,9 @@ This section provides detailed examples of basic EZStitcher usage to help you ge
 Setting Up a Simple Pipeline
 ---------------------------
 
-Let's start by creating a simple pipeline for processing microscopy images. We'll build a basic pipeline that:
+Let's start by creating a simple pipeline for processing microscopy images. For a detailed explanation of pipeline concepts, see :ref:`pipeline-concept`.
+
+We'll build a basic pipeline that:
 
 1. Normalizes image intensities
 2. Generates positions for stitching
@@ -92,43 +94,28 @@ Finally, run the pipeline:
 Understanding Pipeline Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Let's break down the key parameters used in the pipeline:
+For a detailed explanation of pipeline parameters, see :ref:`pipeline-parameters`.
 
-* **name**: A human-readable name for the pipeline or step
-* **func**: The processing function to apply to images
-* **variable_components**: Components that vary across files (e.g., 'channel', 'z_index')
-* **input_dir**: The directory containing input images
-* **output_dir**: The directory where processed images will be saved
-* **positions_dir**: The directory containing position files (for ImageStitchingStep)
+In the example above, we used several key parameters:
+
+* **input_dir**: Set to `orchestrator.workspace_path` to use the workspace directory as input
+* **output_dir**: Set to a custom path for the final stitched images
+* **steps**: A list of processing steps to execute in sequence
+* **name**: A descriptive name for the pipeline for logging purposes
 
 Dynamic Directory Resolution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-EZStitcher features a powerful dynamic directory resolution system that automatically manages the flow of data between pipeline steps:
+EZStitcher features a powerful dynamic directory resolution system that automatically manages the flow of data between pipeline steps. For detailed information on how this works, see :ref:`pipeline-directory-resolution` and :doc:`../concepts/directory_structure`.
 
-1. **Pipeline-Level Directories**: You can set input and output directories at the pipeline level
-2. **Step-Level Directories**: You can override directories for specific steps when needed
-3. **Automatic Resolution**: If directories aren't specified, they're automatically resolved based on the pipeline structure
+In the example above, we leveraged this system by:
 
-Here's how directory resolution works:
+1. Setting the pipeline's input directory to `orchestrator.workspace_path`
+2. Setting the pipeline's output directory to a custom path for stitched images
+3. Only specifying an output directory for the first step (for intermediate processed images)
+4. Letting the specialized steps automatically resolve their directories
 
-* If a step doesn't specify an input directory:
-  - For the first step, it uses the pipeline's input directory
-  - For subsequent steps, it uses the previous step's output directory
-
-* If a step doesn't specify an output directory:
-  - It uses the pipeline's output directory (if specified)
-  - Otherwise, it uses the step's input directory
-
-* If a step specifies an input directory:
-  - The previous step's output directory is updated to match, ensuring coherent data flow
-
-* Specialized steps like `PositionGenerationStep` and `ImageStitchingStep` have additional logic:
-  - `PositionGenerationStep` automatically creates a positions directory if needed
-  - `ImageStitchingStep` follows the standard directory resolution logic, using the previous step's output directory as its input
-  - `ImageStitchingStep` automatically finds the positions directory if not specified
-
-This system ensures that data flows coherently through the pipeline, with each step's output feeding into the next step's input.
+This approach minimizes the need for manual directory management while ensuring that data flows coherently through the pipeline.
 
 Processing a Plate Folder
 ------------------------
@@ -161,7 +148,7 @@ To process only specific wells, use the well_filter parameter:
 Multithreaded Processing
 ^^^^^^^^^^^^^^^^^^^^^^
 
-For faster processing, you can use multiple worker threads:
+For faster processing, you can use multiple worker threads. For detailed information on multithreaded processing, see :ref:`pipeline-multithreaded`.
 
 .. code-block:: python
 
@@ -177,7 +164,6 @@ For faster processing, you can use multiple worker threads:
     )
 
     # Run the pipeline with multithreading
-    # Each well will be processed in a separate thread
     orchestrator.run(pipelines=[pipeline])
 
 Common Image Processing Operations
@@ -288,12 +274,9 @@ In this example:
 Saving and Loading Pipelines
 --------------------------
 
-While EZStitcher doesn't have built-in functions for saving and loading pipelines, you can easily save your pipeline configurations as Python scripts.
+For information on saving and loading pipelines, see :ref:`pipeline-saving-loading`.
 
-Saving a Pipeline as a Script
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Create a Python script with your pipeline configuration:
+Here's a practical example of how to save a pipeline configuration as a reusable function:
 
 .. code-block:: python
 
@@ -307,66 +290,28 @@ Create a Python script with your pipeline configuration:
 
     def create_basic_pipeline(plate_path, num_workers=1):
         """Create a basic processing pipeline."""
-        # Create configuration
-        config = PipelineConfig(
-            num_workers=num_workers
-        )
-
-        # Create orchestrator
-        orchestrator = PipelineOrchestrator(
-            config=config,
-            plate_path=plate_path
-        )
-
-        # The orchestrator automatically manages directories
-        # Directories are created as needed during pipeline execution
+        # Create configuration and orchestrator
+        config = PipelineConfig(num_workers=num_workers)
+        orchestrator = PipelineOrchestrator(config=config, plate_path=plate_path)
 
         # Create pipeline with dynamic directory resolution
         pipeline = Pipeline(
-            input_dir=orchestrator.workspace_path,     # Pipeline input directory (ImageLocator finds actual image directory)
-            output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched", # Pipeline output directory
+            input_dir=orchestrator.workspace_path,
+            output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched",
             steps=[
-                # Step 1: Normalize images
                 Step(
-                    name="Normalize Images",
                     func=IP.stack_percentile_normalize,
-                    output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"  # Intermediate output directory
+                    output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"
                 ),
-
-                # Generate positions for stitching
-                # No need to specify directories - automatically uses previous step's output
                 PositionGenerationStep(),
-
-                # Stitch images
-                # By default, uses previous step's output directory (processed images)
-                # Uncomment the input_dir line to use original images for stitching instead
-                ImageStitchingStep(
-                    # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
-                )
+                ImageStitchingStep()
             ],
             name="Basic Processing Pipeline"
         )
 
         return orchestrator, pipeline
 
-    if __name__ == "__main__":
-        # Example usage
-        plate_path = Path("/path/to/your/plate")
-        orchestrator, pipeline = create_basic_pipeline(plate_path, num_workers=4)
-
-        # Run the pipeline
-        success = orchestrator.run(pipelines=[pipeline])
-
-        if success:
-            print("Pipeline completed successfully!")
-            print(f"Stitched images are in: {orchestrator.plate_path.parent / f'{orchestrator.plate_path.name}_stitched'}")
-        else:
-            print("Pipeline failed. Check logs for details.")
-
-Loading and Using a Saved Pipeline
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Import and use the saved pipeline in another script:
+And here's how to use this saved pipeline in another script:
 
 .. code-block:: python
 
@@ -386,21 +331,15 @@ Import and use the saved pipeline in another script:
     # Run the pipeline
     success = orchestrator.run(pipelines=[pipeline])
 
-    if success:
-        print("Pipeline completed successfully!")
-    else:
-        print("Pipeline failed. Check logs for details.")
-
 Best Practices for Pipeline Scripts
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. **Parameterize your pipelines**: Make key parameters configurable
-2. **Use functions to create pipelines**: Encapsulate pipeline creation in functions
-3. **Document your pipelines**: Add comments explaining the purpose of each step
-4. **Leverage dynamic directory resolution**: Set directories at the pipeline level and only override when necessary
-5. **Use coherent data flow**: Let each step's output feed into the next step's input
-6. **Organize by experiment type**: Create separate scripts for different experiment types
-7. **Version control your scripts**: Keep track of changes to your pipeline configurations
+For a comprehensive list of best practices, see :ref:`pipeline-best-practices`.
+
+When creating pipeline scripts, remember to:
+1. Make your pipelines parameterizable and reusable
+2. Use clear, descriptive names for pipelines and steps
+3. Document your code with comments explaining the purpose of each component
 
 Next Steps
 ---------
@@ -411,3 +350,4 @@ Now that you understand the basics of creating and running pipelines, you can:
 * Explore Z-stack processing and best focus detection
 * Customize your pipelines with channel-specific processing
 * Create more complex workflows with multiple pipelines
+* Review the detailed pipeline concepts in :doc:`../concepts/pipeline`
