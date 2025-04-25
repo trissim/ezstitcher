@@ -23,20 +23,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov coverage
 
       - name: Run tests with coverage
         run: |
+          mkdir -p coverage
           pytest --cov=ezstitcher \
                 --cov-report=xml \
                 --cov-report=json \
                 tests/
+          coverage json -o coverage/coverage-summary.json
 
       - name: Get coverage percentage
         run: |
           COV=$(node -p '
-            const coverage = require("./coverage.json");
-            Math.floor(coverage.totals.percent_covered)
+            const t = require("./coverage/coverage-summary.json").totals;
+            Math.min(t.line_rate * 100, t.branch_rate * 100)
           ')
           echo "COVERAGE=$COV" >> $GITHUB_ENV
 
