@@ -106,16 +106,16 @@ In the example above, we used several key parameters:
 Dynamic Directory Resolution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-EZStitcher features a powerful dynamic directory resolution system that automatically manages the flow of data between pipeline steps. For detailed information on how this works, see :ref:`pipeline-directory-resolution` and :doc:`../concepts/directory_structure`.
+EZStitcher features a powerful dynamic directory resolution system that automatically manages the flow of data between pipeline steps. For detailed information on how this works, see :ref:`directory-resolution`.
 
 In the example above, we leveraged this system by:
 
-1. Setting the pipeline's input directory to `orchestrator.workspace_path`
+1. Setting the pipeline's input directory to `orchestrator.workspace_path` (see :ref:`directory-when-to-specify`)
 2. Setting the pipeline's output directory to a custom path for stitched images
 3. Only specifying an output directory for the first step (for intermediate processed images)
-4. Letting the specialized steps automatically resolve their directories
+4. Letting the specialized steps automatically resolve their directories (see :ref:`directory-step-initialization`)
 
-This approach minimizes the need for manual directory management while ensuring that data flows coherently through the pipeline.
+This approach minimizes the need for manual directory management while ensuring that data flows coherently through the pipeline. For a complete example of directory flow, see :ref:`directory-example-flow`.
 
 Processing a Plate Folder
 ------------------------

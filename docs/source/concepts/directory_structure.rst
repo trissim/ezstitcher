@@ -1,11 +1,17 @@
+.. _directory-structure:
+
 ===================
 Directory Structure
 ===================
+
+.. _directory-overview:
 
 Overview
 --------
 
 EZStitcher uses a structured approach to directory management that balances automation with flexibility. This document explains how directories are managed, resolved, and customized in EZStitcher.
+
+.. _directory-basic-concepts:
 
 Basic Directory Concepts
 -----------------------
@@ -18,6 +24,8 @@ In EZStitcher, several key directories are used during processing:
 * **Output Directory**: Where a step saves processed images
 * **Positions Directory**: Where position files for stitching are saved
 * **Stitched Directory**: Where final stitched images are saved
+
+.. _directory-default-structure:
 
 Default Directory Structure
 -------------------------
@@ -38,6 +46,8 @@ This structure ensures that:
 2. Processed images are kept separate from original images
 3. Position files are stored in a dedicated directory
 4. Stitched images are stored separately from individual processed tiles
+
+.. _directory-resolution:
 
 Directory Resolution
 ------------------
@@ -73,6 +83,8 @@ EZStitcher automatically resolves directories for steps in a pipeline, minimizin
    - By default, its output directory is set to ``{workspace_path}_stitched``
    - This ensures stitched images are saved separately from processed individual tiles
 
+.. _directory-example-flow:
+
 Example Directory Flow
 --------------------
 
@@ -105,6 +117,8 @@ Here's an example of how directories flow through a pipeline:
       output_dir = /data/plates/plate1_workspace_stitched  # New directory for stitched images
 
 This automatic directory resolution simplifies pipeline creation and ensures a consistent directory structure.
+
+.. _directory-step-initialization:
 
 Step Initialization Best Practices
 --------------------------------
@@ -163,6 +177,8 @@ When initializing steps, follow these best practices for directory specification
 
 Following these best practices will make your code more concise and less error-prone, while taking full advantage of EZStitcher's automatic directory resolution.
 
+.. _directory-custom-structures:
+
 Custom Directory Structures
 -------------------------
 
@@ -204,6 +220,8 @@ You can create custom directory structures by explicitly specifying output direc
         name="Custom Directory Pipeline"
     )
 
+.. _directory-customizing-stitching:
+
 Customizing ImageStitchingStep Directories
 ----------------------------------------
 
@@ -231,6 +249,8 @@ For more control over the ImageStitchingStep directories:
         name="Custom Stitching Pipeline"
     )
 
+.. _directory-when-to-specify:
+
 When to Specify Directories Explicitly
 ------------------------------------
 
@@ -249,6 +269,8 @@ When to Specify Directories Explicitly
 4. **Don't specify directories for specialized steps unless needed**:
    - `PositionGenerationStep` and `ImageStitchingStep` have intelligent directory handling
    - They automatically find the right directories based on the pipeline context
+
+.. _directory-configuring-suffixes:
 
 Configuring Directory Suffixes
 -------------------------
@@ -284,6 +306,8 @@ EZStitcher allows you to configure the directory suffixes used for different typ
     orchestrator.run(pipelines=[pipeline])
 
 This allows you to customize the directory structure to match your organization's naming conventions or to integrate with existing workflows.
+
+.. _directory-best-practices:
 
 Directory Structure Best Practices
 --------------------------------
