@@ -1,6 +1,8 @@
 import logging
 import os
 import copy
+import time
+import threading
 import concurrent.futures
 from pathlib import Path
 
@@ -38,11 +40,14 @@ class PipelineOrchestrator:
         self.plate_path = Path(plate_path)
         self.fs_manager = fs_manager or FileSystemManager()
 
-            # Fallback to existing logic if no positions directory is found
-        self.workspace_path = Path((workspace_path or \
-                                  self.config.workspace_path or \
-                                  plate_path.parent / f"{plate_path.name}_workspace"))
-        #logger.info(f"No existing positions directory found, using default workspace path: {self.workspace_path}")
+        # Determine workspace path
+        if workspace_path:
+            workspace_path_to_use = workspace_path
+        else:
+            workspace_path_to_use = plate_path.parent / f"{plate_path.name}_workspace"
+
+        # Convert to Path
+        self.workspace_path = Path(workspace_path_to_use)
 
         logger.info("Detecting microscope type")
         self.microscope_handler = create_microscope_handler('auto', plate_folder=self.plate_path)
@@ -56,7 +61,7 @@ class PipelineOrchestrator:
         self.image_preprocessor = image_preprocessor or ImagePreprocessor()
 
         # Initialize focus analyzer
-        focus_config = self.config.focus_config or FocusAnalyzerConfig(method=self.config.focus_method)
+        focus_config = self.config.focus_config or FocusAnalyzerConfig()
         self.focus_analyzer = focus_analyzer or FocusAnalyzer(focus_config)
 
 
@@ -73,15 +78,12 @@ class PipelineOrchestrator:
         """
         try:
             # Setup
-            #self.microscope_handler.init_workspace(plate_path, workspace_path)
             self.config.grid_size = self.microscope_handler.get_grid_dimensions(self.workspace_path)
             logger.info("Grid size: %s", self.config.grid_size)
             self.config.pixel_size = self.microscope_handler.get_pixel_size(self.workspace_path)
             logger.info("Pixel size: %s", self.config.pixel_size)
-        #    self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
             # Directory setup is handled within pipelines now.
-            # dirs = self._setup_directories(pipelines) # Removed based on feedback
 
             # Get wells to process
             wells = self._get_wells_to_process()
@@ -132,13 +134,7 @@ class PipelineOrchestrator:
                         logger.error("Error processing well %s: %s", well, e, exc_info=True)
 
             # Final cleanup after all wells have been processed
-            # TODO: Re-evaluate cleanup logic. If directories are managed solely
-            # by pipelines, how should cleanup be orchestrated centrally?
-            # This might require pipelines to register cleanup paths or a different strategy.
-            # if self.config.cleanup_processed:
-            #     pass # Placeholder for potential future implementation
-            # if self.config.cleanup_post_processed:
-            #     pass # Placeholder for potential future implementation
+            # Cleanup is now handled by individual pipelines
 
             return True
 
@@ -158,7 +154,6 @@ class PipelineOrchestrator:
             list: List of wells to process
         """
         input_dir = self.input_dir
-        import time
         start_time = time.time()
         logger.info("Finding wells to process in %s", input_dir)
 
@@ -197,13 +192,9 @@ class PipelineOrchestrator:
         logger.info("Processing well %s with pixel size %s", well, self.config.pixel_size)
 
         # Add thread ID information for debugging
-        import threading
         thread_id = threading.get_ident()
         thread_name = threading.current_thread().name
         logger.info("Processing well %s in thread %s (ID: %s)", well, thread_name, thread_id)
-
-        # Directories are managed within the pipelines themselves.
-        # well_dirs = copy.deepcopy(dirs) # Removed
 
         # Stitcher instances will be provided on demand by the orchestrator
         # via the get_stitcher() method, if needed by pipeline steps.
@@ -220,7 +211,6 @@ class PipelineOrchestrator:
                 pipeline.run(
                     well_filter=[well],
                     orchestrator=self
-                    # stitcher argument removed
                 )
 
             logger.info("All pipelines completed for well %s", well)
@@ -241,25 +231,6 @@ class PipelineOrchestrator:
         # Ensure the stitcher is configured using the orchestrator's config
         return Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
 
-    def _setup_directories(self, pipelines):
-        """
-        Ensure that the necessary directories for each pipeline exist
-
-        Args:
-            pipelines: List of pipelines to run for each well
-
-        Returns:
-            list: directories that were ensured
-        """
-        unique_dirs = set()
-        for pipeline in pipelines:
-            unique_dirs.update(pipeline.collect_unique_dirs())
-
-        for dir_path in unique_dirs:
-            self.fs_manager.ensure_directory(dir_path)
-
-        return unique_dirs
-
     def prepare_images(self, plate_path):
         """
         Prepare images by padding filenames and organizing Z-stack folders.
@@ -270,7 +241,6 @@ class PipelineOrchestrator:
         Returns:
             Path: Path to the image directory
         """
-        import time
         start_time = time.time()
 
         # Find the image directory
@@ -400,16 +370,24 @@ class PipelineOrchestrator:
         output_dir = Path(output_dir)
         input_dir = Path(input_dir)
 
+        # Use ImageLocator to find the actual image directory
+        actual_input_dir = ImageLocator.find_image_directory(input_dir)
+        logger.info("Using actual image directory: %s", actual_input_dir)
+
+        # Ensure output directory exists
+        self.fs_manager.ensure_directory(output_dir)
+        logger.info("Ensured output directory exists: %s", output_dir)
+
         # Get patterns for this well
-        all_patterns = self._get_patterns_for_well(well, input_dir)
+        all_patterns = self._get_patterns_for_well(well, actual_input_dir)
         if not all_patterns:
-            raise ValueError(f"No patterns found for well {well}")
+            raise ValueError(f"No patterns found for well {well} in {actual_input_dir}")
 
         # Process each pattern
         for pattern in all_patterns:
             # Find all matching files and skip if none found
             matching_files = self.microscope_handler.parser.path_list_from_pattern(
-                input_dir, pattern)
+                actual_input_dir, pattern)
             if not matching_files:
                 logger.warning("No files found for pattern %s, skipping", pattern)
                 continue
@@ -421,7 +399,7 @@ class PipelineOrchestrator:
             # Assemble the stitched image
             stitcher_to_use.assemble_image(
                 positions_path=positions_file,
-                images_dir=input_dir,
+                images_dir=actual_input_dir,
                 output_path=output_path,
-                override_names=[str(input_dir / f) for f in matching_files]
+                override_names=[str(actual_input_dir / f) for f in matching_files]
             )

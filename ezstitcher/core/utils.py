@@ -245,7 +245,7 @@ def print_thread_activity_report():
 import numpy as np
 
 
-def prepare_patterns_and_functions(patterns, processing_funcs, processing_args=None, component='default'):
+def prepare_patterns_and_functions(patterns, processing_funcs, component='default'):
     """
     Prepare patterns, processing functions, and processing args for processing.
 
@@ -256,8 +256,9 @@ def prepare_patterns_and_functions(patterns, processing_funcs, processing_args=N
 
     Args:
         patterns (list or dict): Patterns to process, either as a flat list or grouped by component
-        processing_funcs (callable, list, dict, optional): Processing functions to apply
-        processing_args (dict, list, or None): Arguments to pass to processing functions
+        processing_funcs (callable, list, dict, tuple, optional): Processing functions to apply.
+            Can be a single callable, a tuple of (callable, kwargs), a list of either,
+            or a dictionary mapping component values to any of these.
         component (str): Component name for grouping (only used for clarity in the result)
 
     Returns:
@@ -274,25 +275,45 @@ def prepare_patterns_and_functions(patterns, processing_funcs, processing_args=N
     component_to_funcs = {}
     component_to_args = {}
 
+    # Helper function to extract function and args from a function item
+    def extract_func_and_args(func_item):
+        if isinstance(func_item, tuple) and len(func_item) == 2 and callable(func_item[0]):
+            # It's a (function, kwargs) tuple
+            return func_item[0], func_item[1]
+        if callable(func_item):
+            # It's just a function, use default args
+            return func_item, {}
+        # Invalid function item
+        logger.warning(
+            "Invalid function item: %s. Expected callable or (callable, kwargs) tuple.",
+            str(func_item)
+        )
+        # Return a dummy function that returns the input unchanged
+        return lambda x, **kwargs: x, {}
+
     for comp_value in grouped_patterns.keys():
-        # Get functions for this component
+        # Get functions and args for this component
         if isinstance(processing_funcs, dict) and comp_value in processing_funcs:
             # Direct mapping for this component
-            component_to_funcs[comp_value] = processing_funcs[comp_value]
+            func_item = processing_funcs[comp_value]
         elif isinstance(processing_funcs, dict) and component == 'channel':
             # For channel grouping, use the channel-specific function if available
-            component_to_funcs[comp_value] = processing_funcs.get(comp_value, processing_funcs)
+            func_item = processing_funcs.get(comp_value, processing_funcs)
         else:
             # Use the same function for all components
-            component_to_funcs[comp_value] = processing_funcs
+            func_item = processing_funcs
 
-        # Get args for this component
-        if isinstance(processing_args, dict) and comp_value in processing_args:
-            # Direct mapping for this component
-            component_to_args[comp_value] = processing_args[comp_value]
+        # Extract function and args
+        if isinstance(func_item, list):
+            # List of functions or function tuples
+            component_to_funcs[comp_value] = func_item
+            # For lists, we'll extract args during processing
+            component_to_args[comp_value] = {}
         else:
-            # Use the same args for all components
-            component_to_args[comp_value] = processing_args
+            # Single function or function tuple
+            func, args = extract_func_and_args(func_item)
+            component_to_funcs[comp_value] = func
+            component_to_args[comp_value] = args
 
     return grouped_patterns, component_to_funcs, component_to_args
 

@@ -8,12 +8,12 @@ This module contains the Step class and its specialized subclasses for the EZSti
 Step
 ----
 
-.. py:class:: Step(func, variable_components=None, group_by=None, input_dir=None, output_dir=None, well_filter=None, processing_args=None, name=None)
+.. py:class:: Step(func, variable_components=None, group_by=None, input_dir=None, output_dir=None, well_filter=None, name=None)
 
    A processing step in a pipeline.
 
-   :param func: The processing function(s) to apply
-   :type func: callable, list, or dict
+   :param func: The processing function(s) to apply. Can be a single callable, a tuple of (function, kwargs), a list of functions or function tuples, or a dictionary mapping component values to functions or function tuples.
+   :type func: callable, tuple, list, or dict
    :param variable_components: Components that vary across files (e.g., 'z_index', 'channel')
    :type variable_components: list
    :param group_by: How to group files for processing (e.g., 'channel', 'site')
@@ -24,8 +24,6 @@ Step
    :type output_dir: str or Path
    :param well_filter: Wells to process
    :type well_filter: list
-   :param processing_args: Additional arguments to pass to the processing function
-   :type processing_args: dict
    :param name: Human-readable name for the step
    :type name: str
 
@@ -41,7 +39,7 @@ Step
 PositionGenerationStep
 ---------------------
 
-.. py:class:: PositionGenerationStep(name="Position Generation", input_dir=None, output_dir=None, processing_args=None)
+.. py:class:: PositionGenerationStep(name="Position Generation", input_dir=None, output_dir=None)
 
    A specialized Step for generating positions.
 
@@ -51,8 +49,6 @@ PositionGenerationStep
    :type input_dir: str or Path
    :param output_dir: Output directory (for positions files)
    :type output_dir: str or Path
-   :param processing_args: Additional arguments for the processing function
-   :type processing_args: dict
 
    .. py:method:: process(context)
 
@@ -66,7 +62,7 @@ PositionGenerationStep
 ImageStitchingStep
 ----------------
 
-.. py:class:: ImageStitchingStep(name="Image Stitching", input_dir=None, positions_dir=None, output_dir=None, processing_args=None)
+.. py:class:: ImageStitchingStep(name="Image Stitching", input_dir=None, positions_dir=None, output_dir=None)
 
    A specialized Step for stitching images using position files.
 
@@ -78,8 +74,6 @@ ImageStitchingStep
    :type positions_dir: str or Path
    :param output_dir: Output directory for stitched images
    :type output_dir: str or Path
-   :param processing_args: Additional arguments for the stitching function
-   :type processing_args: dict
 
    .. py:method:: process(context)
 

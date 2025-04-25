@@ -31,9 +31,10 @@ setup(
         "opencv-python>=4.5.0",
         "PyYAML>=6.0",
     ],
-    entry_points={
-        "console_scripts": [
-            "ezstitcher=ezstitcher.__main__:main",
-        ],
-    },
+    # CLI support is not yet available
+    # entry_points={
+    #     "console_scripts": [
+    #         "ezstitcher=ezstitcher.__main__:main",
+    #     ],
+    # },
 )

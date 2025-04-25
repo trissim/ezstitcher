@@ -224,21 +224,4 @@ ImagePreprocessor
       :return: Histogram-equalized image
       :rtype: numpy.ndarray
 
-ImagePreprocessorConfig
----------------------
 
-.. py:class:: ImagePreprocessorConfig
-
-   Configuration for the ImagePreprocessor class.
-
-   .. py:attribute:: preprocessing_funcs
-      :type: dict
-      :value: {}
-
-      Dictionary mapping channels to preprocessing functions.
-
-   .. py:attribute:: composite_weights
-      :type: dict or None
-      :value: None
-
-      Optional dictionary with weights for each channel in composite images.

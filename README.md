@@ -84,21 +84,20 @@ from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingSt
 from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
 from ezstitcher.core.utils import stack
 
-# Create configuration with reference channels and worker settings
-# - reference_channels: Channels to use for position generation
+# Create configuration with worker settings
 # - num_workers: Number of worker threads for parallel processing
+# - reference_composite_weights: Weights for creating composite images for position generation
 config = PipelineConfig(
-    reference_channels=["1"],  # Use channel 1 as reference
-    num_workers=2              # Use 2 worker threads for parallel processing
+    reference_composite_weights={"1": 1.0},  # Use channel 1 for position generation
+    num_workers=2                           # Use 2 worker threads for parallel processing
 )
 
 # Create orchestrator with configuration and plate path
 # The orchestrator manages the execution of pipelines across wells
 orchestrator = PipelineOrchestrator(config=config, plate_path="path/to/plate")
 
-# Set up directory structure for processing
-# This creates standard directories for input, processed, positions, stitched, etc.
-dirs = orchestrator.setup_directories()
+# The orchestrator automatically creates a workspace directory with symlinks to protect original data
+# Steps will create their output directories as needed
 
 # Create position generation pipeline
 # This pipeline processes images and generates position files for stitching
@@ -221,7 +220,7 @@ pipeline = Pipeline(
 )
 ```
 
-For more examples, see the [Pipeline Examples](docs/examples/pipeline_examples.md) documentation and the integration tests in the `tests/integration` directory.
+For more examples, see the [User Guide](docs/source/user_guide/index.rst) which contains comprehensive usage examples.
 
 ## Architecture
 
@@ -279,7 +278,7 @@ from ezstitcher.core.config import PipelineConfig, StitcherConfig
 
 # Create a configuration with sensible defaults
 config = PipelineConfig(
-    reference_channels=["1", "2"],
+    reference_composite_weights={"1": 0.5, "2": 0.5},  # Use channels 1 and 2 with equal weights
     num_workers=2,
     stitcher=StitcherConfig(
         tile_overlap=10.0,

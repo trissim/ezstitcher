@@ -17,14 +17,18 @@ Key Features
 - **Multiple microscope support**: Works with ImageXpress and Opera Phenix microscopes
 - **Automatic detection**: Automatically detect microscope type and image organization
 - **Object-oriented API**: Clean, modular design for easy customization
-- **Command-line interface**: Easy to use from the command line
 
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started
 
    getting_started/installation
-   getting_started/concepts
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Core Concepts
+
+   concepts/index
 
 .. toctree::
    :maxdepth: 2
@@ -40,21 +44,9 @@ Key Features
 
 .. toctree::
    :maxdepth: 2
-   :caption: Examples
-
-   examples/index
-
-.. toctree::
-   :maxdepth: 2
    :caption: Development
 
    development/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Troubleshooting
-
-   troubleshooting/index
 
 .. toctree::
    :maxdepth: 2

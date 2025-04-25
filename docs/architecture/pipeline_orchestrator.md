@@ -42,18 +42,9 @@ def detect_plate_structure(self, plate_path: Union[str, Path]) -> None:
 
 ### 2. Directory Structure Management
 
-The orchestrator creates and manages the directory structure for processing:
+The orchestrator creates a workspace with symlinks to protect original data. Directory paths are automatically resolved between steps, with each step's output directory becoming the next step's input directory.
 
-```python
-def setup_directories(self) -> Dict[str, Path]:
-    """
-    Set up directory structure for processing.
-
-    Returns:
-        dict: Dictionary of directories
-    """
-    # ...
-```
+> **Note:** The `setup_directories()` method has been removed. Directory paths are now automatically resolved between steps. See the [Directory Structure](../source/concepts/directory_structure.rst) documentation for details.
 
 ### 3. Multithreaded Execution
 
@@ -101,7 +92,7 @@ The orchestrator is configured using a `PipelineConfig` object:
 from ezstitcher.core.config import PipelineConfig, StitcherConfig
 
 config = PipelineConfig(
-    reference_channels=["1", "2"],  # Use channels 1 and 2 as reference
+    reference_composite_weights={"1": 0.5, "2": 0.5},  # Use channels 1 and 2 with equal weights
     well_filter=["A01", "B02"],    # Only process these wells
     stitcher=StitcherConfig(
         tile_overlap=10.0,         # 10% overlap between tiles
@@ -125,7 +116,7 @@ from ezstitcher.core.utils import stack
 
 # Create configuration
 config = PipelineConfig(
-    reference_channels=["1"],
+    reference_composite_weights={"1": 1.0},  # Use channel 1 for position generation
     num_workers=2  # Use 2 worker threads
 )
 
@@ -136,30 +127,29 @@ orchestrator = PipelineOrchestrator(
     config=config                    # Pipeline configuration
 )
 
-# Get directories
-dirs = orchestrator.setup_directories()
-
 # Create position generation pipeline
 position_pipeline = Pipeline(
     steps=[
         # Step 1: Flatten Z-stacks
         Step(name="Z-Stack Flattening",
-             func=IP.create_projection,
+             func=(IP.create_projection, {'method': 'max_projection'}),  # Function tuple with parameters
              variable_components=['z_index'],
-             processing_args={'method': 'max_projection'},
-             input_dir=dirs['input'],
-             output_dir=dirs['processed']),
+             input_dir=orchestrator.workspace_path),  # First step uses workspace_path
+             # output_dir is automatically determined
 
         # Step 2: Process channels
         Step(name="Image Enhancement",
              func=[stack(IP.sharpen),
                   IP.stack_percentile_normalize],
+             # input_dir is automatically set to previous step's output
+             # output_dir is automatically determined
         ),
 
         # Step 3: Generate positions
         PositionGenerationStep(
-            name="Generate Positions",
-            output_dir=dirs['positions']
+            name="Generate Positions"
+            # input_dir is automatically set to previous step's output
+            # output_dir is automatically determined
         )
     ],
     name="Position Generation Pipeline"
@@ -170,23 +160,25 @@ assembly_pipeline = Pipeline(
     steps=[
         # Step 1: Flatten Z-stacks
         Step(name="Z-Stack Flattening",
-             func=IP.create_projection,
+             func=(IP.create_projection, {'method': 'max_projection'}),  # Function tuple with parameters
              variable_components=['z_index'],
-             processing_args={'method': 'max_projection'},
-             input_dir=dirs['input'],
-             output_dir=dirs['post_processed']
+             input_dir=orchestrator.workspace_path  # First step uses workspace_path
+             # output_dir is automatically determined
         ),
 
         # Step 2: Process channels
         Step(name="Channel Processing",
              func=IP.stack_percentile_normalize,
+             # input_dir is automatically set to previous step's output
+             # output_dir is automatically determined
         ),
 
         # Step 3: Stitch images
         ImageStitchingStep(
-            name="Stitch Images",
-            positions_dir=dirs['positions'],
-            output_dir=dirs['stitched']
+            name="Stitch Images"
+            # input_dir is automatically set to previous step's output
+            # positions_dir is automatically determined
+            # output_dir is automatically determined
         )
     ],
     name="Image Assembly Pipeline"
@@ -196,7 +188,7 @@ assembly_pipeline = Pipeline(
 success = orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 ```
 
-For more examples, see the integration tests in the `tests/integration` directory.
+For more examples, see the [User Guide](../source/user_guide/index.rst) which contains comprehensive usage examples.
 
 ## Related Classes
 

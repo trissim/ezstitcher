@@ -12,6 +12,9 @@ Pipeline
 
    A sequence of processing steps that are executed in order.
 
+   For detailed information on pipeline construction, including best practices and different approaches,
+   see :doc:`../concepts/pipeline`.
+
    :param steps: Initial list of steps
    :type steps: list of :class:`~ezstitcher.core.steps.Step`
    :param name: Human-readable name for the pipeline
@@ -19,7 +22,8 @@ Pipeline
 
    .. py:method:: add_step(step)
 
-      Add a step to the pipeline.
+      Add a step to the pipeline. See :doc:`../concepts/pipeline` for best practices on when to use this method
+      versus providing all steps during initialization.
 
       :param step: The step to add
       :type step: :class:`~ezstitcher.core.steps.Step`

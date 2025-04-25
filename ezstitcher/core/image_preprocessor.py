@@ -6,8 +6,6 @@ import tifffile
 from skimage import color, filters, exposure, morphology as morph, transform as trans
 from scipy.ndimage import shift as subpixel_shift
 
-from ezstitcher.core.config import ImagePreprocessorConfig
-
 logger = logging.getLogger(__name__)
 
 

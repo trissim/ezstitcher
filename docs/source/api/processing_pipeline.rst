@@ -53,12 +53,10 @@ PipelineOrchestrator
       :return: True if successful, False otherwise
       :rtype: bool
 
-   .. py:method:: setup_directories()
+   .. note::
 
-      Set up directory structure for processing.
-
-      :return: Dictionary of directories
-      :rtype: dict
+      The ``setup_directories()`` method has been removed. Directory paths are now automatically resolved between steps.
+      See :doc:`../concepts/directory_structure` for details on how EZStitcher manages directories.
 
    .. py:method:: detect_plate_structure(plate_path)
 

@@ -42,38 +42,37 @@ Next, create a configuration and orchestrator:
         plate_path=plate_path
     )
 
-    # Set up directory structure
-    dirs = orchestrator.setup_directories()
+    # The orchestrator automatically manages directories
+    # Directories are created as needed during pipeline execution
 
-Now, create a pipeline with three steps:
+Now, create a pipeline with three steps. EZStitcher's dynamic directory resolution automatically manages the flow of data between steps:
 
 .. code-block:: python
 
     # Create a pipeline
     pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,    # Pipeline input directory (ImageLocator finds actual image directory)
+        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched", # Pipeline output directory
         steps=[
             # Step 1: Normalize image intensities
+            # Only specify directories for the first step if needed
             Step(
                 name="Normalize Images",
                 func=IP.stack_percentile_normalize,
-                variable_components=['channel'],
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"  # Intermediate output directory
             ),
 
             # Step 2: Generate positions for stitching
+            # No need to specify directories - automatically uses previous step's output
             PositionGenerationStep(
-                name="Generate Positions",
-                input_dir=dirs['processed'],
-                output_dir=dirs['positions']
+                name="Generate Positions"
             ),
 
             # Step 3: Stitch images
+            # No need to specify directories - automatically uses previous step's output
+            # and the pipeline's output directory
             ImageStitchingStep(
-                name="Stitch Images",
-                input_dir=dirs['processed'],
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']
+                name="Stitch Images"
             )
         ],
         name="Basic Processing Pipeline"
@@ -88,7 +87,7 @@ Finally, run the pipeline:
 
     if success:
         print("Pipeline completed successfully!")
-        print(f"Stitched images are in: {dirs['stitched']}")
+        print(f"Stitched images are in: {orchestrator.plate_path.parent / f'{orchestrator.plate_path.name}_stitched'}")
     else:
         print("Pipeline failed. Check logs for details.")
 
@@ -103,6 +102,34 @@ Let's break down the key parameters used in the pipeline:
 * **input_dir**: The directory containing input images
 * **output_dir**: The directory where processed images will be saved
 * **positions_dir**: The directory containing position files (for ImageStitchingStep)
+
+Dynamic Directory Resolution
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+EZStitcher features a powerful dynamic directory resolution system that automatically manages the flow of data between pipeline steps:
+
+1. **Pipeline-Level Directories**: You can set input and output directories at the pipeline level
+2. **Step-Level Directories**: You can override directories for specific steps when needed
+3. **Automatic Resolution**: If directories aren't specified, they're automatically resolved based on the pipeline structure
+
+Here's how directory resolution works:
+
+* If a step doesn't specify an input directory:
+  - For the first step, it uses the pipeline's input directory
+  - For subsequent steps, it uses the previous step's output directory
+
+* If a step doesn't specify an output directory:
+  - It uses the pipeline's output directory (if specified)
+  - Otherwise, it uses the step's input directory
+
+* If a step specifies an input directory:
+  - The previous step's output directory is updated to match, ensuring coherent data flow
+
+* Specialized steps like `PositionGenerationStep` and `ImageStitchingStep` have additional logic:
+  - `PositionGenerationStep` automatically creates a positions directory if needed
+  - `ImageStitchingStep` automatically finds the positions directory if not specified
+
+This system ensures that data flows coherently through the pipeline, with each step's output feeding into the next step's input.
 
 Processing a Plate Folder
 ------------------------
@@ -169,11 +196,10 @@ Normalize image intensities to a standard range:
     # Percentile-based normalization
     Step(
         name="Normalize Images",
-        func=IP.stack_percentile_normalize,
-        processing_args={
+        func=(IP.stack_percentile_normalize, {
             'low_percentile': 1.0,  # Bottom 1% becomes black
             'high_percentile': 99.0  # Top 1% becomes white
-        }
+        })
     )
 
 Background Removal
@@ -188,8 +214,7 @@ Remove background using tophat filtering:
     # Apply tophat filter to each image in the stack
     Step(
         name="Remove Background",
-        func=stack(IP.tophat),
-        processing_args={'size': 15}  # Filter size
+        func=(stack(IP.tophat), {'size': 15})  # Function with filter size
     )
 
 Image Sharpening
@@ -202,11 +227,10 @@ Enhance image details:
     # Sharpen images
     Step(
         name="Sharpen Images",
-        func=stack(IP.sharpen),
-        processing_args={
+        func=(stack(IP.sharpen), {
             'sigma': 1.0,  # Gaussian blur sigma
             'amount': 1.5   # Sharpening amount
-        }
+        })
     )
 
 Combining Multiple Operations
@@ -220,14 +244,9 @@ You can apply multiple operations in sequence:
     Step(
         name="Enhance Images",
         func=[
-            stack(IP.tophat),             # First remove background
-            stack(IP.sharpen),            # Then sharpen
-            IP.stack_percentile_normalize  # Finally normalize
-        ],
-        processing_args=[
-            {'size': 15},                  # Args for tophat
-            {'sigma': 1.0, 'amount': 1.5},  # Args for sharpen
-            {'low_percentile': 1.0, 'high_percentile': 99.0}  # Args for normalize
+            (stack(IP.tophat), {'size': 15}),                  # First remove background with args
+            (stack(IP.sharpen), {'sigma': 1.0, 'amount': 1.5}),  # Then sharpen with args
+            (IP.stack_percentile_normalize, {'low_percentile': 1.0, 'high_percentile': 99.0})  # Finally normalize with args
         ]
     )
 
@@ -300,52 +319,50 @@ Create a Python script with your pipeline configuration:
             plate_path=plate_path
         )
 
-        # Set up directory structure
-        dirs = orchestrator.setup_directories()
+        # The orchestrator automatically manages directories
+        # Directories are created as needed during pipeline execution
 
-        # Create pipeline
+        # Create pipeline with dynamic directory resolution
         pipeline = Pipeline(
+            input_dir=orchestrator.workspace_path,     # Pipeline input directory (ImageLocator finds actual image directory)
+            output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched", # Pipeline output directory
             steps=[
                 # Step 1: Normalize images
                 Step(
                     name="Normalize Images",
                     func=IP.stack_percentile_normalize,
-                    variable_components=['channel'],
-                    input_dir=dirs['input'],
-                    output_dir=dirs['processed']
+                    output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"  # Intermediate output directory
                 ),
 
                 # Step 2: Generate positions
+                # No need to specify directories - automatically uses previous step's output
                 PositionGenerationStep(
-                    name="Generate Positions",
-                    input_dir=dirs['processed'],
-                    output_dir=dirs['positions']
+                    name="Generate Positions"
                 ),
 
                 # Step 3: Stitch images
+                # No need to specify directories - automatically uses previous step's output
+                # and the pipeline's output directory
                 ImageStitchingStep(
-                    name="Stitch Images",
-                    input_dir=dirs['processed'],
-                    positions_dir=dirs['positions'],
-                    output_dir=dirs['stitched']
+                    name="Stitch Images"
                 )
             ],
             name="Basic Processing Pipeline"
         )
 
-        return orchestrator, pipeline, dirs
+        return orchestrator, pipeline
 
     if __name__ == "__main__":
         # Example usage
         plate_path = Path("/path/to/your/plate")
-        orchestrator, pipeline, dirs = create_basic_pipeline(plate_path, num_workers=4)
+        orchestrator, pipeline = create_basic_pipeline(plate_path, num_workers=4)
 
         # Run the pipeline
         success = orchestrator.run(pipelines=[pipeline])
 
         if success:
             print("Pipeline completed successfully!")
-            print(f"Stitched images are in: {dirs['stitched']}")
+            print(f"Stitched images are in: {orchestrator.plate_path.parent / f'{orchestrator.plate_path.name}_stitched'}")
         else:
             print("Pipeline failed. Check logs for details.")
 
@@ -364,7 +381,7 @@ Import and use the saved pipeline in another script:
     plate_path = Path("/path/to/your/plate")
 
     # Create the pipeline
-    orchestrator, pipeline, dirs = create_basic_pipeline(
+    orchestrator, pipeline = create_basic_pipeline(
         plate_path=plate_path,
         num_workers=4
     )
@@ -383,8 +400,10 @@ Best Practices for Pipeline Scripts
 1. **Parameterize your pipelines**: Make key parameters configurable
 2. **Use functions to create pipelines**: Encapsulate pipeline creation in functions
 3. **Document your pipelines**: Add comments explaining the purpose of each step
-4. **Organize by experiment type**: Create separate scripts for different experiment types
-5. **Version control your scripts**: Keep track of changes to your pipeline configurations
+4. **Leverage dynamic directory resolution**: Set directories at the pipeline level and only override when necessary
+5. **Use coherent data flow**: Let each step's output feed into the next step's input
+6. **Organize by experiment type**: Create separate scripts for different experiment types
+7. **Version control your scripts**: Keep track of changes to your pipeline configurations
 
 Next Steps
 ---------

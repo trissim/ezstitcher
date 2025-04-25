@@ -5,20 +5,25 @@ Introduction
 What is EZStitcher?
 ------------------
 
-EZStitcher is a Python library for processing and stitching high-throughput microscopy images. It provides a flexible, pipeline-based architecture that allows researchers to create custom image processing workflows for various microscopy data formats.
+EZStitcher is a Python library designed to simplify the processing and stitching of microscopy images. It provides a flexible pipeline architecture that allows researchers to easily process large microscopy datasets, create composite images, flatten Z-stacks, and stitch tiled images together.
 
-Unlike monolithic applications, EZStitcher embraces a modular approach where processing pipelines are built programmatically as Python scripts, giving you complete control over the processing workflow while maintaining simplicity and reusability.
+**Key Features:**
 
-Key Features
------------
+* **Pipeline Architecture**: Organize processing steps in a logical sequence
+* **Automatic Directory Management**: Protect original data while maintaining organized outputs
+* **Flexible Function Handling**: Apply various processing functions in different patterns
+* **Support for Various Microscope Formats**: Work with data from different microscope types
+* **Multithreaded Processing**: Process multiple wells in parallel for faster results
 
-* **Pipeline Architecture**: Build custom processing workflows from reusable components
-* **Microscope Support**: Process images from ImageXpress, Opera Phenix, and other microscopes
-* **Z-Stack Processing**: Handle 3D image stacks with various projection methods
-* **Focus Detection**: Automatically find the best-focused plane in Z-stacks
-* **Channel-Specific Processing**: Apply different processing to different fluorescence channels
-* **Multithreaded Processing**: Process multiple wells in parallel for performance
-* **Extensible Design**: Add custom processing functions and microscope support
+**Use Cases:**
+
+* Processing large microscopy datasets with consistent operations
+* Stitching tiled microscopy images into complete well or plate views
+* Creating composite images from multiple fluorescence channels
+* Flattening Z-stacks into 2D projections
+* Applying custom image processing algorithms to microscopy data
+
+EZStitcher is designed for researchers working with microscopy data who need a flexible, code-based approach to image processing and stitching.
 
 Supported Microscope Types
 ------------------------
@@ -41,18 +46,43 @@ EZStitcher currently supports the following microscope types:
 
 Support for additional microscope types can be added by implementing the appropriate interfaces. See the :doc:`../development/extending` guide for details.
 
-Installation
------------
+Core Architecture Overview
+------------------------
+
+EZStitcher uses a pipeline architecture that organizes processing into a logical sequence of steps.
+
+.. figure:: ../_static/architecture_overview.png
+   :alt: EZStitcher Architecture Overview
+   :width: 80%
+   :align: center
+
+   EZStitcher's pipeline architecture showing the relationship between Orchestrator, Pipeline, and Steps.
+
+The architecture consists of three main components:
+
+* **Pipeline**: A sequence of processing steps that can be applied to microscopy images
+* **Orchestrator**: Manages plate-level operations and provides services to steps
+* **Step**: A single processing operation that can be applied to images
+
+For detailed information about EZStitcher's architecture, see:
+
+* :doc:`../concepts/architecture_overview` - Overview of the architecture
+* :doc:`../concepts/pipeline_orchestrator` - Details about the Orchestrator
+* :doc:`../concepts/pipeline` - Details about Pipelines
+* :doc:`../concepts/step` - Details about Steps
+
+Installation and Setup
+--------------------
 
 Requirements
-^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 * Python 3.11 or higher
 * NumPy, SciPy, scikit-image, pandas, tqdm
 * OpenCV (for image processing)
 
 Installation with pip
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 The recommended way to install EZStitcher is using pip with a virtual environment:
 
@@ -67,7 +97,7 @@ The recommended way to install EZStitcher is using pip with a virtual environmen
     pip install ezstitcher
 
 Installation from source
-^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^
 
 To install the latest development version:
 
@@ -78,7 +108,7 @@ To install the latest development version:
     pip install -e .
 
 Verifying Installation
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^
 
 To verify that EZStitcher is installed correctly:
 
@@ -87,10 +117,10 @@ To verify that EZStitcher is installed correctly:
     import ezstitcher
     print(ezstitcher.__version__)
 
-Quick Start
-----------
+Quick Start Example
+-----------------
 
-Here's a minimal example to get started with EZStitcher:
+Here's a simple example that demonstrates how to create and run a pipeline for processing and stitching microscopy images:
 
 .. code-block:: python
 
@@ -100,57 +130,112 @@ Here's a minimal example to get started with EZStitcher:
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
 
-    # Create configuration
-    config = PipelineConfig(
-        num_workers=1  # Single-threaded for simplicity
-    )
+    # Create configuration with 2 worker threads
+    config = PipelineConfig(num_workers=2)
 
-    # Create orchestrator with plate path
-    orchestrator = PipelineOrchestrator(
-        config=config,
-        plate_path="path/to/plate"
-    )
+    # Create orchestrator with path to microscopy data
+    orchestrator = PipelineOrchestrator(config=config, plate_path="path/to/plate")
 
-    # Set up directory structure
-    dirs = orchestrator.setup_directories()
-
-    # Create a simple pipeline
+    # Create pipeline with processing, position generation, and stitching steps
     pipeline = Pipeline(
         steps=[
-            # Step 1: Process images
-            Step(name="Image Processing",
-                 func=IP.stack_percentile_normalize,
-                 variable_components=['channel']),
-
-            # Step 2: Generate positions
+            # Step 1: Basic processing - normalize image intensities
+            Step(
+                name="Basic Processing",
+                func=IP.stack_percentile_normalize,
+                input_dir=orchestrator.workspace_path
+            ),
+            # Step 2: Generate positions for stitching
             PositionGenerationStep(
-                name="Generate Positions",
-                output_dir=dirs['positions']),
-
-            # Step 3: Stitch images
+                name="Generate Positions"
+            ),
+            # Step 3: Image stitching - combine processed tiles
             ImageStitchingStep(
-                name="Stitch Images",
-                output_dir=dirs['stitched'])
+                name="Stitch Images"
+            )
         ],
-        name="Basic Pipeline"
+        name="Simple Pipeline"
     )
 
     # Run the pipeline
-    success = orchestrator.run(pipelines=[pipeline])
+    orchestrator.run(pipelines=[pipeline])
 
-For more detailed examples, see the :doc:`basic_usage` and :doc:`../examples/pipeline_examples` sections.
+**Step-by-Step Explanation:**
+
+1. We create a configuration with 2 worker threads for parallel processing
+2. We create an orchestrator that points to our microscopy data
+3. We define a pipeline with three steps:
+   - A basic processing step that normalizes image intensities
+   - A position generation step that calculates tile positions
+   - An image stitching step that combines the processed tiles
+4. We run the pipeline using the orchestrator
+
+**Expected Output:**
+
+* Processed images will be saved in the workspace directory with the suffix `/_out` (e.g., `plate_workspace/_out`)
+* Position files will be saved in the workspace directory with the suffix `/_positions` (e.g., `plate_workspace/_positions`)
+* Stitched images will be saved in the workspace directory with the suffix `/_stitched` (e.g., `plate_workspace/_stitched`)
+
+**Common Issues:**
+
+* **Directory Permissions**: Ensure you have write permissions for the output directories
+* **Missing Dependencies**: Make sure all required dependencies are installed
+* **Image Format Issues**: Verify that your images are in a supported format
+
+Key Concepts Preview
+------------------
+
+EZStitcher includes several key concepts that are important to understand for effective use:
+
+* **Pipeline Architecture**: The overall structure of EZStitcher's processing framework
+* **Function Handling Patterns**: Different ways to specify processing functions
+* **Directory Structure and Resolution**: How EZStitcher manages directories
+* **Step Parameters**: How to configure processing steps
+* **Specialized Steps**: Pre-built steps for common tasks
+
+For detailed explanations of these concepts, see the following documentation:
+
+* :doc:`../concepts/architecture_overview` - Overview of the architecture
+* :doc:`../concepts/function_handling` - Function handling patterns
+* :doc:`../concepts/directory_structure` - Directory structure and resolution
+* :doc:`../concepts/step` - Step parameters and configuration
+* :doc:`../concepts/specialized_steps` - Specialized steps for common tasks
 
 How to Use This Guide
 -------------------
 
 This user guide is organized into several sections:
 
-* **Core Concepts**: Explains the fundamental concepts of EZStitcher's pipeline architecture
-* **Basic Usage**: Provides simple examples to get started with EZStitcher
-* **Intermediate Usage**: Covers more advanced topics like Z-stack processing and stitching
+* **Intermediate Usage**: Provides detailed examples of common EZStitcher workflows
 * **Advanced Usage**: Explores custom functions, multithreading, and extensions
-* **Practical Examples**: Shows complete workflows for common use cases
+* **Integration**: Shows how to integrate EZStitcher with other tools
 
-If you're new to EZStitcher, we recommend starting with the :doc:`core_concepts` section to understand the pipeline architecture, then moving on to the :doc:`basic_usage` section for practical examples.
+For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
 
-For API reference documentation, see the :doc:`../api/index` section.
+Next Steps
+---------
+
+Now that you have a basic understanding of EZStitcher, here are some recommendations for next steps:
+
+**For All Users:**
+
+* Read the :doc:`intermediate_usage` guide for detailed examples
+* Explore the concepts documentation to understand the core architecture
+
+**For Intermediate Users:**
+
+* Explore :doc:`../concepts/function_handling` to learn about advanced function patterns
+* Learn about :doc:`../concepts/directory_structure` to understand how directories are managed
+
+**For Advanced Users:**
+
+* Dive into :doc:`../concepts/pipeline` to create custom pipelines
+* Study :doc:`../concepts/step` to understand step parameters in detail
+
+**Getting Help:**
+
+* Consult the documentation for detailed information
+* Check the GitHub repository for issues and updates
+* Join the community for support and discussions
+
+EZStitcher provides a flexible framework for processing and stitching microscopy images. By understanding its core concepts and architecture, you can create powerful pipelines tailored to your specific needs.

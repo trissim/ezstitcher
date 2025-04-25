@@ -21,6 +21,5 @@ from ezstitcher.core import (
 from ezstitcher.core import (
     StitcherConfig,
     FocusAnalyzerConfig,
-    ImagePreprocessorConfig,
     PipelineConfig
 )

@@ -17,7 +17,6 @@ from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 from ezstitcher.core.config import (
     StitcherConfig,
     FocusAnalyzerConfig,
-    ImagePreprocessorConfig,
     PipelineConfig
 )
 

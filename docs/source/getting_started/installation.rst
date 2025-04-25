@@ -149,11 +149,4 @@ Windows with WSL
 Getting Started
 ------------
 
-After installation, you can verify and use EZStitcher:
-
-.. code-block:: bash
-
-    # Run EZStitcher with help flag to see available options
-    python -m ezstitcher --help
-
-For a quick introduction to using EZStitcher, see the :doc:`quickstart` guide.
+After installation, you can start using EZStitcher through its Python API. For a quick introduction, see the :doc:`../user_guide/introduction` guide.

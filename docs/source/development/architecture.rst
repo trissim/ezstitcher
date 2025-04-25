@@ -20,7 +20,7 @@ The central coordinator that manages the execution of multiple pipelines across 
 - Handles high-level operations like well filtering and multithreading
 - Coordinates the execution of pipelines for each well
 
-For detailed information on the new pipeline architecture, see :doc:`pipeline_architecture`.
+For detailed information on the pipeline architecture, see :doc:`../concepts/architecture_overview`.
 
 MicroscopeHandler
 ^^^^^^^^^^^^^^^^^

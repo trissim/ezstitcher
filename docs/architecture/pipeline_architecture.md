@@ -75,7 +75,7 @@ This flexibility allows for complex processing workflows to be built from simple
 
 ## Example Usage
 
-For examples of using the pipeline architecture, see the [Pipeline Examples](../examples/pipeline_examples.md) documentation and the integration tests in the `tests/integration` directory.
+For examples of using the pipeline architecture, see the [User Guide](../source/user_guide/index.rst) which contains comprehensive usage examples.
 
 ## Next Steps
 

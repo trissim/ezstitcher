@@ -155,7 +155,7 @@ context = ProcessingContext(
 result_context = pipeline.run(context)
 ```
 
-For more examples, see the integration tests in the `tests/integration` directory.
+For more examples, see the [User Guide](../source/user_guide/index.rst) which contains comprehensive usage examples.
 
 ## Related Classes
 

@@ -67,7 +67,7 @@ def _apply_processing(self, images: List[np.ndarray], func: Optional[ProcessingF
     """Apply processing function(s) to a stack (list) of images.
 
     Note: This method only handles single functions or lists of functions.
-    Dictionary mapping of functions to component values is handled by 
+    Dictionary mapping of functions to component values is handled by
     prepare_patterns_and_functions before this method is called.
 
     Args:
@@ -229,7 +229,7 @@ stitching_step = ImageStitchingStep(
 )
 ```
 
-For more examples, see the integration tests in the `tests/integration` directory.
+For more examples, see the [User Guide](../source/user_guide/index.rst) which contains comprehensive usage examples.
 
 ## Related Classes
 

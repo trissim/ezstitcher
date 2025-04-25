@@ -156,10 +156,8 @@ def create_synthetic_plate_data(test_function_dir, microscope_config, test_param
     )
     generator.generate_dataset()
 
-    # Create a copy of the original data for inspection
-    original_dir = test_function_dir / f"{plate_name}_original"
-    if not original_dir.exists():
-        shutil.copytree(plate_dir, original_dir)
+    # No longer creating a copy of the original data
+    # This helps keep the test directories cleaner
 
     # Always return the plate directory - let the core library handle the directory structure
     return plate_dir
@@ -222,9 +220,6 @@ def thread_tracker():
 def base_pipeline_config(microscope_config):
     """Create a base pipeline configuration with default values."""
     config = PipelineConfig(
-        reference_channels=["1"],
-        cleanup_processed=False,
-        cleanup_post_processed=False,
         stitcher=StitcherConfig(
             tile_overlap=10.0,
             max_shift=50,
@@ -232,7 +227,6 @@ def base_pipeline_config(microscope_config):
         ),
         num_workers=1,
     )
-    # We don't need to set workspace_path as it's handled in the PipelineOrchestrator.run method
     return config
 
 def create_config(base_config, **kwargs):
@@ -248,58 +242,12 @@ def create_config(base_config, **kwargs):
     # Create a copy of the base config dict
     config_dict = base_config.__dict__.copy()
 
-    # Handle special case for reference_composite_weights
-    if 'reference_composite_weights' in kwargs and isinstance(kwargs['reference_composite_weights'], dict):
-        # Convert dictionary weights to a list
-        weights_dict = kwargs['reference_composite_weights']
-        channels = kwargs.get('reference_channels', config_dict.get('reference_channels', []))
-
-        # Create a list of weights in the same order as channels
-        weights_list = [weights_dict.get(channel, 0.0) for channel in channels]
-        kwargs['reference_composite_weights'] = weights_list
-
     # Override with new values
     for key, value in kwargs.items():
         config_dict[key] = value
 
     # Create a new config object
     return PipelineConfig(**config_dict)
-
-def setup_directories(workspace_dir, input_dir):
-    """
-    Set up directory structure for processing.
-
-    Args:
-        plate_path: Path to the plate folder
-        input_dir: Path to the input directory
-
-    Returns:
-        dict: Dictionary of directories
-    """
-    # Create main directories
-
-    workspace = workspace_dir
-    processed = workspace.parent / f"{workspace.name}_processed"
-    post_processed = workspace.parent / f"{workspace.name}_post_processed"
-    positions = workspace.parent / f"{workspace.name}_positions"
-    stitched = workspace.parent / f"{workspace.name}_stitched"
-    focus = workspace.parent / f"{workspace.name}_best_focus"
-
-    dirs = {
-        'input': input_dir,
-        'workspace': workspace,
-        'processed': processed,
-        'post_processed': post_processed,
-        'positions': positions,
-        'stitched': stitched,
-        'focus': focus
-    }
-
-    # Ensure main directories exist
-#    for dir_path in dirs.values():
-#        fs_manager.ensure_directory(dir_path)
-
-    return dirs
 
 
 def calcein_process(stack):
@@ -328,38 +276,31 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
 
     orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir)
 
-
-    dirs = setup_directories(orchestrator.workspace_path, orchestrator.input_dir)
-
-
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
         steps=[
             # Step 1: Flatten Z-stacks
             Step(name="Z-Stack Flattening",
-                 func=IP.create_projection,
+                 func=(IP.create_projection, {'method': 'max_projection'}),
                  variable_components=['z_index'],
-                 processing_args={'method': 'max_projection'},
-                 input_dir=dirs['input'],  
-                 output_dir=dirs['processed']),  
+                 input_dir=orchestrator.workspace_path),
 
-            # Step 2: Process channels
+            # Step 2: Process channels with a sequence of functions and their parameters
             Step(name="Image Enhancement Processing",
-                 #func=IP.stack_percentile_normalize,
-                 func=[stack(IP.sharpen),
-                      IP.stack_percentile_normalize,
-                       IP.stack_equalize_histogram],
+                 func=[
+                     (stack(IP.sharpen), {'amount': 1.5}),
+                     (IP.stack_percentile_normalize, {'low_percentile': 0.5, 'high_percentile': 99.5}),
+                     IP.stack_equalize_histogram  # No parameters needed
+                 ],
             ),
 
-            # Step 3: Create composites
+            # Step 3: Create composites (must use variable_components=['channel'])
             Step(name="Composite Creation",
-                 func=IP.create_composite,
+                 func=(IP.create_composite, {'weights': [0.7, 0.3]}),
                  variable_components=['channel']),
 
             # Step 4: Generate positions
-            PositionGenerationStep(
-                name="Generate Positions",
-            )
+            PositionGenerationStep()
         ],
         name="Position Generation Pipeline"
     )
@@ -369,11 +310,9 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
         steps=[
             # Step 1: Flatten Z-stacks with best focus
             Step(name="Z-Stack Flattening",
-                 func=IP.create_projection,
+                 func=(IP.create_projection, {'method': 'max_projection'}),
                  variable_components=['z_index'],
-                 processing_args={'method': 'max_projection'},
-                 input_dir=dirs['input'],
-                 output_dir=dirs['post_processed']
+                 input_dir=orchestrator.workspace_path
                  ),
 
             # Step 2: Process channels
@@ -382,9 +321,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
             ),
 
             # Step 3: Stitch images
-            ImageStitchingStep(
-                name="Stitch Images",
-            )
+            ImageStitchingStep()
         ],
         name="Image Assembly Pipeline"
     )
@@ -393,7 +330,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
     pipelines = [position_pipeline, assembly_pipeline]
     # Run the orchestrator with the pipelines
     success = orchestrator.run(pipelines=pipelines)
-    assert success, f"{test_name} failed"
+    assert success, "Pipeline execution failed"
     print_thread_activity_report()
 
 def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_config, thread_tracker):
@@ -410,34 +347,28 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
 
     orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
 
-
-    dirs = setup_directories(orchestrator.workspace_path, orchestrator.input_dir)
-
+    # Create focus directory
+    focus_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_focus"
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
         steps=[
             # Step 1: Flatten Z-stacks
             Step(name="Z-Stack Flattening",
-                 func=IP.create_projection,
+                 func=(IP.create_projection, {'method': 'max_projection'}),
                  variable_components=['z_index'],
-                 processing_args={'method': 'max_projection'},
-                 input_dir=dirs['input'],  
-                 output_dir=dirs['processed']),  
+                 input_dir=orchestrator.workspace_path),
 
             # Step 2: Process channels
             Step(name="Feature Enhancement",
-                 func=stack(IP.sharpen),
-                 variable_components=['site']),
+                 func=stack(IP.sharpen)),
 
             Step(name="Composite Creation",
                  func=IP.create_composite,
-                 variable_components=['site']),
+                 variable_components=['channel']),
 
             # Step 3: Generate positions
-            PositionGenerationStep(
-                name="Generate Positions",
-                output_dir=dirs['positions'])
+            PositionGenerationStep()
         ],
         name="Position Generation Pipeline"
     )
@@ -447,20 +378,17 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
         steps=[
             # Step 1: Flatten Z-stacks with best focus
             Step(name="cleaning",
-                 func=[IP.tophat],
-                 input_dir=dirs['input'],
-                 output_dir=dirs['focus']),
+                 func=[stack(IP.tophat)],  # Use stack() for single-image functions
+                 input_dir=orchestrator.workspace_path,
+                 output_dir=focus_dir),
 
             # Step 2: Stitch images
             Step(name="Focus",
-                 func=IP.create_projection,
-                 variable_components=['z_index'],
-                 processing_args={'method': 'best_focus'}),
+                 func=(IP.create_projection, {'method': 'best_focus'}),
+                 variable_components=['z_index']),
 
-            ImageStitchingStep(
-                name="Stitch Focused Images",
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']),
+            ImageStitchingStep(input_dir=focus_dir)
+            #ImageStitchingStep()
         ],
         name="Focused Image Assembly Pipeline"
     )
@@ -468,7 +396,7 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
     pipelines = [position_pipeline, assembly_pipeline]
     # Run the orchestrator with the pipelines
     success = orchestrator.run(pipelines=pipelines)
-    assert success, f"{test_name} failed"
+    assert success, "Pipeline execution failed"
     print_thread_activity_report()
 
 def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, thread_tracker):
@@ -486,7 +414,6 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
     orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
 
 
-    dirs = setup_directories(orchestrator.workspace_path, orchestrator.input_dir)
 
 
     # Create position generation pipeline with reference steps
@@ -494,11 +421,9 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
         steps=[
             # Step 1: Flatten Z-stacks
             Step(name="Z-Stack Flattening",
-                 func=IP.create_projection,
+                 func=(IP.create_projection, {'method': 'max_projection'}),
                  variable_components=['z_index'],
-                 processing_args={'method': 'max_projection'},
-                 input_dir=dirs['input'],  
-                 output_dir=dirs['processed']),  
+                 input_dir=orchestrator.workspace_path),
 
             # Step 2: Process channels
             Step(name="Channel Processing",
@@ -506,9 +431,7 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
                  variable_components=['channel']),
 
             # Step 3: Generate positions
-            PositionGenerationStep(
-                name="Generate Positions",
-                output_dir=dirs['positions'])
+            PositionGenerationStep()
         ],
         name="Position Generation Pipeline"
     )
@@ -516,17 +439,22 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
     # Create image assembly pipeline
     assembly_pipeline = Pipeline(
         steps=[
-            # Step 1: Clean final images
-            Step(name="cleaning",
-                 func=stack(IP.tophat),
-                 input_dir=dirs['input'],
-                 output_dir=dirs['post_processed']),
+            # Step 1: Clean final images with channel-specific processing
+            Step(name="Channel-specific cleaning",
+                 func={
+                     # DAPI channel with larger footprint
+                     "1": (stack(IP.tophat), {'footprint_size': 5}),
+                     # GFP channel with smaller footprint
+                     "2": (stack(IP.tophat), {'footprint_size': 3})
+                 },
+                 group_by='channel',
+                 input_dir=orchestrator.workspace_path),
 
             # Step 2: Stitch images
-            ImageStitchingStep(
-                name="Stitch Images",
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']),
+            ImageStitchingStep()
+#                name="Stitch Images",
+#                positions_dir=dirs['positions'],
+#                output_dir=dirs['stitched']),
         ],
         name="Image Assembly Pipeline"
     )
@@ -535,5 +463,75 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
     pipelines = [position_pipeline, assembly_pipeline]
     # Run the orchestrator with the pipelines
     success = orchestrator.run(pipelines=pipelines)
-    assert success, f"{test_name} failed"
+    assert success, "Pipeline execution failed"
+    print_thread_activity_report()
+
+def test_minimal_pipeline_with_defaults(flat_plate_dir, base_pipeline_config, thread_tracker):
+    """
+    Test a minimal pipeline that only defines input directory and handles processing,
+    position generation, and stitching in one go using defaults.
+
+    This test verifies that:
+    1. A pipeline can be created with minimal configuration
+    2. ImageStitchingStep correctly uses the pipeline's input directory by default
+    3. The entire workflow (processing, position generation, stitching) works with defaults
+    """
+    # Set up the orchestrator
+    config = base_pipeline_config
+    orchestrator = PipelineOrchestrator(config=config, plate_path=flat_plate_dir)
+
+    # Set up directories
+    #dirs = setup_directories(orchestratorn.workspace_path, orchestrator.input_dir)
+
+    # Create a single all-in-one pipeline that does everything with absolute minimal configuration
+    # Only defining the input directory - everything else should be handled automatically
+    all_in_one_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        # No output_dir defined - should be handled automatically
+        steps=[
+            # Step 1: Basic image processing
+            Step(
+                name="Basic Processing",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Generate positions
+            PositionGenerationStep(
+                name="Generate Positions"
+            ),
+
+            # Step 3: Stitch images
+            # No input_dir specified - should use pipeline's input_dir by default
+            # No output_dir specified - should be handled automatically
+            ImageStitchingStep(
+                name="Stitch Images"
+            )
+        ],
+        name="Absolute Minimal Pipeline"
+    )
+
+    # Run the pipeline
+    success = orchestrator.run(pipelines=[all_in_one_pipeline])
+    assert success, "Minimal pipeline execution failed"
+
+    # Since we didn't specify an output directory, we need to find where the images were saved
+    # They should be in a directory with 'stitched' in the name
+    workspace_parent = orchestrator.workspace_path.parent
+    stitched_dir = None
+
+    # Look for directories with 'stitched' in the name
+    for path in workspace_parent.glob("*stitched*"):
+        if path.is_dir():
+            stitched_dir = path
+            break
+
+    assert stitched_dir is not None, "Could not find stitched images directory"
+    print(f"Found stitched images directory: {stitched_dir}")
+
+    # Verify that stitched images were created
+    stitched_files = find_image_files(stitched_dir)
+    assert len(stitched_files) > 0, "No stitched images were created"
+
+    print(f"Successfully created {len(stitched_files)} stitched images")
+    print("Using absolute minimal pipeline configuration with defaults")
     print_thread_activity_report()

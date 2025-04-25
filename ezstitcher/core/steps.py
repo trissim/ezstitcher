@@ -5,7 +5,7 @@ This module contains the Step class and its specialized subclasses for
 different types of processing operations.
 """
 
-from typing import Dict, List, Union, Callable, Any, TypeVar, Optional, Sequence
+from typing import Dict, List, Union, Callable, Any, TypeVar, Optional, Sequence, Tuple
 import logging
 from pathlib import Path
 import numpy as np
@@ -13,13 +13,17 @@ import numpy as np
 # Import core components
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import prepare_patterns_and_functions
+from ezstitcher.core.image_locator import ImageLocator
 # Removed adapt_func_to_stack import
 
 
 # Type definitions
 # Note: All functions in ProcessingFunc are now expected to accept List[np.ndarray]
 # and return List[np.ndarray]. Use utils.stack() to wrap single-image functions.
-ProcessingFunc = Union[Callable, Dict[str, Callable], List[Callable]]
+FunctionType = Callable[[List[np.ndarray], ...], List[np.ndarray]]
+# A function can be a callable or a tuple of (callable, kwargs)
+FunctionWithArgs = Union[FunctionType, Tuple[FunctionType, Dict[str, Any]]]
+ProcessingFunc = Union[FunctionWithArgs, Dict[str, FunctionWithArgs], List[FunctionWithArgs]]
 VariableComponents = List[str]
 GroupBy = Optional[str]
 WellFilter = Optional[List[str]]
@@ -56,22 +60,22 @@ class Step:
         input_dir: str = None,
         output_dir: str = None,
         well_filter: WellFilter = None,
-        processing_args: Union[Dict[str, Any], List[Dict[str, Any]]] = None,
         name: str = None
     ):
         """
         Initialize a processing step.
 
         Args:
-            func: The processing function(s) to apply
+            func: The processing function(s) to apply. Can be:
+                - A single callable function
+                - A tuple of (function, kwargs)
+                - A list of functions or (function, kwargs) tuples
+                - A dictionary mapping component values to functions or tuples
             variable_components: Components that vary across files
             group_by: How to group files for processing
             input_dir: The input directory
             output_dir: The output directory
             well_filter: Wells to process
-            processing_args: Additional arguments to pass to the processing function.
-                Can be a single dictionary (applied to all functions) or a list of dictionaries
-                (matched with the functions in the func list)
             name: Human-readable name for the step
         """
         self.func = func
@@ -80,7 +84,6 @@ class Step:
         self.input_dir = input_dir
         self.output_dir = output_dir
         self.well_filter = well_filter
-        self.processing_args = processing_args or {}
         self.name = name or self._generate_name()
 
     def _generate_name(self) -> str:
@@ -90,14 +93,26 @@ class Step:
         Returns:
             A human-readable name for the step
         """
+        # Helper function to get name from function or function tuple
+        def get_func_name(f):
+            if isinstance(f, tuple) and len(f) == 2 and callable(f[0]):
+                return getattr(f[0], '__name__', str(f[0]))
+            if callable(f):
+                return getattr(f, '__name__', str(f))
+            return str(f)
+
+        # Dictionary of functions
         if isinstance(self.func, dict):
-            funcs = ", ".join(f"{k}:{f.__name__}" for k, f in self.func.items())
+            funcs = ", ".join(f"{k}:{get_func_name(f)}" for k, f in self.func.items())
             return f"ChannelMappedStep({funcs})"
-        elif isinstance(self.func, list):
-            funcs = ", ".join(f.__name__ for f in self.func)
+
+        # List of functions
+        if isinstance(self.func, list):
+            funcs = ", ".join(get_func_name(f) for f in self.func)
             return f"MultiStep({funcs})"
-        else:
-            return f"Step({self.func.__name__})"
+
+        # Single function or function tuple
+        return f"Step({get_func_name(self.func)})"
 
     def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
         """
@@ -118,15 +133,20 @@ class Step:
         input_dir = self.input_dir
         output_dir = self.output_dir
         well_filter = self.well_filter or context.well_filter
-        orchestrator = context.orchestrator  # Required, will raise AttributeError if missing = context.microscope_handler
+        orchestrator = context.orchestrator  # Required, will raise AttributeError if missing
         microscope_handler = orchestrator.microscope_handler
 
         if not input_dir:
             raise ValueError("Input directory must be specified")
 
+        # Use ImageLocator to find the actual directory containing images
+        # This works whether input_dir is a plate folder or a subfolder
+        actual_input_dir = ImageLocator.find_image_directory(Path(input_dir))
+        logger.debug("Using actual image directory: %s", actual_input_dir)
+
         # Get patterns with variable components
         patterns_by_well = microscope_handler.auto_detect_patterns(
-            input_dir,
+            actual_input_dir,
             well_filter=well_filter,
             variable_components=self.variable_components
         )
@@ -142,7 +162,7 @@ class Step:
 
             # Prepare patterns, functions, and args
             grouped_patterns, component_to_funcs, component_to_args = prepare_patterns_and_functions(
-                patterns, self.func, self.processing_args, component=self.group_by
+                patterns, self.func, component=self.group_by
             )
 
             # Process each component
@@ -154,11 +174,11 @@ class Step:
                 # Process each pattern
                 for pattern in component_patterns:
                     # Find matching files
-                    matching_files = microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
+                    matching_files = microscope_handler.parser.path_list_from_pattern(actual_input_dir, pattern)
 
                     # Load images
                     try:
-                        images = [FileSystemManager.load_image(str(Path(input_dir) / filename)) for filename in matching_files]
+                        images = [FileSystemManager.load_image(str(Path(actual_input_dir) / filename)) for filename in matching_files]
                         images = [img for img in images if img is not None]
                     except Exception as e:
                         logger.error("Error loading images: %s", str(e))
@@ -168,17 +188,11 @@ class Step:
                         continue  # Skip if no valid images found
 
                     # Process the images with component-specific args
-                    # Save the current processing_args
-                    original_args = self.processing_args
-                    # Set component-specific args temporarily
-                    self.processing_args = component_args
                     # Process the images
                     images = self._apply_processing(images, func=component_func)
-                    # Restore original args
-                    self.processing_args = original_args
 
                     # Save images and get output files
-                    pattern_files = self._save_images(input_dir, output_dir, images, matching_files)
+                    pattern_files = self._save_images(actual_input_dir, output_dir, images, matching_files)
                     if pattern_files:
                         output_files.extend(pattern_files)
 
@@ -213,67 +227,69 @@ class Step:
         logger.warning("Reduced image dimensions from %dD to 2D", img.ndim)
         return result
 
-    def _apply_processing(self, images: List[np.ndarray], func: Optional[ProcessingFunc] = None) -> List[np.ndarray]:
-        """Apply processing function(s) to a stack (list) of images.
+    def _extract_function_and_args(
+        self,
+        func_item: FunctionWithArgs
+    ) -> Tuple[Callable, Dict[str, Any]]:
+        """Extract function and arguments from a function item.
 
-        Note: This method only handles single functions or lists of functions.
-        Dictionary mapping of functions to component values is handled by
-        prepare_patterns_and_functions before this method is called.
+        A function item can be either a callable or a tuple of (callable, kwargs).
 
         Args:
-            images: List of images (numpy arrays) to process.
-            func: Stack-aware processing function or list of functions. Defaults to self.func.
+            func_item: Function item to extract from
 
         Returns:
-            List of processed images, or the original list if an error occurs.
+            Tuple of (function, kwargs)
         """
-        if not images:
-            return []
+        if isinstance(func_item, tuple) and len(func_item) == 2 and callable(func_item[0]):
+            # It's a (function, kwargs) tuple
+            return func_item[0], func_item[1]
+        if callable(func_item):
+            # It's just a function, use default args
+            return func_item, {}
 
-        processing_func = func if func is not None else self.func
+        # Invalid function item
+        logger.warning(
+            "Invalid function item: %s. Expected callable or (callable, kwargs) tuple.",
+            str(func_item)
+        )
+        # Return a dummy function that returns the input unchanged
+        return lambda x, **kwargs: x, {}
 
-        try:
-            # Case 1: List of functions - apply sequentially
-            if isinstance(processing_func, list):
-                processed_images = images
+    def _apply_function_list(
+        self,
+        images: List[np.ndarray],
+        function_list: List[FunctionWithArgs]
+    ) -> List[np.ndarray]:
+        """Apply a list of functions sequentially to images.
 
-                # Check if processing_args is a list matching the functions
-                if isinstance(self.processing_args, list) and len(self.processing_args) > 0:
-                    # Apply each function with its corresponding args
-                    for i, f in enumerate(processing_func):
-                        # Get args for this function (use empty dict if index out of range)
-                        func_args = self.processing_args[i] if i < len(self.processing_args) else {}
-                        # Apply the function with its specific args
-                        result = self._apply_single_function(processed_images, f, func_args)
-                        processed_images = [self._ensure_2d(img) for img in result]
-                else:
-                    # Use the same args for all functions
-                    args_to_pass = self.processing_args or {}
-                    for f in processing_func:
-                        result = self._apply_single_function(processed_images, f, args_to_pass)
-                        processed_images = [self._ensure_2d(img) for img in result]
+        Args:
+            images: List of images to process
+            function_list: List of functions to apply (can include tuples of (function, kwargs))
 
-                return processed_images
+        Returns:
+            List of processed images
+        """
+        processed_images = images
 
-            # Case 2: Single callable function
-            if callable(processing_func):
-                args_to_pass = self.processing_args or {}
-                if isinstance(args_to_pass, list) and len(args_to_pass) > 0:
-                    # If processing_args is a list but func is a single function, use the first item
-                    args_to_pass = args_to_pass[0]
+        for func_item in function_list:
+            # Extract function and args
+            func, func_args = self._extract_function_and_args(func_item)
 
-                return self._apply_single_function(images, processing_func, args_to_pass)
+            # Apply the function
+            result = self._apply_single_function(processed_images, func, func_args)
+            processed_images = [self._ensure_2d(img) for img in result]
 
-            # Case 3: Invalid function
-            logger.warning("No valid processing function provided. Returning original images.")
-            return images
+        return processed_images
 
-        except Exception as e:
-            func_name = getattr(processing_func, '__name__', str(processing_func))
-            logger.exception("Error applying processing function %s: %s", func_name, e)
-            return images
 
-    def _apply_single_function(self, images: List[np.ndarray], func: Callable, args: Dict[str, Any]) -> List[np.ndarray]:
+
+    def _apply_single_function(
+        self,
+        images: List[np.ndarray],
+        func: Callable,
+        args: Dict[str, Any]
+    ) -> List[np.ndarray]:
         """Apply a single processing function with specific args.
 
         Args:
@@ -291,17 +307,97 @@ class Step:
             if isinstance(result, list):
                 return result
             if isinstance(result, np.ndarray):
-                logger.warning("Function %s returned a single image instead of a list. Wrapping it.",
-                              getattr(func, '__name__', 'unknown'))
+                func_name = getattr(func, '__name__', 'unknown')
+
+                # Check if this is a 3D array (stack of images)
+                if result.ndim >= 3:
+                    # Convert 3D+ array to list of 2D arrays
+                    logger.debug(
+                        "Function %s returned a 3D array. Converting to list of 2D arrays.",
+                        func_name
+                    )
+                    return [result[i] for i in range(result.shape[0])]
+
+                # It's a single 2D image
+                logger.warning(
+                    "Function %s returned a single image instead of a list. Wrapping it.",
+                    func_name
+                )
                 return [result]
 
             # Unexpected return type
-            logger.error("Function %s returned an unexpected type (%s). Returning original images.",
-                        getattr(func, '__name__', 'unknown'), type(result).__name__)
+            func_name = getattr(func, '__name__', 'unknown')
+            result_type = type(result).__name__
+            logger.error(
+                "Function %s returned an unexpected type (%s). Returning original images.",
+                func_name,
+                result_type
+            )
             return images
 
         except Exception as e:
             func_name = getattr(func, '__name__', str(func))
+            logger.exception(
+                "Error applying processing function %s: %s",
+                func_name,
+                e
+            )
+            return images
+
+    def _apply_processing(
+        self,
+        images: List[np.ndarray],
+        func: Optional[ProcessingFunc] = None
+    ) -> List[np.ndarray]:
+        """Apply processing function(s) to a stack (list) of images.
+
+        Note: This method only handles single functions or lists of functions.
+        Dictionary mapping of functions to component values is handled by
+        prepare_patterns_and_functions before this method is called.
+
+        Functions can be specified in several ways:
+        - A single callable function
+        - A tuple of (function, kwargs)
+        - A list of functions or (function, kwargs) tuples
+
+        Args:
+            images: List of images (numpy arrays) to process.
+            func: Processing function(s) to apply. Defaults to self.func.
+
+        Returns:
+            List of processed images, or the original list if an error occurs.
+        """
+        # Handle empty input
+        if not images:
+            return []
+
+        # Get processing function
+        processing_func = func if func is not None else self.func
+
+        try:
+            # Case 1: List of functions or function tuples
+            if isinstance(processing_func, list):
+                return self._apply_function_list(images, processing_func)
+
+            # Case 2: Single function or function tuple
+            is_callable = callable(processing_func)
+            is_func_tuple = isinstance(processing_func, tuple) and len(processing_func) == 2
+
+            if is_callable or is_func_tuple:
+                func, args = self._extract_function_and_args(processing_func)
+                return self._apply_single_function(images, func, args)
+
+            # Case 3: Invalid function
+            logger.warning("No valid processing function provided. Returning original images.")
+            return images
+
+        except Exception as e:
+            # Try to get function name, but handle the case where processing_func might be a tuple
+            if isinstance(processing_func, tuple) and callable(processing_func[0]):
+                func_name = getattr(processing_func[0], '__name__', str(processing_func[0]))
+            else:
+                func_name = getattr(processing_func, '__name__', str(processing_func))
+
             logger.exception("Error applying processing function %s: %s", func_name, e)
             return images
 
@@ -325,7 +421,7 @@ class Step:
             FileSystemManager.ensure_directory(output_dir)
 
             # Clean up old files if working in place
-            if input_dir is output_dir:
+            if input_dir == output_dir:
                 for filename in filenames:
                     FileSystemManager.delete_file(Path(output_dir) / filename)
 
@@ -413,8 +509,7 @@ class PositionGenerationStep(Step):
         self,
         name: str = "Position Generation",
         input_dir: Optional[Path] = None,
-        output_dir: Optional[Path] = None,  # Output directory for positions files
-        processing_args: Optional[Dict[str, Any]] = None
+        output_dir: Optional[Path] = None  # Output directory for positions files
     ):
         """
         Initialize a position generation step.
@@ -423,14 +518,12 @@ class PositionGenerationStep(Step):
             name: Name of the step
             input_dir: Input directory
             output_dir: Output directory (for positions files)
-            processing_args: Additional arguments for the processing function
         """
         super().__init__(
             func=None,  # No processing function needed
             name=name,
             input_dir=input_dir,
-            output_dir=output_dir,
-            processing_args=processing_args
+            output_dir=output_dir
         )
 
     def process(self, context):
@@ -450,7 +543,7 @@ class PositionGenerationStep(Step):
         positions_dir = self.output_dir or context.output_dir
 
         # Call the generate_positions method
-        positions_dir, reference_pattern = orchestrator.generate_positions(well, input_dir, positions_dir)
+        positions_file, reference_pattern = orchestrator.generate_positions(well, input_dir, positions_dir)
 
         # Store in context
         context.positions_dir = positions_dir
@@ -460,66 +553,85 @@ class PositionGenerationStep(Step):
 
 class ImageStitchingStep(Step):
     """
-    A specialized Step for stitching images.
+    A step that stitches images using position files.
 
-    This step takes processed images and stitches them using the positions file
-    generated by a previous PositionGenerationStep.
+    If input_dir is not specified, it will use the pipeline's input directory by default.
+    If positions_dir is not specified, it will try to find a directory with "positions" in its name.
     """
 
-    def __init__(
-        self,
-        name: str = "Image Stitching",
-        input_dir: Optional[Path] = None,
-        positions_dir: Optional[Path] = None,
-        output_dir: Optional[Path] = None,
-        processing_args: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, name=None, input_dir=None, positions_dir=None, output_dir=None, **kwargs):
         """
-        Initialize an image stitching step.
+        Initialize an ImageStitchingStep.
 
         Args:
-            name: Name of the step
-            input_dir: Input directory
-            output_dir: Output directory
-            processing_args: Additional arguments for the processing function
+            name (str, optional): Name of the step
+            input_dir (str, optional): Directory containing images to stitch.
+                                       If not specified, uses the pipeline's input directory.
+            positions_dir (str, optional): Directory containing position files.
+                                           If not specified, tries to find a directory with "positions" in its name.
+            output_dir (str, optional): Directory to save stitched images
+            **kwargs: Additional arguments for the step
         """
         super().__init__(
-            func=None,  # No processing function needed
-            name=name,
+            func=None,  # ImageStitchingStep doesn't use the standard func mechanism
+            name=name or "Image Stitching",
             input_dir=input_dir,
-            output_dir=output_dir, ### stitched images folder
-            processing_args=processing_args
+            output_dir=output_dir,
+            variable_components=[],  # Empty list for variable_components
+            **kwargs
         )
         self.positions_dir = positions_dir
 
     def process(self, context):
         """
-        Stitch images using the positions file from the context.
+        Stitch images using the positions file.
+
+        Args:
+            context: Processing context containing orchestrator and other metadata
+
+        Returns:
+            Updated context
         """
         logger.info("Processing step: %s", self.name)
 
-        if not self.positions_dir:
-            self.positions_dir = FileSystemManager.find_directory_substring_recursive(self.input_dir.parent, "positions")
-            if self.positions_dir is None:
-                raise ValueError("No positions directory found")
-            else:
-                logger.info(f"positions_dir not provided, using detected positoins directory in parent @: {self.positions_dir}")
+        # Get orchestrator from context
+        orchestrator = getattr(context, 'orchestrator', None)
+        if not orchestrator:
+            raise ValueError("ImageStitchingStep requires an orchestrator in the context")
 
-
-        if self.output_dir is self.input_dir:
-            self.output_dir = self.input_dir.parent / f"{self.input_dir.name}_stitched"
-            logger.info(f"Input and output directories are the same, using default positions directory: {self.output_dir}")
-
-        # Get required objects from context
+        # Get well from context
         well = context.well_filter[0] if context.well_filter else None
-        orchestrator = context.orchestrator  # Required, will raise AttributeError if missing
-        positions_dir = getattr(context, '', None)  # Oppositions_dirtional, check if exists
-        input_dir = self.input_dir or context.input_dir
-        output_dir = self.output_dir or context.output_dir
-        positions_path = FileSystemManager.find_file_recursive(self.positions_dir, f"{well}.csv")
+        if not well:
+            raise ValueError("ImageStitchingStep requires a well filter in the context")
+
+        # If positions_dir is not specified, try to get it from context or find it
+        if not self.positions_dir:
+            # First try to get from context (set by PositionGenerationStep)
+            self.positions_dir = getattr(context, 'positions_dir', None)
+
+            # If still not found, try to find at parent level of plate
+            if not self.positions_dir and orchestrator:
+                plate_name = orchestrator.plate_path.name
+                parent_positions_dir = orchestrator.plate_path.parent / f"{plate_name}_positions"
+                if parent_positions_dir.exists():
+                    self.positions_dir = parent_positions_dir
+                    logger.info(f"Using positions directory at parent level: {self.positions_dir}")
+                else:
+                    # Fallback to existing logic if no positions directory is found
+                    self.positions_dir = FileSystemManager.find_directory_substring_recursive(
+                        Path(self.input_dir).parent, "positions")
+
+        # If still not found, raise an error
+        if not self.positions_dir:
+            raise ValueError(f"No positions directory found for well {well}")
 
         # Call the stitch_images method
-        orchestrator.stitch_images(well, input_dir, output_dir, positions_path)
+        orchestrator.stitch_images(
+            well=well,
+            input_dir=self.input_dir,
+            output_dir=self.output_dir or context.output_dir,
+            positions_file=Path(self.positions_dir) / f"{well}.csv"
+        )
 
         return context
 

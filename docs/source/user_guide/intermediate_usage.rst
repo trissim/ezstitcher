@@ -4,10 +4,24 @@ Intermediate Usage
 
 This section covers more advanced topics in EZStitcher, building on the basic concepts and usage patterns introduced earlier.
 
+.. note::
+   Directory paths are automatically resolved between steps in EZStitcher. The first step should specify
+   ``input_dir=orchestrator.workspace_path`` to ensure processing happens on workspace copies,
+   but subsequent steps will automatically use the output of the previous step as their input.
+   See :doc:`../concepts/directory_structure` for details on how EZStitcher manages directories.
+
+.. important::
+   Understanding the relationship between ``variable_components`` and ``group_by`` parameters is crucial for
+   correctly configuring pipeline steps. For detailed explanations of these parameters and their relationships,
+   see :doc:`../concepts/step`.
+
 Z-Stack Processing
 ----------------
 
-Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks.
+Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks. For detailed explanations of Z-stack processing and the `variable_components` parameter, see :doc:`../concepts/step`.
+
+.. important::
+   Z-stack flattening is a one-way operation that converts a 3D stack into a single 2D image. Once a Z-stack is flattened, it cannot be flattened again using a different method. You should choose the most appropriate flattening method for your data based on your specific needs.
 
 Z-Stack Flattening
 ^^^^^^^^^^^^^^^
@@ -29,7 +43,6 @@ One common operation is to flatten a Z-stack into a single 2D image using a proj
         config=config,
         plate_path=Path("/path/to/plate")
     )
-    dirs = orchestrator.setup_directories()
 
     # Create a pipeline for Z-stack flattening
     z_flatten_pipeline = Pipeline(
@@ -37,12 +50,9 @@ One common operation is to flatten a Z-stack into a single 2D image using a proj
             # Z-stack flattening step
             Step(
                 name="Z-Stack Flattening",
-                func=IP.create_projection,
+                func=(IP.create_projection, {'method': 'max_projection'}),  # Function with projection method
                 variable_components=['z_index'],  # Process each z-index separately
-                group_by='site',  # Group by site to combine z-planes for each site
-                processing_args={'method': 'max_projection'},  # Use maximum intensity projection
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
             )
         ],
         name="Z-Stack Flattening Pipeline"
@@ -54,45 +64,68 @@ One common operation is to flatten a Z-stack into a single 2D image using a proj
 Projection Methods
 ^^^^^^^^^^^^^^^
 
-EZStitcher supports several projection methods:
+EZStitcher supports several alternative projection methods for flattening Z-stacks. You should choose the most appropriate method for your specific data:
 
 1. **Maximum Intensity Projection (max_projection)**: Takes the maximum value at each pixel position across all Z-planes
-2. **Minimum Intensity Projection (min_projection)**: Takes the minimum value at each pixel position
-3. **Mean Intensity Projection (mean_projection)**: Takes the average value at each pixel position
-4. **Standard Deviation Projection (std_projection)**: Shows the standard deviation at each pixel position
-5. **Sum Projection (sum_projection)**: Sums the values at each pixel position
+2. **Mean Intensity Projection (mean_projection)**: Takes the average value at each pixel position
+3. **Best Focus (best_focus)**: Selects the best-focused plane using focus metrics
 
 Example with different projection methods:
 
 .. code-block:: python
 
-    # Create a pipeline with different projection methods
-    multi_projection_pipeline = Pipeline(
+    # Create separate pipelines for different projection methods
+    # Note: You would typically choose ONE method, not run multiple in sequence
+
+    # Maximum intensity projection pipeline
+    max_projection_pipeline = Pipeline(
         steps=[
-            # Maximum intensity projection
             Step(
                 name="Max Projection",
-                func=IP.create_projection,
+                func=(IP.create_projection, {'method': 'max_projection'}),
                 variable_components=['z_index'],
-                group_by='site',
-                processing_args={'method': 'max_projection'},
-                input_dir=dirs['input'],
+                input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/max_projection")
-            ),
+            )
+        ],
+        name="Max Projection Pipeline"
+    )
 
-            # Mean intensity projection
+    # Mean intensity projection pipeline
+    mean_projection_pipeline = Pipeline(
+        steps=[
             Step(
                 name="Mean Projection",
-                func=IP.create_projection,
+                func=(IP.create_projection, {'method': 'mean_projection'}),
                 variable_components=['z_index'],
-                group_by='site',
-                processing_args={'method': 'mean_projection'},
-                input_dir=dirs['input'],
+                input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/mean_projection")
             )
         ],
-        name="Multi-Projection Pipeline"
+        name="Mean Projection Pipeline"
     )
+
+    # Best focus pipeline (requires a focus analyzer)
+    from ezstitcher.core.focus_analyzer import FocusAnalyzer
+
+    focus_analyzer = FocusAnalyzer(metric='variance_of_laplacian')
+    best_focus_pipeline = Pipeline(
+        steps=[
+            Step(
+                name="Best Focus",
+                func=(IP.create_projection, {'method': 'best_focus', 'focus_analyzer': focus_analyzer}),
+                variable_components=['z_index'],
+                input_dir=orchestrator.workspace_path,
+                output_dir=Path("path/to/best_focus")
+            )
+        ],
+        name="Best Focus Pipeline"
+    )
+
+    # Run only one of these pipelines
+    # orchestrator.run(pipelines=[max_projection_pipeline])
+    # orchestrator.run(pipelines=[mean_projection_pipeline])
+    # orchestrator.run(pipelines=[best_focus_pipeline])
 
 Best Focus Detection
 ^^^^^^^^^^^^^^^^^
@@ -107,12 +140,9 @@ Instead of using a projection method, you can select the best-focused plane from
             # Best focus detection step
             Step(
                 name="Best Focus Detection",
-                func=IP.find_best_focus,
+                func=(IP.find_best_focus, {'metric': 'variance_of_laplacian'}),
                 variable_components=['z_index'],
-                group_by='site',
-                processing_args={'metric': 'variance_of_laplacian'},
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
             )
         ],
         name="Best Focus Pipeline"
@@ -121,7 +151,7 @@ Instead of using a projection method, you can select the best-focused plane from
 Focus Metrics
 ^^^^^^^^^^^
 
-EZStitcher supports several focus metrics:
+EZStitcher supports several alternative focus metrics for finding the best-focused plane. You should choose the most appropriate metric for your specific data:
 
 1. **Variance of Laplacian (variance_of_laplacian)**: Measures local variations in intensity
 2. **Normalized Variance (normalized_variance)**: Measures the variance normalized by the mean intensity
@@ -134,33 +164,40 @@ Example with different focus metrics:
 
     from ezstitcher.core.focus_analyzer import FocusAnalyzer
 
-    # Create a pipeline with different focus metrics
-    focus_metrics_pipeline = Pipeline(
+    # Create separate pipelines for different focus metrics
+    # Note: You would typically choose ONE metric, not run multiple in sequence
+
+    # Variance of Laplacian metric pipeline
+    laplacian_pipeline = Pipeline(
         steps=[
-            # Variance of Laplacian metric
             Step(
                 name="Variance of Laplacian",
-                func=IP.find_best_focus,
+                func=(IP.find_best_focus, {'metric': 'variance_of_laplacian'}),
                 variable_components=['z_index'],
-                group_by='site',
-                processing_args={'metric': 'variance_of_laplacian'},
-                input_dir=dirs['input'],
+                input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/laplacian_focus")
-            ),
+            )
+        ],
+        name="Laplacian Focus Pipeline"
+    )
 
-            # Tenengrad metric
+    # Tenengrad metric pipeline
+    tenengrad_pipeline = Pipeline(
+        steps=[
             Step(
                 name="Tenengrad",
-                func=IP.find_best_focus,
+                func=(IP.find_best_focus, {'metric': 'tenengrad'}),
                 variable_components=['z_index'],
-                group_by='site',
-                processing_args={'metric': 'tenengrad'},
-                input_dir=dirs['input'],
+                input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/tenengrad_focus")
             )
         ],
-        name="Focus Metrics Pipeline"
+        name="Tenengrad Focus Pipeline"
     )
+
+    # Run the pipelines separately
+    # orchestrator.run(pipelines=[laplacian_pipeline])
+    # orchestrator.run(pipelines=[tenengrad_pipeline])
 
     # You can also use the FocusAnalyzer directly for more control
     focus_analyzer = FocusAnalyzer()
@@ -175,6 +212,8 @@ Channel-Specific Processing
 -------------------------
 
 Different fluorescence channels often require different processing approaches. EZStitcher provides several ways to apply channel-specific processing.
+
+For detailed explanations of function handling patterns, including dictionaries of functions, see :doc:`../concepts/function_handling`.
 
 Using Dictionary of Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -207,8 +246,8 @@ The most flexible approach is to use a dictionary of functions, where each key c
                     "2": process_gfp    # Apply process_gfp to channel 2 (GFP)
                 },
                 group_by='channel',  # Specifies that keys "1" and "2" refer to channel values
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
+
             )
         ],
         name="Channel-Specific Pipeline"
@@ -217,7 +256,7 @@ The most flexible approach is to use a dictionary of functions, where each key c
 Advanced Channel-Specific Processing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can also use a dictionary of lists of functions with matching processing arguments:
+You can also use a dictionary of lists of functions with matching processing arguments. For detailed explanations of this pattern, see :doc:`../concepts/function_handling`.
 
 .. code-block:: python
 
@@ -231,27 +270,17 @@ You can also use a dictionary of lists of functions with matching processing arg
                 name="Advanced Channel Processing",
                 func={
                     "1": [  # Process channel 1 (DAPI)
-                        stack(IP.tophat),             # First apply tophat
-                        IP.stack_percentile_normalize  # Then normalize
+                        (stack(IP.tophat), {'size': 15}),  # First apply tophat with args
+                        (IP.stack_percentile_normalize, {'low_percentile': 1.0, 'high_percentile': 99.0})  # Then normalize with args
                     ],
                     "2": [  # Process channel 2 (GFP)
-                        stack(IP.sharpen),            # First apply sharpen
-                        IP.stack_percentile_normalize  # Then normalize
+                        (stack(IP.sharpen), {'sigma': 1.0, 'amount': 1.5}),  # First apply sharpen with args
+                        (IP.stack_percentile_normalize, {'low_percentile': 1.0, 'high_percentile': 99.0})  # Then normalize with args
                     ]
                 },
                 group_by='channel',  # Specifies that keys "1" and "2" refer to channel values
-                processing_args={
-                    "1": [
-                        {'size': 15},                  # Args for tophat
-                        {'low_percentile': 1.0, 'high_percentile': 99.0}  # Args for normalize
-                    ],
-                    "2": [
-                        {'sigma': 1.0, 'amount': 1.5},  # Args for sharpen
-                        {'low_percentile': 1.0, 'high_percentile': 99.0}  # Args for normalize
-                    ]
-                },
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
+
             )
         ],
         name="Advanced Channel Pipeline"
@@ -260,7 +289,15 @@ You can also use a dictionary of lists of functions with matching processing arg
 Creating Composite Images
 ^^^^^^^^^^^^^^^^^^^^^^
 
-You can combine multiple channels into a composite image:
+You can combine multiple channels into a composite image. For detailed explanations of composite image creation and the `variable_components=['channel']` parameter, see :doc:`../concepts/step`.
+
+.. note::
+   The `create_composite` function can be called with or without the `weights` parameter:
+
+   * Without weights: `func=IP.create_composite` - All channels are weighted equally
+   * With weights: `func=(IP.create_composite, {'weights': [0.7, 0.3]})` - Custom weighting for each channel
+
+   The weights list should have the same length as the number of channels being processed.
 
 .. code-block:: python
 
@@ -272,8 +309,8 @@ You can combine multiple channels into a composite image:
                 name="Channel Processing",
                 func=IP.stack_percentile_normalize,
                 variable_components=['channel'],
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
+
             ),
 
             # Create composite images
@@ -281,9 +318,9 @@ You can combine multiple channels into a composite image:
                 name="Create Composite",
                 func=IP.create_composite,
                 variable_components=['channel'],  # Process each channel separately
-                group_by='site',  # Group by site to combine channels for each site
-                input_dir=dirs['processed'],
-                output_dir=dirs['composite']
+
+
+                output_dir=Path("path/to/composite")
             )
         ],
         name="Composite Image Pipeline"
@@ -292,15 +329,22 @@ You can combine multiple channels into a composite image:
 Position Generation and Stitching
 -------------------------------
 
-EZStitcher provides specialized steps for generating position files and stitching images.
+EZStitcher provides specialized steps for generating position files and stitching images. For detailed explanations of these specialized steps, see :doc:`../concepts/specialized_steps`.
+
+.. important::
+   When working with multiple channels, always create a composite image before position generation.
+   This ensures that position files are generated based on all available information rather than
+   defaulting to a single channel, which may not have the best features for alignment.
 
 Basic Stitching Workflow
 ^^^^^^^^^^^^^^^^^^^^^
 
-A typical stitching workflow involves two main steps:
+A typical stitching workflow involves these main steps:
 
-1. Generate position files that describe how the tiles fit together
-2. Stitch the images using these position files
+1. Process images to enhance features (optional)
+2. Create a composite image if multiple channels exist
+3. Generate position files that describe how the tiles fit together
+4. Stitch the images using these position files
 
 .. code-block:: python
 
@@ -314,75 +358,30 @@ A typical stitching workflow involves two main steps:
                 name="Image Processing",
                 func=IP.stack_percentile_normalize,
                 variable_components=['channel'],
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
             ),
 
-            # Step 2: Generate positions
+            # Step 2: Create composite for position generation
+            # This is important when working with multiple channels
+            Step(
+                name="Create Composite",
+                func=IP.create_composite,  # Equal weighting for all channels
+                variable_components=['channel']
+            ),
+
+            # Step 3: Generate positions using the composite
             PositionGenerationStep(
                 name="Generate Positions",
-                input_dir=dirs['processed'],
-                output_dir=dirs['positions']
             ),
 
-            # Step 3: Stitch images
+            # Step 4: Stitch images
             ImageStitchingStep(
                 name="Stitch Images",
-                input_dir=dirs['processed'],
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']
             )
         ],
         name="Stitching Pipeline"
     )
 
-Advanced Position Generation
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can customize the position generation process:
-
-.. code-block:: python
-
-    # Create a pipeline with customized position generation
-    advanced_position_pipeline = Pipeline(
-        steps=[
-            # Generate positions with custom parameters
-            PositionGenerationStep(
-                name="Advanced Position Generation",
-                input_dir=dirs['processed'],
-                output_dir=dirs['positions'],
-                overlap_percent=20,  # Expected overlap percentage
-                max_shift_percent=5,  # Maximum allowed shift as percentage of image size
-                use_phase_correlation=True,  # Use phase correlation for alignment
-                reference_channel="1"  # Use channel 1 as reference for alignment
-            )
-        ],
-        name="Advanced Position Pipeline"
-    )
-
-Advanced Stitching
-^^^^^^^^^^^^^^^
-
-You can also customize the stitching process:
-
-.. code-block:: python
-
-    # Create a pipeline with customized stitching
-    advanced_stitching_pipeline = Pipeline(
-        steps=[
-            # Stitch images with custom parameters
-            ImageStitchingStep(
-                name="Advanced Stitching",
-                input_dir=dirs['processed'],
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched'],
-                blend_method="linear",  # Use linear blending at overlaps
-                normalize_intensities=True,  # Normalize intensities across tiles
-                background_subtraction=True  # Perform background subtraction
-            )
-        ],
-        name="Advanced Stitching Pipeline"
-    )
 
 Combining Multiple Techniques
 ---------------------------
@@ -402,27 +401,34 @@ Process Z-stacks and then stitch the resulting images:
             # Step 1: Flatten Z-stacks
             Step(
                 name="Z-Stack Flattening",
-                func=IP.create_projection,
+                func=(IP.create_projection, {'method': 'max_projection'}),
                 variable_components=['z_index'],
-                group_by='site',
-                processing_args={'method': 'max_projection'},
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
             ),
 
-            # Step 2: Generate positions
+            # Step 2: Process channels (if multiple channels exist)
+            Step(
+                name="Channel Processing",
+                func=IP.stack_percentile_normalize,
+                variable_components=['channel']
+            ),
+
+            # Step 3: Create composite for position generation
+            # This is important when working with multiple channels
+            Step(
+                name="Create Composite",
+                func=IP.create_composite,  # Equal weighting for all channels
+                variable_components=['channel']
+            ),
+
+            # Step 4: Generate positions using the composite
             PositionGenerationStep(
                 name="Generate Positions",
-                input_dir=dirs['processed'],
-                output_dir=dirs['positions']
             ),
 
-            # Step 3: Stitch images
+            # Step 5: Stitch images
             ImageStitchingStep(
                 name="Stitch Images",
-                input_dir=dirs['processed'],
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']
             )
         ],
         name="Z-Stack Stitching Pipeline"
@@ -446,24 +452,25 @@ Apply different processing to different channels and then stitch the results:
                     "2": process_gfp
                 },
                 group_by='channel',
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
             ),
 
-            # Step 2: Generate positions
+            # Step 2: Create composite for position generation
+            # This is important when working with multiple channels
+            Step(
+                name="Create Composite",
+                func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Custom weighting: 70% channel 1, 30% channel 2
+                variable_components=['channel']
+            ),
+
+            # Step 3: Generate positions using the composite
             PositionGenerationStep(
                 name="Generate Positions",
-                input_dir=dirs['processed'],
-                output_dir=dirs['positions'],
-                reference_channel="1"  # Use channel 1 as reference for alignment
             ),
 
-            # Step 3: Stitch images
+            # Step 4: Stitch images
             ImageStitchingStep(
                 name="Stitch Images",
-                input_dir=dirs['processed'],
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']
             )
         ],
         name="Channel Stitching Pipeline"
@@ -476,6 +483,8 @@ A complete workflow that combines Z-stack processing, channel-specific processin
 
 .. code-block:: python
 
+    from ezstitcher.core.focus_analyzer import FocusAnalyzer
+
     # Create a complete workflow pipeline
     complete_workflow_pipeline = Pipeline(
         steps=[
@@ -483,48 +492,40 @@ A complete workflow that combines Z-stack processing, channel-specific processin
             Step(
                 name="Z-Stack Processing",
                 func={
-                    "1": IP.create_projection,  # Use max projection for channel 1
-                    "2": IP.find_best_focus     # Use best focus for channel 2
+                    "1": (IP.create_projection, {'method': 'max_projection'}),  # Use max projection for channel 1
+                    "2": (IP.create_projection, {'method': 'best_focus', 'focus_analyzer': FocusAnalyzer(metric='variance_of_laplacian')})  # Use best focus for channel 2
                 },
                 group_by='channel',
                 variable_components=['z_index'],
-                processing_args={
-                    "1": {'method': 'max_projection'},
-                    "2": {'metric': 'variance_of_laplacian'}
-                },
-                input_dir=dirs['input'],
-                output_dir=dirs['processed']
+                input_dir=orchestrator.workspace_path
             ),
 
             # Step 2: Channel-specific enhancement
             Step(
                 name="Channel Enhancement",
                 func={
-                    "1": stack(IP.tophat),
-                    "2": stack(IP.sharpen)
+                    "1": (stack(IP.tophat), {'size': 15}),
+                    "2": (stack(IP.sharpen), {'sigma': 1.0, 'amount': 1.5})
                 },
                 group_by='channel',
-                processing_args={
-                    "1": {'size': 15},
-                    "2": {'sigma': 1.0, 'amount': 1.5}
-                },
-                output_dir=dirs['enhanced']
             ),
 
-            # Step 3: Generate positions
+            # Step 3: Create composite for position generation
+            # This is important when working with multiple channels
+            Step(
+                name="Create Composite",
+                func=(IP.create_composite, {'weights': [0.6, 0.4]}),  # Custom weighting: 60% channel 1, 40% channel 2
+                variable_components=['channel']
+            ),
+
+            # Step 4: Generate positions using the composite
             PositionGenerationStep(
                 name="Generate Positions",
-                input_dir=dirs['enhanced'],
-                output_dir=dirs['positions'],
-                reference_channel="1"
             ),
 
-            # Step 4: Stitch images
+            # Step 5: Stitch images
             ImageStitchingStep(
                 name="Stitch Images",
-                input_dir=dirs['enhanced'],
-                positions_dir=dirs['positions'],
-                output_dir=dirs['stitched']
             )
         ],
         name="Complete Workflow Pipeline"
@@ -537,4 +538,4 @@ Now that you understand intermediate usage patterns, you can:
 
 * Explore advanced usage in the :doc:`advanced_usage` section
 * Learn about custom processing functions and multithreaded processing
-* See complete workflow examples in the :doc:`practical_examples` section
+* Explore the :doc:`advanced_usage` section for more complex workflows
