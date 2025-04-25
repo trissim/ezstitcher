@@ -68,48 +68,31 @@ For details about specific components, see:
 Installation and Setup
 --------------------
 
-Requirements
+EZStitcher requires Python 3.11 or higher and several scientific computing libraries. For detailed installation instructions, including:
+
+* System requirements
+* Recommended installation with pyenv
+* Dependencies
+* Platform-specific installation details (Linux, macOS, Windows)
+* Troubleshooting installation issues
+* Verifying installation
+
+See the comprehensive :doc:`../getting_started/installation` guide.
+
+Quick Installation
 ^^^^^^^^^^^^^^^^^
 
-* Python 3.11 or higher
-* NumPy, SciPy, scikit-image, pandas, tqdm
-* OpenCV (for image processing)
-
-Installation with pip
-^^^^^^^^^^^^^^^^^
-
-The recommended way to install EZStitcher is using pip with a virtual environment:
+For a quick installation using pip with a virtual environment:
 
 .. code-block:: bash
 
-    # Create a virtual environment with pyenv (recommended)
+    # Create a virtual environment with pyenv
     pyenv install 3.11.0
     pyenv virtualenv 3.11.0 ezstitcher-env
     pyenv activate ezstitcher-env
 
     # Install EZStitcher
     pip install ezstitcher
-
-Installation from source
-^^^^^^^^^^^^^^^^^
-
-To install the latest development version:
-
-.. code-block:: bash
-
-    git clone https://github.com/trissim/ezstitcher.git
-    cd ezstitcher
-    pip install -e .
-
-Verifying Installation
-^^^^^^^^^^^^^^^^^^^
-
-To verify that EZStitcher is installed correctly:
-
-.. code-block:: python
-
-    import ezstitcher
-    print(ezstitcher.__version__)
 
 Quick Start Example
 -----------------
