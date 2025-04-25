@@ -5,30 +5,22 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment
 concurrency:
   group: "pages"
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
-        
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -38,26 +30,35 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install pytest pytest-cov coverage sphinx sphinx-rtd-theme
-          
-      - name: Build documentation
-        run: |
-          cd docs
-          make html
-          mkdir -p ../site
-          cp -r build/html/* ../site/
+          pip install pytest pytest-cov coverage
           
       - name: Run tests with coverage
         run: |
+          mkdir -p site
           pytest --cov=ezstitcher \
                 --cov-report=html:site/coverage \
                 tests/
         
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: List directory contents
+        run: |
+          echo "Site directory contents:"
+          ls -la site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
-          
+          path: './site'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v3
