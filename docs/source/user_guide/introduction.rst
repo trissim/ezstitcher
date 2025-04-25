@@ -68,31 +68,35 @@ For details about specific components, see:
 Installation and Setup
 --------------------
 
-EZStitcher requires Python 3.11 or higher and several scientific computing libraries. For detailed installation instructions, including:
+EZStitcher requires Python 3.11 or higher. The simplest way to install EZStitcher is directly from the Git repository using pyenv and pip.
 
-* System requirements
-* Recommended installation with pyenv
-* Dependencies
-* Platform-specific installation details (Linux, macOS, Windows)
-* Troubleshooting installation issues
-* Verifying installation
+### Quick Installation
 
-See the comprehensive :doc:`../getting_started/installation` guide.
+1. **Set up a Python environment with pyenv**:
 
-Quick Installation
-^^^^^^^^^^^^^^^^^
+```bash
+# Install Python 3.11 with pyenv
+pyenv install 3.11.0
 
-For a quick installation using pip with a virtual environment:
+# Create a virtual environment
+pyenv virtualenv 3.11.0 ezstitcher-env
 
-.. code-block:: bash
+# Activate the environment
+pyenv local ezstitcher-env
+```
 
-    # Create a virtual environment with pyenv
-    pyenv install 3.11.0
-    pyenv virtualenv 3.11.0 ezstitcher-env
-    pyenv activate ezstitcher-env
+2. **Install EZStitcher from the Git repository**:
 
-    # Install EZStitcher
-    pip install ezstitcher
+```bash
+# Clone the repository
+git clone https://github.com/your-org/ezstitcher.git
+cd ezstitcher
+
+# Install the package and dependencies
+pip install -e .
+```
+
+All dependencies will be automatically installed from the requirements.txt file included in the repository.
 
 Quick Start Example
 -----------------
@@ -150,12 +154,6 @@ Here's a simple example that demonstrates how to create and run a pipeline for p
 * Processed images will be saved in the workspace directory with the suffix `_out` (e.g., `plate_workspace_out`)
 * Position files will be saved in the workspace directory with the suffix `_positions` (e.g., `plate_workspace_positions`)
 * Stitched images will be saved in the workspace directory with the suffix `_stitched` (e.g., `plate_workspace_stitched`)
-
-**Common Issues:**
-
-* **Directory Permissions**: Ensure you have write permissions for the output directories
-* **Missing Dependencies**: Make sure all required dependencies are installed
-* **Image Format Issues**: Verify that your images are in a supported format
 
 Key Concepts
 -----------
