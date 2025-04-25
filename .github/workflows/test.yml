@@ -27,31 +27,32 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          mkdir -p coverage
           pytest --cov=ezstitcher \
                 --cov-report=xml \
                 --cov-report=json \
                 tests/
-          coverage json -o coverage/coverage-summary.json
+          coverage json -o coverage.json
 
       - name: Debug coverage JSON
         run: |
           echo "Coverage JSON content:"
-          cat coverage/coverage-summary.json
+          cat coverage.json
           echo "JSON structure:"
-          node -p 'JSON.stringify(require(`./coverage/coverage-summary.json`), null, 2)'
+          node -p 'try { console.log(JSON.stringify(require(`./coverage.json`), null, 2)) } catch (e) { console.log("Invalid JSON structure") }'
 
       - name: Get coverage percentage
         run: |
-          COV=$(node -p '
-            const data = require(`./coverage/coverage-summary.json`);
-            console.error("Data:", JSON.stringify(data, null, 2));
-            const total = data.totals || data.total || data;
-            console.error("Total:", JSON.stringify(total, null, 2));
-            const coverage = total.percent_covered || total.line_rate * 100 || 0;
-            coverage.toFixed(2)
-          ')
-          echo "COVERAGE=$COV" >> $GITHUB_ENV
+          python -c "import json
+          import os
+          try:
+              with open('coverage.json') as f:
+                  data = json.load(f)
+              total = data.get('total', {})
+              percent = total.get('percent_covered', 0.0) if isinstance(total, dict) else 0.0
+          except Exception as e:
+              percent = 0.0
+          print(f'COVERAGE={percent:.2f}')
+          " >> $GITHUB_ENV
 
       - name: Coverage Badge
         uses: we-cli/coverage-badge-action@v1.0.1
