@@ -8,13 +8,17 @@ with open("ezstitcher/__init__.py", "r") as f:
             version = line.split("=")[1].strip().strip('"').strip("'")
             break
 
-# Read README and replace local image path with absolute GitHub URL
+# Read README and ensure absolute GitHub URL for PyPI
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
-    # Replace local image path with GitHub raw content URL
+    # Ensure logo URL is absolute and points to main branch
+    github_base = 'https://raw.githubusercontent.com/trissim/ezstitcher/main'
+    logo_path = 'docs/source/_static/ezstitcher_logo.png'
+    
+    # Replace any relative or malformed paths with the absolute GitHub URL
     long_description = re.sub(
-        r'docs/source/_static/ezstitcher_logo.png',
-        'https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png',
+        rf'{github_base}/{github_base}/{logo_path}|{github_base}/{logo_path}|{logo_path}',
+        f'{github_base}/{logo_path}',
         long_description
     )
 
