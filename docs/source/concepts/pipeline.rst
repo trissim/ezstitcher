@@ -20,7 +20,7 @@ The recommended way to create a pipeline is to provide all steps at once during 
 
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+    from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create a pipeline with all steps at once (recommended approach)
     pipeline = Pipeline(

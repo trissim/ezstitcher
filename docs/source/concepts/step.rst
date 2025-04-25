@@ -18,7 +18,7 @@ Creating a Basic Step
 .. code-block:: python
 
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+    from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create a basic processing step
     step = Step(

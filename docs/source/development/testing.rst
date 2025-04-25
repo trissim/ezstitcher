@@ -25,19 +25,19 @@ To run a specific test file:
 
 .. code-block:: bash
 
-    pytest tests/unit/test_image_preprocessor.py
+    pytest tests/unit/test_image_processor.py
 
 To run a specific test class:
 
 .. code-block:: bash
 
-    pytest tests/unit/test_image_preprocessor.py::TestImagePreprocessor
+    pytest tests/unit/test_image_processor.py::TestImageProcessor
 
 To run a specific test method:
 
 .. code-block:: bash
 
-    pytest tests/unit/test_image_preprocessor.py::TestImagePreprocessor::test_blur
+    pytest tests/unit/test_image_processor.py::TestImageProcessor::test_blur
 
 Test Coverage
 ------------
@@ -71,10 +71,10 @@ Here's an example of a unit test:
 
     import pytest
     import numpy as np
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor
+    from ezstitcher.core.image_processor import ImageProcessor
 
-    class TestImagePreprocessor:
-        """Tests for the ImagePreprocessor class."""
+    class TestImageProcessor:
+        """Tests for the ImageProcessor class."""
 
         def test_blur(self):
             """Test the blur method."""
@@ -83,7 +83,7 @@ Here's an example of a unit test:
             image[40:60, 40:60] = 5000  # Add a bright square
 
             # Apply blur
-            blurred = ImagePreprocessor.blur(image, sigma=2.0)
+            blurred = ImageProcessor.blur(image, sigma=2.0)
 
             # Verify that the image was blurred
             assert blurred.shape == image.shape
@@ -98,7 +98,7 @@ Here's an example of a unit test:
             image[40:60, 40:60] = 5000  # Add a bright square
 
             # Apply normalization
-            normalized = ImagePreprocessor.normalize(image, target_min=0, target_max=65535)
+            normalized = ImageProcessor.normalize(image, target_min=0, target_max=65535)
 
             # Verify that the image was normalized
             assert normalized.shape == image.shape
@@ -117,7 +117,7 @@ Here's an example of an integration test:
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+    from ezstitcher.core.image_processor import ImageProcessor as IP
     from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 
     @pytest.fixture

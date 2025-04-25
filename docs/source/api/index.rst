@@ -14,7 +14,7 @@ Core Components
    steps
    stitcher
    focus_analyzer
-   image_preprocessor
+   image_processor
    file_system_manager
    image_locator
 

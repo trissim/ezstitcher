@@ -21,7 +21,7 @@ First, import the necessary modules:
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+    from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
 
 Next, create a configuration and orchestrator:
@@ -184,7 +184,7 @@ For faster processing, you can use multiple worker threads:
 Common Image Processing Operations
 --------------------------------
 
-EZStitcher provides a variety of image processing functions through the ImagePreprocessor class. Here are some common operations:
+EZStitcher provides a variety of image processing functions through the ImageProcessor class. Here are some common operations:
 
 Normalization
 ^^^^^^^^^^^
@@ -303,7 +303,7 @@ Create a Python script with your pipeline configuration:
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+    from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
 
     def create_basic_pipeline(plate_path, num_workers=1):

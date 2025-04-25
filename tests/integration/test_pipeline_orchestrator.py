@@ -8,7 +8,7 @@ from ezstitcher.core.processing_pipeline import PipelineOrchestrator
 from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.file_system_manager import FileSystemManager as fs_manager
@@ -187,10 +187,10 @@ def zstack_plate_dir(test_function_dir, microscope_config, test_params):
     )
 
 
-# Import the ImagePreprocessor for stack functions
+# Import thread tracking utilities
 from ezstitcher.core.utils import track_thread_activity, clear_thread_activity, print_thread_activity_report
 
-# Create an instance of ImagePreprocessor for testing
+# Create an instance of ImageProcessor for testing
 
 # Define a wrapper function for stack_equalize_histogram
 def normalize(stack):

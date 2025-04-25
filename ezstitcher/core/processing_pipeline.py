@@ -11,7 +11,7 @@ from ezstitcher.core.microscope_interfaces import create_microscope_handler
 from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.file_system_manager import FileSystemManager
-from ezstitcher.core.image_preprocessor import ImagePreprocessor
+from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
 
@@ -58,7 +58,7 @@ class PipelineOrchestrator:
         self.input_dir = self.prepare_images(self.workspace_path)
 
         self.stitcher = Stitcher(self.config.stitcher, filename_parser=self.microscope_handler.parser)
-        self.image_preprocessor = image_preprocessor or ImagePreprocessor()
+        self.image_preprocessor = image_preprocessor or ImageProcessor()
 
         # Initialize focus analyzer
         focus_config = self.config.focus_config or FocusAnalyzerConfig()

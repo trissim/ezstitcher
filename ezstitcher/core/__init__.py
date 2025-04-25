@@ -7,7 +7,7 @@ This module provides the core functionality for the ezstitcher package.
 # Removed obsolete imports of non-existent functions from main.py
 
 # Import classes for instance-based API
-from ezstitcher.core.image_preprocessor import ImagePreprocessor
+from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.file_system_manager import FileSystemManager
