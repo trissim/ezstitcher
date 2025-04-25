@@ -30,6 +30,8 @@ Creating a Basic Step
         # output_dir is automatically determined
     )
 
+.. _step-parameters:
+
 Step Parameters
 -------------
 
@@ -40,6 +42,13 @@ Step Parameters
 * ``input_dir``: The input directory (optional, can inherit from pipeline)
 * ``output_dir``: The output directory (optional, can inherit from pipeline)
 * ``well_filter``: Wells to process (optional, can inherit from pipeline)
+
+For practical examples of how to use these parameters in different scenarios, see:
+
+* :doc:`../user_guide/basic_usage` - Basic examples of step parameters
+* :doc:`../user_guide/intermediate_usage` - Examples of variable_components and group_by
+* :doc:`../user_guide/advanced_usage` - Advanced examples of func parameter
+* :doc:`../user_guide/best_practices` - Best practices for step parameters
 
 Processing Arguments
 ------------------
@@ -73,6 +82,8 @@ When initializing steps, it's important to follow best practices for directory s
 
 For detailed information on step initialization best practices, directory resolution, and directory flow, see :doc:`directory_structure`.
 
+.. _variable-components:
+
 Variable Components
 -----------------
 
@@ -80,7 +91,12 @@ The ``variable_components`` parameter specifies which components will be grouped
 
 **Key concept**: Images that share the same values for all components *except* the variable component will be grouped together into a stack.
 
-In most cases, you don't need to set this explicitly as it defaults to ``['site']``, but there are specific cases where you should change it:
+In most cases, you don't need to set this explicitly as it defaults to ``['site']``, but there are specific cases where you should change it.
+
+For practical examples of how to use variable_components in different scenarios, see:
+
+* :doc:`../user_guide/intermediate_usage` - Examples for Z-stack processing and channel compositing
+* :doc:`../user_guide/advanced_usage` - Advanced examples with custom functions
 
 .. code-block:: python
 
@@ -118,10 +134,17 @@ In most cases, you don't need to set this explicitly as it defaults to ``['site'
         # variable_components defaults to ['site']
     )
 
+.. _group-by:
+
 Group By
 -------
 
-The ``group_by`` parameter is only used when providing a dictionary of functions. It specifies what component the keys in your function dictionary correspond to:
+The ``group_by`` parameter is only used when providing a dictionary of functions. It specifies what component the keys in your function dictionary correspond to.
+
+For practical examples of how to use group_by in different scenarios, see:
+
+* :doc:`../user_guide/intermediate_usage` - Examples for channel-specific processing
+* :doc:`../user_guide/advanced_usage` - Advanced examples with dictionaries of functions
 
 .. code-block:: python
 

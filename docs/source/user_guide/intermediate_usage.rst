@@ -18,7 +18,7 @@ This section covers more advanced topics in EZStitcher, building on the basic co
 Z-Stack Processing
 ----------------
 
-Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks. For detailed explanations of Z-stack processing and the `variable_components` parameter, see :doc:`../concepts/step`. For a comprehensive guide to all Z-stack processing operations, see :ref:`operation-z-projection` in the :doc:`../api/image_processing_operations` documentation.
+Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks. For detailed explanations of Z-stack processing and the `variable_components` parameter, see :ref:`variable-components` in the :doc:`../concepts/step` documentation. For a comprehensive guide to all Z-stack processing operations, see :ref:`operation-z-projection` in the :doc:`../api/image_processing_operations` documentation.
 
 .. important::
    Z-stack flattening is a one-way operation that converts a 3D stack into a single 2D image. Once a Z-stack is flattened, it cannot be flattened again using a different method. You should choose the most appropriate flattening method for your data based on your specific needs.
@@ -218,7 +218,7 @@ For detailed explanations of function handling patterns, including dictionaries 
 Using Dictionary of Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The most flexible approach is to use a dictionary of functions, where each key corresponds to a channel:
+The most flexible approach is to use a dictionary of functions, where each key corresponds to a channel. For detailed explanations of the `group_by` parameter and how it works with dictionaries of functions, see :ref:`group-by` in the :doc:`../concepts/step` documentation.
 
 .. code-block:: python
 
@@ -289,7 +289,7 @@ You can also use a dictionary of lists of functions with matching processing arg
 Creating Composite Images
 ^^^^^^^^^^^^^^^^^^^^^^
 
-You can combine multiple channels into a composite image. For detailed explanations of composite image creation and the `variable_components=['channel']` parameter, see :doc:`../concepts/step`.
+You can combine multiple channels into a composite image. For detailed explanations of composite image creation and the `variable_components=['channel']` parameter, see :ref:`variable-components` in the :doc:`../concepts/step` documentation.
 
 .. note::
    The `create_composite` function can be called with or without the `weights` parameter:

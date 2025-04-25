@@ -103,6 +103,8 @@ In the example above, we used several key parameters:
 * **steps**: A list of processing steps to execute in sequence
 * **name**: A descriptive name for the pipeline for logging purposes
 
+For detailed information about step parameters, including variable_components and group_by, see :ref:`step-parameters` in the :doc:`../concepts/step` documentation.
+
 Directory Management
 ^^^^^^^^^^^^^^^^^
 

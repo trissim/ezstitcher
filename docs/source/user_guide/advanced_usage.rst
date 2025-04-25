@@ -129,7 +129,7 @@ If your function is designed to process a single image but you want to apply it 
 Advanced Custom Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For more complex processing, you can create functions that handle specific components differently. For detailed explanations of how component information is passed to functions, see :doc:`../concepts/step`.
+For more complex processing, you can create functions that handle specific components differently. For detailed explanations of how component information is passed to functions, see :ref:`variable-components` and :ref:`group-by` in the :doc:`../concepts/step` documentation.
 
 .. code-block:: python
 
@@ -322,12 +322,6 @@ The core concepts documentation covers:
 Next Steps
 ----------
 
-Now that you understand advanced usage patterns, you can:
-
-* Create custom processing functions tailored to your specific needs
-* Optimize performance with multithreaded processing
-* Extend EZStitcher to support new microscope types
-* Apply best practices for step initialization and directory management
-* Learn about :doc:`integration` with other tools and frameworks
+Now that you understand advanced usage patterns, you're ready to master EZStitcher and explore integration with other tools. For a comprehensive learning path that covers mastering EZStitcher, see :ref:`learning-path` in the introduction.
 
 For more information on integrating with other tools, see the :doc:`integration` section.
