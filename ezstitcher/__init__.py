@@ -1,8 +1,4 @@
-"""EZStitcher - Easy Microscopy Image Stitching Tool.
-
-EZStitcher is a Python package for stitching microscopy images with support for
-Z-stacks, multi-channel fluorescence, and advanced focus detection.
-"""
+"""EZStitcher: An easy-to-use microscopy image stitching and processing tool."""
 
 __version__ = "0.1.0"
 
