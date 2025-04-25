@@ -53,6 +53,7 @@ ENV/
 *.png
 *.PNG
 !docs/source/_static/images/*.png  # Allow png files in assets/images
+!docs/source/_static/*.png  # Allow png files in assets/images
 !docs/source/_static/images/*.jpg  # Allow jpg files in assets/images
 
 # Test directories

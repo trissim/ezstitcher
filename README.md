@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docs/source/_static/images/ezstitcher_logo.png" alt="EZStitcher Logo" width="400"/>
+</div>
+
 # EZStitcher
 
 [![PyPI version](https://badge.fury.io/py/ezstitcher.svg)](https://badge.fury.io/py/ezstitcher)
