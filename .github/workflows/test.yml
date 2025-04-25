@@ -32,7 +32,7 @@ jobs:
       run: |
         COV=$(node -p '
           const coverage = require("./coverage.json");
-          coverage.totals.percent_covered.toFixed(2);
+          coverage.totals.percent_covered.toFixed(2)
         ')
         echo "COVERAGE=$COV" >> $GITHUB_ENV
     
