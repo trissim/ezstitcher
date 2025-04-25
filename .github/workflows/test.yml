@@ -1,76 +1,5 @@
-#---
-#name: Tests
-#
-#on:
-#  push:
-#    branches: [main]
-#  pull_request:
-#    branches: [main]
-#
-#jobs:
-#  test:
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - uses: actions/checkout@v3
-#
-#      - name: Set up Python 3.11
-#        uses: actions/setup-python@v4
-#        with:
-#          python-version: "3.11"
-#
-#      - name: Install dependencies
-#        run: |
-#          python -m pip install --upgrade pip
-#          pip install -e ".[dev]"
-#          pip install pytest pytest-cov coverage
-#
-#      - name: Run tests with coverage
-#        run: |
-#          pytest --cov=ezstitcher \
-#                --cov-report=xml \
-#                --cov-report=json \
-#                tests/
-#          coverage json -o coverage.json
-#
-#      - name: Debug coverage JSON
-#        run: |
-#          echo "Coverage JSON content:"
-#          cat coverage.json
-#          echo "JSON structure:"
-#          node -p 'try { console.log(JSON.stringify(require(`./coverage.json`), null, 2)) } catch (e) { console.log("Invalid JSON structure") }'
-#
-#      - name: Get coverage percentage
-#        run: |
-#          python -c "import json
-#          try:
-#              with open('coverage.json') as f:
-#                  data = json.load(f)
-#              if not isinstance(data.get('totals'), dict):
-#                  raise ValueError('Missing or invalid totals section')
-#              percent = data['totals'].get('percent_covered', 0.0)
-#          except Exception as e:
-#              print(f'Error processing coverage data: {e}')
-#              percent = 0.0
-#          print(f'COVERAGE={percent:.2f}%')
-#          " >> $GITHUB_ENV
-#
-#      - name: Coverage Badge
-#        uses: we-cli/coverage-badge-action@v1.0.1
-#        with:
-#          badges-directory: .github/badges
-#          coverage: ${{ env.COVERAGE }}
-#
-#      - name: Commit and push if coverage has changed
-#        run: |
-#          git config --local user.email \
-#            "github-actions[bot]@users.noreply.github.com"
-#          git config --local user.name "github-actions[bot]"
-#          git add .github/badges/coverage.svg
-#          git commit -m "chore: update coverage badge" || exit 0
-#          git push
-
-name: Coverage Badge
+---
+name: Tests
 
 on:
   push:
@@ -79,9 +8,9 @@ on:
     branches: [main]
 
 jobs:
-  coverage:
+  test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v3
 
@@ -94,22 +23,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov coverage genbadge[coverage]
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=ezstitcher tests/ --cov-report=xml
+          pytest --cov=ezstitcher \
+                --cov-report=xml \
+                tests/
 
       - name: Generate coverage badge
-        uses: we-cli/coverage-badge-action@v1.0.1
-        with:
-          badges-directory: .github/badges
-          coverage-path: coverage.xml
-
-      - name: Commit and push badge
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p .github/badges
+          genbadge coverage -i coverage.xml -o .github/badges/coverage.svg
+
+      - name: Commit and push if coverage has changed
+        run: |
+          git config --local user.email \
+            "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add .github/badges/coverage.svg
-          git commit -m "Update coverage badge" || exit 0
+          git commit -m "chore: update coverage badge" || exit 0
           git push
