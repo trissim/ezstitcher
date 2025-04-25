@@ -26,8 +26,8 @@ def test_field_remapping():
     """
     Test the field remapping functionality.
     """
-    # Use the Index.xml file in the project root directory
-    xml_path = Path(__file__).parent.parent / "Index.xml"
+    # Use the Index.xml file in the project tests directory
+    xml_path = Path(__file__).parent / "Index.xml"
     assert xml_path.exists(), f"Index.xml file not found at: {xml_path}"
 
     logger.info(f"Testing field remapping with XML file: {xml_path}")
