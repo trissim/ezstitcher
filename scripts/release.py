@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import re
 import requests
+from packaging import version
 
 def get_current_version():
     with open("ezstitcher/__init__.py", "r") as f:
@@ -23,32 +24,32 @@ def get_pypi_version():
 
 def main():
     # Get current version
-    version = get_current_version()
-    if not version:
+    current_version = get_current_version()
+    if not current_version:
         print("Error: Could not find version in __init__.py")
         sys.exit(1)
     
     # Get PyPI version
     pypi_version = get_pypi_version()
-    print(f"Current package version: {version}")
+    print(f"Current package version: {current_version}")
     print(f"Current PyPI version: {pypi_version}")
     
-    if pypi_version and version <= pypi_version:
-        print(f"Error: Current version ({version}) must be greater than PyPI version ({pypi_version})")
+    if pypi_version and version.parse(current_version) <= version.parse(pypi_version):
+        print(f"Error: Current version ({current_version}) must be greater than PyPI version ({pypi_version})")
         sys.exit(1)
     
     # Confirm with user
-    response = input(f"Create release for v{version}? [y/N] ")
+    response = input(f"Create release for v{current_version}? [y/N] ")
     if response.lower() != 'y':
         print("Aborted.")
         return
     
     try:
         # Create and push tag
-        subprocess.run(['git', 'tag', '-a', f'v{version}', '-m', f'Release version {version}'], check=True)
-        subprocess.run(['git', 'push', 'origin', f'v{version}'], check=True)
+        subprocess.run(['git', 'tag', '-a', f'v{current_version}', '-m', f'Release version {current_version}'], check=True)
+        subprocess.run(['git', 'push', 'origin', f'v{current_version}'], check=True)
         
-        print(f"\nSuccessfully created and pushed tag v{version}")
+        print(f"\nSuccessfully created and pushed tag v{current_version}")
         print("GitHub Actions workflow should start automatically.")
         print("Monitor progress at: https://github.com/YOUR_USERNAME/ezstitcher/actions")
     
