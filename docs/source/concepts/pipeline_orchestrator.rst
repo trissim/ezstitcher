@@ -1,3 +1,5 @@
+.. _pipeline-orchestrator:
+
 ===================
 PipelineOrchestrator
 ===================
@@ -6,6 +8,13 @@ Role and Responsibilities
 ------------------------
 
 The ``PipelineOrchestrator`` is the top-level component that manages all plate-specific operations and coordinates the execution of pipelines. It serves as an abstraction layer between the plate-specific details and the pipeline steps.
+
+.. figure:: ../_static/orchestrator_pipeline_relationship.png
+   :alt: Orchestrator and Pipeline Relationship
+   :width: 80%
+   :align: center
+
+   The relationship between PipelineOrchestrator and Pipeline components.
 
 Key responsibilities:
 
@@ -30,6 +39,9 @@ Key responsibilities:
   - Abstracts plate-specific operations that depend on the microscope handler
 
 The orchestrator acts as a "plate manager" that knows how to handle the specific details of different plate formats, allowing the pipeline steps to focus on their image processing tasks without needing to know about the underlying plate structure.
+
+.. note::
+   While a :ref:`pipeline <pipeline-concept>` defines *what* processing to perform, the orchestrator controls *how* and *where* that processing is applied across a plate.
 
 Creating an Orchestrator
 -----------------------
@@ -125,6 +137,8 @@ The orchestrator provides several plate-specific services that abstract away the
 
    **Used by**: The `stitch_images()` and `generate_positions()` methods call this internally to get a thread-safe stitcher instance. Steps don't need to call this directly.
 
+.. _orchestrator-running-pipelines:
+
 Running Pipelines
 ----------------
 
@@ -139,3 +153,60 @@ The orchestrator can run one or more pipelines:
     orchestrator.run(pipelines=[pipeline1, pipeline2, pipeline3])
 
 When multiple pipelines are provided, they are executed in sequence for each well. If ``num_workers`` is greater than 1, multiple wells are processed in parallel.
+
+.. figure:: ../_static/pipeline_execution_flow.png
+   :alt: Pipeline Execution Flow
+   :width: 80%
+   :align: center
+
+   Pipeline execution flow with multiple wells and pipelines.
+
+The execution flow is:
+
+1. For each well in the plate (or well_filter if specified):
+   a. Create a thread to process the well (if multithreading is enabled)
+   b. For each pipeline in the pipelines list:
+      i. Run the pipeline on the well
+      ii. Wait for completion before starting the next pipeline
+
+This approach ensures that:
+- Multiple wells can be processed concurrently (controlled by ``num_workers``)
+- Pipelines are executed in sequence for each well
+- Each pipeline has access to the results of previous pipelines
+
+For more information on how pipelines are executed, see :ref:`pipeline-running`.
+
+.. _orchestrator-pipeline-relationship:
+
+Orchestrator-Pipeline Relationship
+-------------------------------
+
+The relationship between the PipelineOrchestrator and Pipeline is a key aspect of EZStitcher's architecture:
+
+.. figure:: ../_static/orchestrator_pipeline_steps.png
+   :alt: Orchestrator, Pipeline, and Steps Relationship
+   :width: 80%
+   :align: center
+
+   The hierarchical relationship between Orchestrator, Pipeline, and Steps.
+
+**Responsibilities:**
+
+* **PipelineOrchestrator**: Manages plate-level operations and multithreaded execution
+* **Pipeline**: Manages a sequence of processing steps and their execution
+* **Step**: Performs a specific processing operation on images
+
+**Communication Flow:**
+
+1. The orchestrator provides plate-specific services to pipelines
+2. Pipelines use these services to execute their steps
+3. Steps access the orchestrator through the pipeline's context
+
+**Key Interactions:**
+
+* The orchestrator creates a ProcessingContext for each pipeline
+* The context includes a reference to the orchestrator
+* Steps can access the orchestrator through this context reference
+* Specialized steps (like PositionGenerationStep) use orchestrator services
+
+For more information on pipelines and their structure, see :ref:`pipeline-concept`.

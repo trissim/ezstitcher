@@ -114,6 +114,15 @@ A pipeline can be run directly, but it's typically run through the orchestrator:
         orchestrator=orchestrator  # Required for microscope handler access
     )
 
+Running through the orchestrator is recommended because it:
+
+1. Handles multithreaded execution across wells
+2. Provides plate-specific services to the pipeline
+3. Manages error handling and logging
+4. Ensures proper directory resolution
+
+For detailed information on how the orchestrator runs pipelines, see :ref:`orchestrator-running-pipelines`.
+
 .. _pipeline-context:
 
 Pipeline Context
@@ -128,6 +137,21 @@ When a pipeline runs, it creates a ``ProcessingContext`` that is passed from ste
 * Reference to the orchestrator
 
 This allows steps to communicate and build on each other's results. The context is created at the beginning of pipeline execution and updated by each step as it runs.
+
+.. figure:: ../_static/pipeline_context_flow.png
+   :alt: Pipeline Context Flow
+   :width: 80%
+   :align: center
+
+   The flow of context between steps in a pipeline.
+
+The context serves as a communication mechanism between:
+
+1. The orchestrator and the pipeline
+2. The pipeline and its steps
+3. Different steps within the pipeline
+
+For example, specialized steps like ``PositionGenerationStep`` use the orchestrator reference in the context to access plate-specific services. For more information on the relationship between the orchestrator and pipeline, see :ref:`orchestrator-pipeline-relationship`.
 
 .. _pipeline-multithreaded:
 
@@ -154,6 +178,20 @@ Pipelines can be run in a multithreaded environment through the orchestrator:
     orchestrator.run(pipelines=[pipeline])
 
 The number of worker threads determines how many wells can be processed concurrently. This can significantly improve performance when processing multiple wells.
+
+.. important::
+   Multithreading happens at the well level, not the step level. Each well is processed in a separate thread, but steps within a pipeline are executed sequentially for each well.
+
+Key points about multithreaded processing:
+
+1. The orchestrator creates a thread pool with ``num_workers`` threads
+2. Each well is assigned to a thread from the pool
+3. All pipelines for a well are executed in the same thread
+4. Steps within a pipeline are executed sequentially
+
+This approach provides good performance while avoiding race conditions and ensuring that steps have access to the results of previous steps.
+
+For more information on how the orchestrator manages multithreaded execution, see :ref:`orchestrator-running-pipelines`.
 
 .. _pipeline-directory-resolution:
 
