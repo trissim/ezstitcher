@@ -4,37 +4,43 @@
 [![Documentation Status](https://readthedocs.org/projects/ezstitcher/badge/?version=latest)](https://ezstitcher.readthedocs.io/en/latest/?badge=latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-EZStitcher is a Python library designed to simplify the processing and stitching of microscopy images. It provides a flexible pipeline architecture that allows researchers to easily process large microscopy datasets, create composite images, flatten Z-stacks, and stitch tiled images together. The stitching process is powered by the robust [Ashlar](https://github.com/labsyspharm/ashlar) backend.
+## Powerful Microscopy Image Processing Made Simple
 
-## Key Features
+EZStitcher is a high-performance Python library that transforms complex microscopy image processing into simple, intuitive workflows. Built on top of the robust [Ashlar](https://github.com/labsyspharm/ashlar) stitching engine, it provides a flexible pipeline architecture that makes processing large microscopy datasets effortless.
 
-*   Multi-channel fluorescence support: Process and stitch multiple fluorescence channels
-*   Z-stack Handling & Focus Detection: Process 3D image stacks with various projection methods, advanced focus detection, and support for per-plane 3D stitching.
-*   Flexible Preprocessing: Apply custom image processing functions within the pipeline.
-*   Microscope Support & Auto-Detection: Supports ImageXpress and Opera Phenix formats with automatic detection of microscope type and image organization.
-*   Parallel Processing: Built-in multithreading support (`PipelineConfig`) for faster execution on multi-core systems.
-*   Extensible & Integratable: Clean, object-oriented API facilitates customization and integration with other Python microscopy/image analysis packages.
+## 🚀 Key Features
 
-## Installation
+- **Intelligent Z-Stack Processing**
+  - Advanced focus detection and quality metrics
+  - Multiple projection methods (max, mean, best-focus)
+  - Per-plane 3D stitching support
 
-1. Install pyenv (platform-specific, choose one):
+- **Multi-Channel Excellence**
+  - Process multiple fluorescence channels independently
+  - Create channel-specific processing pipelines
+  - Generate composite images with custom weighting
+
+- **Automated Workflow Management**
+  - Smart microscope format detection
+  - Automatic directory management
+  - Built-in multithreading support
+
+- **Research-Ready Architecture**
+  - Clean, object-oriented API
+  - Extensible pipeline system
+  - Seamless integration with other Python tools
+  - Comprehensive testing suite
+
+## 🎯 Supported Microscopes
+
+- ImageXpress
+- Opera Phenix
+- Extensible architecture for adding new microscope types
+
+## ⚡ Quick Start
+
 ```bash
-# macOS
-brew install pyenv
-
-# Linux/WSL
-curl https://pyenv.run | bash
-```
-
-2. Set up pyenv and install Python (all platforms):
-```bash
-# Add to ~/.bashrc (or ~/.zshrc)
-echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-source ~/.bashrc
-
-# Install and set Python 3.11
+# Install with pyenv (recommended)
 pyenv install 3.11
 pyenv global 3.11
 
@@ -46,61 +52,107 @@ source .venv/bin/activate
 pip install ezstitcher
 ```
 
-This command installs the package in editable mode and handles dependencies listed in `requirements.txt`.
-
-## Basic Usage
-
-The following example demonstrates a basic pipeline that normalizes images and then stitches them. Intermediate output directories for steps are managed automatically by default, typically within structured intermediate folders. The final pipeline output directory also defaults to a location based on the input plate name (e.g., `[plate_name]_stitched` next to the original plate folder). You can specify custom `output_dir` for individual steps or the overall pipeline if manual control over output locations is needed.
+## 📊 Basic Usage
 
 ```python
+from ezstitcher import Pipeline, Step, IP
+from ezstitcher.steps import PositionGenerationStep, ImageStitchingStep
 from ezstitcher.core.config import PipelineConfig
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-from ezstitcher.core.pipeline import Pipeline
-from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-from ezstitcher.core.image_processor import ImageProcessor as IP
 from pathlib import Path
 
-# Create configuration (e.g., single-threaded)
-config = PipelineConfig(num_workers=1)
-
-# Path to your plate folder (replace with actual path)
-plate_path = Path("/path/to/your/plate")
-
-# Create orchestrator
+# Initialize configuration and orchestrator
+config = PipelineConfig(num_workers=2)  # Use 2 worker threads
 orchestrator = PipelineOrchestrator(
     config=config,
-    plate_path=plate_path
+    plate_path=Path("/path/to/plate")
 )
 
-# Define the pipeline steps
-# The final output directory defaults to '[plate_name]_stitched' next to the plate folder
+# Define a complete processing pipeline
 pipeline = Pipeline(
-    input_dir=orchestrator.workspace_path,  # Use workspace managed by orchestrator
+    input_dir=orchestrator.workspace_path,
     steps=[
-        # Step 1: Normalize image intensities
-        # Output is implicitly stored in an automatically managed intermediate directory
         Step(
             name="Normalize Images",
             func=IP.stack_percentile_normalize
         ),
-        # Step 2: Generate positions for stitching (uses output from Step 1)
         PositionGenerationStep(),
-        # Step 3: Stitch images (uses output from Step 2 by default)
         ImageStitchingStep()
     ],
     name="Basic Processing Pipeline"
 )
 
-# Run the pipeline
+# Execute with automatic directory management
 success = orchestrator.run(pipelines=[pipeline])
-
-
 ```
 
-## Core Concepts
+## 📊 Advanced Usage Example
 
-EZStitcher uses a hierarchical pipeline architecture: the `PipelineOrchestrator` coordinates plate-level operations and manages the execution of `Pipeline`s (sequences of processing `Step`s) across multiple wells.
+```python
+from ezstitcher import Pipeline, Step, IP
+from ezstitcher.steps import PositionGenerationStep, ImageStitchingStep
+from n2v.models import N2V
+from basicpy import BaSiC
+import numpy as np
 
-## Documentation
+# Custom processing functions
+def n2v_process(images, model_path):
+    """Apply Noise2Void denoising to images"""
+    model = N2V(None, model_path, 'N2V')
+    return [model.predict(img, 'N2V') for img in images]
 
-For more detailed information, please refer to the full documentation hosted on [Read the Docs](https://ezstitcher.readthedocs.io/en/latest/) (replace with actual link if different). The source files for the documentation are located in the `docs/source` directory, with the main index page at `docs/source/index.rst`.
+def basic_process(images):
+    """Apply BaSiC illumination correction"""
+    basic = BaSiC()
+    basic.fit(np.stack(images))
+    return list(basic.transform(np.stack(images)))
+
+def generate_position_pipeline(orchestrator, n2v_model_path):
+    """Generate pipeline for position file creation"""
+    return Pipeline(
+        steps=[
+            Step(func=IP.stack_percentile_normalize,
+                 input_dir=orchestrator.workspace_path),
+            Step(func=(IP.create_projection, {'method': 'max_projection'}),
+                variable_components=['z_index']),
+            Step(func=IP.create_composite,
+                variable_components=['channel']),
+            PositionGenerationStep()
+        ])
+
+def generate_stitching_pipeline(orchestrator, n2v_model_path):
+    """Generate pipeline for image stitching"""
+    return Pipeline(
+        steps=[
+            Step(func=(stack(n2v_process), {'model_path': n2v_model_path}),
+                 input_dir=orchestrator.workspace_path),
+            Step(func=stack(basic_process)),
+            Step(func=IP.stack_percentile_normalize),
+            Step(func=IP.stack_histogram_match),
+            ImageStitchingStep(positions_file='positions.json')
+        ])
+
+# Process a plate with both pipelines
+orchestrator.run(pipelines=[
+    generate_position_pipeline(orchestrator, n2v_model_path),
+    generate_stitching_pipeline(orchestrator, n2v_model_path)
+])
+```
+
+## 📚 Documentation
+
+Comprehensive documentation is available at [Read the Docs](https://ezstitcher.readthedocs.io/en/latest/), including:
+
+- Detailed tutorials and examples
+- Advanced usage patterns
+- API reference
+- Best practices
+- Performance optimization guides
+
+## 🤝 Contributing
+
+We welcome contributions! Check out our [Contributing Guide](https://ezstitcher.readthedocs.io/en/latest/development/contributing.html) to get started.
+
+## 📄 License
+
+EZStitcher is released under the MIT License. See the LICENSE file for details.
