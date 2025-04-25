@@ -18,7 +18,7 @@ First, import the necessary modules:
 .. code-block:: python
 
     from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
@@ -300,7 +300,7 @@ Create a Python script with your pipeline configuration:
 
     # save_pipeline.py
     from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP

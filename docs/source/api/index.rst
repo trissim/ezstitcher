@@ -9,7 +9,7 @@ Core Components
 .. toctree::
    :maxdepth: 2
 
-   processing_pipeline
+   pipeline_orchestrator
    pipeline
    steps
    stitcher

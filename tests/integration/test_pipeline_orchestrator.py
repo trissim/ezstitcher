@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from typing import List, Union
 
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep

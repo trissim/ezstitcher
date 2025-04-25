@@ -11,7 +11,7 @@ from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.file_system_manager import FileSystemManager
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 
 # Import configuration classes
 from ezstitcher.core.config import (

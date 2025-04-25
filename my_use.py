@@ -1,4 +1,4 @@
-from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.core.image_processor import ImageProcessor as IP
 

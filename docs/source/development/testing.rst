@@ -114,7 +114,7 @@ Here's an example of an integration test:
     import numpy as np
     from pathlib import Path
     from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP

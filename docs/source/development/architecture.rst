@@ -125,7 +125,7 @@ The directory structure of the EZStitcher codebase is as follows:
     │   ├── image_preprocessor.py
     │   ├── main.py            # Main entry point
     │   ├── microscope_interfaces.py
-    │   ├── processing_pipeline.py
+    │   ├── pipeline_orchestrator.py
     │   └── stitcher.py
     ├── microscopes/           # Microscope-specific implementations
     │   ├── __init__.py

@@ -1,7 +1,7 @@
 Pipeline Architecture
 ==================
 
-.. module:: ezstitcher.core.processing_pipeline
+.. module:: ezstitcher.core.pipeline_orchestrator
 
 This module contains the core processing pipeline architecture for EZStitcher, which consists of three main components:
 
@@ -26,8 +26,8 @@ PipelineOrchestrator
    :type config: :class:`~ezstitcher.core.config.PipelineConfig`
    :param fs_manager: File system manager (optional, a new instance will be created if not provided)
    :type fs_manager: :class:`~ezstitcher.core.file_system_manager.FileSystemManager`
-   :param image_preprocessor: Image preprocessor (optional, a new instance will be created if not provided)
-   :type image_preprocessor: :class:`~ezstitcher.core.image_preprocessor.ImagePreprocessor`
+   :param image_preprocessor: Image processor (optional, a new instance will be created if not provided)
+   :type image_preprocessor: :class:`~ezstitcher.core.image_processor.ImageProcessor`
    :param focus_analyzer: Focus analyzer (optional, a new instance will be created if not provided)
    :type focus_analyzer: :class:`~ezstitcher.core.focus_analyzer.FocusAnalyzer`
 
