@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/_static/images/ezstitcher_logo.png" alt="EZStitcher Logo" width="400"/>
+  <img src="docs/_static/ezstitcher_logo.png" alt="EZStitcher Logo" width="400"/>
 </div>
 
 # EZStitcher
