@@ -305,6 +305,8 @@ For detailed information on directory management, including:
 
 See :doc:`../concepts/directory_structure`.
 
+For information about the output file structure, see :ref:`output-file-structure`.
+
 Pipeline Construction
 -------------------
 

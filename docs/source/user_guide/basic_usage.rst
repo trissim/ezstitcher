@@ -7,7 +7,7 @@ This section provides detailed examples of basic EZStitcher usage to help you ge
 Setting Up a Simple Pipeline
 ---------------------------
 
-Let's start by creating a simple pipeline for processing microscopy images. For a detailed explanation of pipeline concepts, see :ref:`pipeline-concept`.
+Let's start by creating a simple pipeline for processing microscopy images. For a detailed explanation of pipeline concepts, see :ref:`pipeline-concept`. For information about supported file formats, see :ref:`file-formats`.
 
 We'll build a basic pipeline that:
 

@@ -1,7 +1,11 @@
+.. _file-formats:
+
 File Formats
 ===========
 
 This appendix provides technical specifications for file formats and directory structures supported by EZStitcher.
+
+.. _image-file-formats:
 
 Image File Formats
 ------------------
@@ -29,6 +33,8 @@ Bit Depth Support
 ~~~~~~~~~~~~~~~~~~
 
 EZStitcher currently supports only 16-bit images (uint16, values from 0-65535). Support for 8-bit and 32-bit images may be added in future versions.
+
+.. _position-files:
 
 Position Files
 --------------
@@ -65,6 +71,8 @@ Where:
 - **file**: The filename of the tile
 - **i, j**: Grid coordinates (column, row)
 - **x, y**: Pixel coordinates in the final stitched image
+
+.. _metadata-formats:
 
 Metadata Formats
 ---------------
@@ -131,6 +139,8 @@ Opera Phenix metadata is stored in the Index.xml file:
         </Image>
       </Images>
     </EvaluationInputData>
+
+.. _output-file-structure:
 
 Output File Structure
 -------------------

@@ -1,7 +1,11 @@
+.. _microscope-formats:
+
 Microscope Formats
 ==================
 
 This page describes the file naming conventions and directory structures for different microscope types supported by EZStitcher.
+
+.. _microscope-imagexpress:
 
 ImageXpress
 -----------
@@ -77,6 +81,8 @@ The metadata contains information about:
 
 Pixel size information is typically stored in the TIFF files themselves.
 
+.. _microscope-opera-phenix:
+
 Opera Phenix
 ------------
 
@@ -132,6 +138,8 @@ The metadata contains information about:
 - Position coordinates for each field
 - Acquisition settings
 
+.. _microscope-automatic-detection:
+
 Automatic Detection
 -------------------
 
@@ -153,6 +161,8 @@ The detection algorithm:
 3. Samples image filenames and tries to parse them with different parsers
 4. Selects the most likely microscope type based on the results
 
+.. _microscope-adding-support:
+
 Adding Support for New Microscopes
 ----------------------------------
 
@@ -163,6 +173,8 @@ To add support for a new microscope type:
 3. Register the new microscope type in `ezstitcher/microscopes/__init__.py`
 
 See the :doc:`../development/extending` section for details.
+
+.. _microscope-comparison:
 
 Comparison of Microscope Formats
 --------------------------------

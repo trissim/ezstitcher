@@ -6,7 +6,9 @@ This guide explains how to extend EZStitcher with new functionality.
 Adding a New Microscope Type
 -------------------------
 
-EZStitcher is designed to be easily extended with support for new microscope types. There are two approaches to adding a new microscope type:
+EZStitcher is designed to be easily extended with support for new microscope types. For detailed information about the microscope formats currently supported by EZStitcher, see :ref:`microscope-formats`. For a comparison of different microscope formats, see :ref:`microscope-comparison`.
+
+There are two approaches to adding a new microscope type:
 
 1. **Using the BaseMicroscopeHandler class** (recommended for most cases)
 2. **Implementing the FilenameParser and MetadataHandler interfaces separately** (for more complex cases)

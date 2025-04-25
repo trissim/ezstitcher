@@ -326,7 +326,7 @@ You can combine multiple channels into a composite image. For detailed explanati
 Position Generation and Stitching
 -------------------------------
 
-EZStitcher provides specialized steps for generating position files and stitching images. For detailed explanations of these specialized steps, see :ref:`specialized-steps`.
+EZStitcher provides specialized steps for generating position files and stitching images. For detailed explanations of these specialized steps, see :ref:`specialized-steps`. For information about position file formats, see :ref:`position-files`.
 
 .. important::
    When working with multiple channels, always create a composite image before position generation.
