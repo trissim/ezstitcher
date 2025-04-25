@@ -167,7 +167,7 @@ For faster processing, you can use multiple worker threads. For detailed informa
 Common Image Processing Operations
 --------------------------------
 
-EZStitcher provides a variety of image processing functions through the ImageProcessor class. For detailed information about function handling patterns, see :ref:`function-handling`.
+EZStitcher provides a variety of image processing functions through the ImageProcessor class. For detailed information about function handling patterns, see :ref:`function-handling`. For a comprehensive guide to all image processing operations, see :doc:`../api/image_processing_operations`.
 
 Here are some common operations:
 
@@ -341,11 +341,4 @@ Or visit the complete :doc:`best_practices` guide.
 Next Steps
 ---------
 
-Now that you understand the basics of creating and running pipelines, you can:
-
-* Learn about more advanced topics in the :doc:`intermediate_usage` section
-* Explore Z-stack processing and best focus detection
-* Customize your pipelines with channel-specific processing
-* Create more complex workflows with multiple pipelines
-* Review the detailed pipeline concepts in :doc:`../concepts/pipeline`
-* Learn best practices in the :doc:`best_practices` guide
+Now that you understand the basics of creating and running pipelines, you're ready to explore more advanced topics. For a comprehensive learning path that will guide you through intermediate and advanced topics, see :ref:`learning-path` in the introduction.

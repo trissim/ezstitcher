@@ -18,7 +18,7 @@ This section covers more advanced topics in EZStitcher, building on the basic co
 Z-Stack Processing
 ----------------
 
-Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks. For detailed explanations of Z-stack processing and the `variable_components` parameter, see :doc:`../concepts/step`.
+Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks. For detailed explanations of Z-stack processing and the `variable_components` parameter, see :doc:`../concepts/step`. For a comprehensive guide to all Z-stack processing operations, see :ref:`operation-z-projection` in the :doc:`../api/image_processing_operations` documentation.
 
 .. important::
    Z-stack flattening is a one-way operation that converts a 3D stack into a single 2D image. Once a Z-stack is flattened, it cannot be flattened again using a different method. You should choose the most appropriate flattening method for your data based on your specific needs.
@@ -213,7 +213,7 @@ Channel-Specific Processing
 
 Different fluorescence channels often require different processing approaches. EZStitcher provides several ways to apply channel-specific processing.
 
-For detailed explanations of function handling patterns, including dictionaries of functions, see :doc:`../concepts/function_handling`.
+For detailed explanations of function handling patterns, including dictionaries of functions, see :doc:`../concepts/function_handling`. For a comprehensive guide to all multi-channel operations, see :ref:`operation-composite` in the :doc:`../api/image_processing_operations` documentation.
 
 Using Dictionary of Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -469,8 +469,4 @@ A complete workflow that combines Z-stack processing, channel-specific processin
 Next Steps
 ---------
 
-Now that you understand intermediate usage patterns, you can:
-
-* Explore advanced usage in the :doc:`advanced_usage` section
-* Learn about custom processing functions and multithreaded processing
-* Explore the :doc:`advanced_usage` section for more complex workflows
+Now that you understand intermediate usage patterns, you're ready to explore advanced topics. For a comprehensive learning path that will guide you through advanced topics and mastering EZStitcher, see :ref:`learning-path` in the introduction.

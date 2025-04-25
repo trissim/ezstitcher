@@ -5,6 +5,8 @@ Image Processor
 
 This module contains the ImageProcessor class for handling image normalization, filtering, and compositing.
 
+For a comprehensive guide to all image processing operations and how to use them in pipelines, see :doc:`image_processing_operations`.
+
 ImageProcessor
 ------------
 
