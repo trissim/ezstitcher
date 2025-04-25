@@ -9,4 +9,3 @@ This section provides additional reference material for EZStitcher.
    glossary
    file_formats
    microscope_formats
-   changelog
