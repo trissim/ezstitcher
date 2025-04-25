@@ -26,7 +26,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires="==3.11",
+    python_requires="~=3.11.0",  # Changed from "==3.11" to "~=3.11.0"
     install_requires=[
         "numpy>=1.20.0",
         "scikit-image>=0.18.0",
