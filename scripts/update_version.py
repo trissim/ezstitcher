@@ -24,18 +24,16 @@ def validate_version(new_version):
         raise ValueError("Invalid version format. Use semantic versioning (e.g., 1.2.3)")
 
 def check_for_uncommitted_changes():
-    """Check if there are any uncommitted changes"""
-    result = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True)
-    return bool(result.stdout.strip())
+    """Check if there are any uncommitted changes in tracked files"""
+    # Check for staged and unstaged changes in tracked files
+    staged = subprocess.run(['git', 'diff', '--staged', '--quiet'])
+    unstaged = subprocess.run(['git', 'diff', '--quiet'])
+    return staged.returncode != 0 or unstaged.returncode != 0
 
 def update_version(new_version=None):
     """Update version in files and create git commit"""
     try:
-        # Check for uncommitted changes first
-        if check_for_uncommitted_changes():
-            print("Error: You have uncommitted changes. Please commit or stash them first.")
-            sys.exit(1)
-
+        # Get current version first
         current_version = get_current_version()
         if not current_version:
             print("Error: Could not find current version in __init__.py")
@@ -52,12 +50,14 @@ def update_version(new_version=None):
             print(f"Error: New version ({new_version}) must be greater than current version ({current_version})")
             sys.exit(1)
 
-        # Pull latest changes with merge strategy
+        # Check for uncommitted changes
+        if check_for_uncommitted_changes():
+            print("Error: You have uncommitted changes. Please commit or stash them first.")
+            sys.exit(1)
+
+        # Pull latest changes
         try:
-            # First, set the pull strategy globally
-            subprocess.run(['git', 'config', '--global', 'pull.rebase', 'false'], check=True)
-            # Then pull with explicit merge strategy
-            subprocess.run(['git', 'pull', '--no-rebase', 'origin', 'main'], check=True)
+            subprocess.run(['git', 'pull', 'origin', 'main'], check=True)
         except subprocess.CalledProcessError as e:
             print(f"Error: Failed to pull latest changes: {e}")
             sys.exit(1)
@@ -74,16 +74,19 @@ def update_version(new_version=None):
         
         # Update README.md with absolute image URL
         readme_file = Path("README.md")
-        readme_content = readme_file.read_text()
-        updated_readme = re.sub(
-            r'docs/source/_static/ezstitcher_logo\.png',
-            'https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png',
-            readme_content
-        )
-        readme_file.write_text(updated_readme)
+        if readme_file.exists():
+            readme_content = readme_file.read_text()
+            updated_readme = re.sub(
+                r'docs/source/_static/ezstitcher_logo\.png',
+                'https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png',
+                readme_content
+            )
+            readme_file.write_text(updated_readme)
         
         # Commit and push changes
-        subprocess.run(['git', 'add', 'ezstitcher/__init__.py', 'README.md'], check=True)
+        subprocess.run(['git', 'add', 'ezstitcher/__init__.py'], check=True)
+        if readme_file.exists():
+            subprocess.run(['git', 'add', 'README.md'], check=True)
         subprocess.run(['git', 'commit', '-m', f'bump version to {new_version}'], check=True)
         subprocess.run(['git', 'push', 'origin', 'main'], check=True)
         
