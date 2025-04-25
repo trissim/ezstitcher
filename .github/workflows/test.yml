@@ -26,15 +26,15 @@ jobs:
     
     - name: Run tests with coverage
       run: |
-        pytest --cov=ezstitcher --cov-report=xml --cov-report=json tests/
+        pytest --cov=ezstitcher --cov-report=xml --cov-report=json --cov-report=json-summary tests/
     
     - name: Get coverage percentage
       run: |
         COV=$(node -p '
-          const coverage = require("./coverage.json");
+          const coverage = require("./coverage-summary.json");
           const metrics = ["lines", "statements", "functions", "branches"];
           const percentages = metrics.map(metric => 
-            coverage.totals[metric] ? coverage.totals[metric].percent : 100
+            coverage.total[metric].pct || 100
           );
           Math.min(...percentages);
         ')
