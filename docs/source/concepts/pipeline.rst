@@ -209,20 +209,4 @@ This approach allows you to:
 Best Practices
 ------------
 
-Here are some best practices for working with pipelines:
-
-1. **Parameterize your pipelines**: Make key parameters configurable to increase reusability.
-
-2. **Use functions to create pipelines**: Encapsulate pipeline creation in functions for better organization.
-
-3. **Document your pipelines**: Add comments explaining the purpose of each step.
-
-4. **Leverage dynamic directory resolution**: Set directories at the pipeline level and only override when necessary.
-
-5. **Use coherent data flow**: Let each step's output feed into the next step's input.
-
-6. **Organize by experiment type**: Create separate pipeline configurations for different experiment types.
-
-7. **Version control your scripts**: Keep track of changes to your pipeline configurations.
-
-For more detailed best practices on using pipelines effectively, see the sections above.
+For comprehensive best practices on using pipelines effectively, see :ref:`best-practices-pipeline` in the :doc:`../user_guide/best_practices` guide.

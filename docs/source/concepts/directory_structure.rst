@@ -312,6 +312,8 @@ This allows you to customize the directory structure to match your organization'
 Directory Structure Best Practices
 --------------------------------
 
+Here are some key recommendations for directory management:
+
 1. **Use the workspace path for the first step**:
    - Always use `orchestrator.workspace_path` as the input directory for the first step
    - This ensures that original data is protected from modification
@@ -319,14 +321,9 @@ Directory Structure Best Practices
 2. **Minimize directory specification**:
    - Only specify directories when necessary
    - Let EZStitcher handle directory resolution automatically when possible
-   - This makes your code more concise and less error-prone
 
 3. **Use consistent directory naming**:
    - Follow the default naming conventions when possible
    - Or configure custom suffixes through PipelineConfig for consistent naming
-   - This makes it easier to understand the directory structure
 
-4. **Consider performance**:
-   - In-place processing (using the same directory for input and output) is more efficient
-   - This is the default behavior for steps after the first step
-   - Only use separate input and output directories when necessary
+For comprehensive best practices for directory management, see :ref:`best-practices-directory` in the :doc:`../user_guide/best_practices` guide.

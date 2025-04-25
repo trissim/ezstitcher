@@ -25,4 +25,5 @@ This user guide provides a comprehensive overview of EZStitcher, from basic conc
    basic_usage
    intermediate_usage
    advanced_usage
+   best_practices
    integration

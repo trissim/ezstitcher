@@ -219,6 +219,8 @@ When to Use Each Pattern
 * **Dictionary of Functions**: When you need to apply different processing to different components with default parameters
 * **Dictionary of Function Tuples**: When you need to apply different processing to different components with specific parameters
 
+For comprehensive best practices for function handling, see :ref:`best-practices-function-handling` in the :doc:`../user_guide/best_practices` guide.
+
 .. _function-stack-utility:
 
 The stack() Utility Function

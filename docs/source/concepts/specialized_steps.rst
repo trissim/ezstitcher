@@ -150,21 +150,19 @@ Use specialized steps when you need the specific functionality they provide. For
 Specialized Step Best Practices
 -----------------------------
 
+Here are some key recommendations for using specialized steps:
+
 1. **Directory Resolution**:
    - Let EZStitcher automatically resolve directories when possible
    - Only specify directories when you need a specific directory structure
-   - The ``ImageStitchingStep`` follows the standard directory resolution logic, using the previous step's output directory as its input
-   - You can explicitly set ``input_dir=orchestrator.workspace_path`` to use original images for stitching instead of processed images
-   - The ``positions_dir`` for ``ImageStitchingStep`` is automatically determined if not specified
+   - You can explicitly set ``input_dir=orchestrator.workspace_path`` to use original images for stitching
 
 2. **Step Order**:
    - Place ``PositionGenerationStep`` after image processing steps
    - Place ``ImageStitchingStep`` after ``PositionGenerationStep``
    - This ensures that position generation works with processed images
 
-3. **Pipeline Integration**:
-   - Use specialized steps within a pipeline for automatic directory resolution
-   - The steps will automatically access the orchestrator through the context
+For comprehensive best practices for specialized steps, see :ref:`best-practices-specialized-steps` in the :doc:`../user_guide/best_practices` guide.
 
 .. _typical-stitching-workflows:
 

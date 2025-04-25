@@ -325,15 +325,18 @@ And here's how to use this saved pipeline in another script:
     # Run the pipeline
     success = orchestrator.run(pipelines=[pipeline])
 
-Best Practices for Pipeline Scripts
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Best Practices
+^^^^^^^^^^^^^
 
-For a comprehensive list of best practices, see :ref:`pipeline-best-practices`.
+For comprehensive best practices, see:
 
-When creating pipeline scripts, remember to:
-1. Make your pipelines parameterizable and reusable
-2. Use clear, descriptive names for pipelines and steps
-3. Document your code with comments explaining the purpose of each component
+* :ref:`best-practices-pipeline` - Best practices for pipeline creation and configuration
+* :ref:`best-practices-directory` - Best practices for directory management
+* :ref:`best-practices-specialized-steps` - Best practices for specialized steps
+* :ref:`best-practices-function-handling` - Best practices for function handling
+* :ref:`best-practices-performance` - Best practices for performance optimization
+
+Or visit the complete :doc:`best_practices` guide.
 
 Next Steps
 ---------
@@ -345,3 +348,4 @@ Now that you understand the basics of creating and running pipelines, you can:
 * Customize your pipelines with channel-specific processing
 * Create more complex workflows with multiple pipelines
 * Review the detailed pipeline concepts in :doc:`../concepts/pipeline`
+* Learn best practices in the :doc:`best_practices` guide
