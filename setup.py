@@ -12,7 +12,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="ezstitcher",
-    version=version,  # Use version from __init__.py
+    version=version,
     author="trissim",
     author_email="tristan.simas@mail.mcgill.ca",
     description="An easy-to-use microscopy image stitching and processing tool",
