@@ -1,5 +1,9 @@
 # EZStitcher
 
+[![PyPI version](https://badge.fury.io/py/ezstitcher.svg)](https://badge.fury.io/py/ezstitcher)
+[![Documentation Status](https://readthedocs.org/projects/ezstitcher/badge/?version=latest)](https://ezstitcher.readthedocs.io/en/latest/?badge=latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 EZStitcher is a Python library designed to simplify the processing and stitching of microscopy images. It provides a flexible pipeline architecture that allows researchers to easily process large microscopy datasets, create composite images, flatten Z-stacks, and stitch tiled images together. The stitching process is powered by the robust [Ashlar](https://github.com/labsyspharm/ashlar) backend.
 
 ## Key Features
@@ -13,10 +17,33 @@ EZStitcher is a Python library designed to simplify the processing and stitching
 
 ## Installation
 
-The package is typically installed by cloning the Git repository and running the following command within the repository's root directory (after setting up a suitable Python 3.11 environment and virtual environment):
-
+1. Install pyenv (platform-specific, choose one):
 ```bash
-pip install -e .
+# macOS
+brew install pyenv
+
+# Linux/WSL
+curl https://pyenv.run | bash
+```
+
+2. Set up pyenv and install Python (all platforms):
+```bash
+# Add to ~/.bashrc (or ~/.zshrc)
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+source ~/.bashrc
+
+# Install and set Python 3.11
+pyenv install 3.11
+pyenv global 3.11
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install EZStitcher
+pip install ezstitcher
 ```
 
 This command installs the package in editable mode and handles dependencies listed in `requirements.txt`.
