@@ -5,7 +5,19 @@ Image Processor
 
 This module contains the ImageProcessor class for handling image normalization, filtering, and compositing.
 
-For a comprehensive guide to all image processing operations and how to use them in pipelines, see :doc:`image_processing_operations`.
+.. important::
+   For a comprehensive guide to all image processing operations, including:
+
+   * Detailed explanations of each operation
+   * Examples of how to use operations in pipelines
+   * Common use cases and best practices
+   * Function handling patterns
+
+   See :doc:`image_processing_operations`.
+
+   The documentation below provides the API reference for the ImageProcessor class, while
+   :doc:`image_processing_operations` provides more user-friendly documentation focused on
+   practical usage.
 
 ImageProcessor
 ------------
@@ -86,6 +98,8 @@ ImageProcessor
 
       Normalize a stack of images using global percentile-based contrast stretching.
       This ensures consistent normalization across all images in the stack.
+
+      For examples and common use cases, see :ref:`operation-normalize` in :doc:`image_processing_operations`.
 
       :param stack: Stack of images
       :type stack: list or numpy.ndarray

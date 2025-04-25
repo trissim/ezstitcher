@@ -42,8 +42,8 @@ Core Components
 - **ProcessingContext**: Maintains state during pipeline execution
 - **MicroscopeHandler**: Handles microscope-specific functionality
 - **Stitcher**: Performs image stitching
-- **ImagePreprocessor**: Processes images
-- **ImageLocator**: Locates images in various directory structures
+- **ImagePreprocessor**: Applies processing functions to images
+- **ImageLocator**: Locates image files in various directory structures
 
 These components work together to process microscopy images in a flexible and extensible way.
 
@@ -74,7 +74,7 @@ EZStitcher's architecture is designed around a modular, composable API that allo
 
 **Architectural Design**
 
-- **PipelineOrchestrator**: Acts as a plate manager that handles plate-level organization and multithreaded processing. It provides services to steps with the right configuration for the plate they're running on, and mirrors the plate folder structure to a workspace using symlinks to protect original source files.
+- **PipelineOrchestrator**: Acts as a plate manager that handles plate-level organization and multithreaded processing. It provides configured services to steps based on the plate being processed, and mirrors the plate folder structure to a workspace using symlinks to protect original source files.
 
 - **Pipeline**: Serves as a container for a sequence of steps, managing their execution order and data flow. Pipelines can be composed, reused, and shared across different projects.
 
@@ -128,4 +128,4 @@ A typical image processing and stitching workflow might include:
    - Blend overlapping regions
    - Save final stitched images
 
-The beauty of EZStitcher's design is that these steps aren't hardcoded—they're composed through the API, allowing you to create custom workflows tailored to your specific microscopy needs. By combining regular processing Steps with specialized PositionGenerationStep and ImageStitchingStep, you can create seamless end-to-end workflows that handle everything from initial image processing to final stitched image assembly.
+A key advantage of EZStitcher's design is that these steps aren't hardcoded—they're composed through the API, allowing you to create custom workflows tailored to your specific microscopy needs. By combining regular processing Steps with specialized PositionGenerationStep and ImageStitchingStep, you can create seamless end-to-end workflows that handle everything from initial image processing to final stitched image assembly.

@@ -284,42 +284,6 @@ Microscope handlers are responsible for:
 For detailed information about creating and registering custom microscope handlers, see :doc:`../development/extending`.
 
 Next Steps
----------
-
-Customizing Directory Resolution
----------------------------
-
-Directory Management
-------------------
-
-EZStitcher provides flexible directory management capabilities, from automatic directory resolution to custom directory structures.
-
-For detailed information on directory management, including:
-
-- Default directory structure
-- Directory resolution logic
-- Step initialization best practices
-- Custom directory structures
-- When to specify directories explicitly
-- Common mistakes to avoid
-
-See :doc:`../concepts/directory_structure`.
-
-For information about the output file structure, see :ref:`output-file-structure`.
-
-Pipeline Construction
--------------------
-
-For detailed information on pipeline construction, including best practices and different approaches, see :doc:`../concepts/pipeline`.
-
-The core concepts documentation covers:
-
-- Creating pipelines with all steps at once (recommended approach)
-- Adding steps one by one for dynamic scenarios
-- When to use each approach
-- Directory resolution and management
-
-Next Steps
 ----------
 
 Now that you understand advanced usage patterns, you're ready to master EZStitcher and explore integration with other tools. For a comprehensive learning path that covers mastering EZStitcher, see :ref:`learning-path` in the introduction.

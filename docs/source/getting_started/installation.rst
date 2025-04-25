@@ -82,7 +82,7 @@ If you encounter issues during installation:
 2. **Check that your virtual environment is activated**
 3. **Try installing in a fresh virtual environment**
 
-For detailed troubleshooting, see the :doc:`../troubleshooting/installation` guide.
+For detailed troubleshooting, please refer to the relevant sections in the user guide or open an issue on the GitHub repository.
 
 Verifying Installation
 ------------------

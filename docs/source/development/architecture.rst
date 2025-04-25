@@ -6,8 +6,8 @@ EZStitcher is built on a modular, object-oriented architecture that separates co
 Core Components
 ---------------
 
-.. image:: ../images/architecture.png
-   :alt: EZStitcher Architecture
+.. image:: ../_static/architecture_overview.png
+   :alt: EZStitcher Architecture Overview
    :width: 600px
 
 PipelineOrchestrator
@@ -52,8 +52,8 @@ Provides multiple focus detection algorithms for Z-stacks. It:
 - Supports region of interest (ROI) based focus detection
 - Combines multiple metrics for robust focus detection
 
-ImagePreprocessor
-^^^^^^^^^^^^^^^^^
+ImageProcessor
+^^^^^^^^^^^^^^
 
 Handles image normalization, filtering, and compositing. It:
 
@@ -122,7 +122,7 @@ The directory structure of the EZStitcher codebase is as follows:
     │   ├── file_system_manager.py
     │   ├── focus_analyzer.py
     │   ├── image_locator.py
-    │   ├── image_preprocessor.py
+    │   ├── image_processor.py
     │   ├── main.py            # Main entry point
     │   ├── microscope_interfaces.py
     │   ├── pipeline_orchestrator.py

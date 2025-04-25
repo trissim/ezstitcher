@@ -60,7 +60,7 @@ Pipeline
       :type well_filter: list
       :param microscope_handler: Optional microscope handler override
       :type microscope_handler: :class:`~ezstitcher.core.microscope_interfaces.MicroscopeHandler`
-      :param orchestrator: Optional PipelineOrchestrator instance (required)
+      :param orchestrator: PipelineOrchestrator instance (required)
       :type orchestrator: :class:`~ezstitcher.core.processing_pipeline.PipelineOrchestrator`
       :param positions_file: Optional positions file to use for stitching
       :type positions_file: str or Path

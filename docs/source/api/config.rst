@@ -102,7 +102,7 @@ FocusAnalyzerConfig
       :type: str
       :value: "combined"
 
-      Focus detection method. Options: "combined", "nvar", "normalized_variance", "lap", "laplacian", "ten", "tenengrad", "fft".
+      Focus detection method. Options: "combined", "normalized_variance", "laplacian", "tenengrad", "fft".
 
    .. py:attribute:: roi
       :type: tuple or None

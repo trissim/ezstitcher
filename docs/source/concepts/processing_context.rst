@@ -104,7 +104,7 @@ Steps use the orchestrator's high-level methods for specialized operations:
             well=context.well,
             input_dir=context.input_dir,
             output_dir=context.output_dir,
-            positions_path=positions_file
+            positions_file=positions_file
         )
 
         return context

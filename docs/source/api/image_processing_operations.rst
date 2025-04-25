@@ -8,6 +8,14 @@ Image Processing Operations
 
 This module provides a comprehensive set of image processing operations for microscopy images. These operations can be used in pipeline steps to process images in various ways.
 
+.. note::
+   This guide focuses on practical usage of image processing operations, with examples and common use cases.
+   For the complete API reference of the ImageProcessor class, including all method signatures and parameters,
+   see :doc:`image_processor`.
+
+   The documentation here is organized by operation type and includes examples of how to use these operations
+   in pipeline steps, while :doc:`image_processor` provides the formal API documentation.
+
 Basic Operations
 --------------
 

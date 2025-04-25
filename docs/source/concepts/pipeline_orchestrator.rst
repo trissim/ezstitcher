@@ -34,7 +34,7 @@ Key responsibilities:
   - Error handling and logging
 
 * **Specialized Services**:
-  - Provides stitching objects with the right configuration for the plate
+  - Provides configured `Stitcher` instances suitable for the plate
   - Manages position generation specific to the plate format
   - Abstracts plate-specific operations that depend on the microscope handler
 

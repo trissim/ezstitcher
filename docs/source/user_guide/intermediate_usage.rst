@@ -34,7 +34,7 @@ One common operation is to flatten a Z-stack into a single 2D image using a proj
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.image_preprocessor import ImagePreprocessor as IP
+    from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
 
     # Create configuration and orchestrator
