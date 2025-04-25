@@ -41,13 +41,13 @@ PositionGenerationStep
 
 .. py:class:: PositionGenerationStep(name="Position Generation", input_dir=None, output_dir=None)
 
-   A specialized Step for generating positions.
+   A specialized Step for generating positions. For detailed information about how this step works, see :ref:`position-generation-step`.
 
-   :param name: Name of the step
+   :param name: Name of the step (optional)
    :type name: str
-   :param input_dir: Input directory
+   :param input_dir: Input directory (optional)
    :type input_dir: str or Path
-   :param output_dir: Output directory (for positions files)
+   :param output_dir: Output directory for positions files (optional)
    :type output_dir: str or Path
 
    .. py:method:: process(context)
@@ -64,15 +64,15 @@ ImageStitchingStep
 
 .. py:class:: ImageStitchingStep(name="Image Stitching", input_dir=None, positions_dir=None, output_dir=None)
 
-   A specialized Step for stitching images using position files.
+   A specialized Step for stitching images using position files. For detailed information about how this step works, see :ref:`image-stitching-step`.
 
-   :param name: Name of the step
+   :param name: Name of the step (optional)
    :type name: str
-   :param input_dir: Input directory containing images to stitch
+   :param input_dir: Input directory containing images to stitch (optional)
    :type input_dir: str or Path
    :param positions_dir: Directory containing position files (optional, can be provided in context)
    :type positions_dir: str or Path
-   :param output_dir: Output directory for stitched images
+   :param output_dir: Output directory for stitched images (optional)
    :type output_dir: str or Path
 
    .. py:method:: process(context)

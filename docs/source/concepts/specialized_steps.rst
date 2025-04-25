@@ -1,8 +1,12 @@
+.. _specialized-steps:
+
 =================
 Specialized Steps
 =================
 
-EZStitcher includes specialized Step subclasses for common tasks that leverage the orchestrator's plate-specific services.
+EZStitcher includes specialized Step subclasses for common tasks that leverage the orchestrator's plate-specific services. These steps are designed to work seamlessly with the orchestrator to handle plate-specific operations.
+
+.. _position-generation-step:
 
 PositionGenerationStep
 ---------------------
@@ -46,6 +50,8 @@ Behind the scenes, the step uses the orchestrator's `generate_positions` method,
         # Store the positions file in the context for other steps to use
         context.positions_file = positions_file
         return context
+
+.. _image-stitching-step:
 
 ImageStitchingStep
 -----------------
@@ -93,6 +99,8 @@ Behind the scenes, the step uses the orchestrator's `stitch_images` method, whic
 
         return context
 
+.. _orchestrator-step-interaction:
+
 Orchestrator-Step Interaction
 ---------------------------
 
@@ -107,6 +115,8 @@ The specialized steps leverage the orchestrator's services to handle plate-speci
 4. **Image Loading**: The orchestrator uses ImageLocator to find the actual image directory within the plate path.
 
 This abstraction allows the steps to focus on their specific tasks without needing to know the details of different plate formats.
+
+.. _specialized-step-parameters:
 
 Specialized Step Parameters
 ----------------------
@@ -128,10 +138,14 @@ ImageStitchingStep Parameters
 
 The ``ImageStitchingStep`` doesn't use the ``func``, ``variable_components``, or ``group_by`` parameters since it has a fixed purpose.
 
+.. _when-to-use-specialized-steps:
+
 When to Use Specialized Steps
 ---------------------------
 
 Use specialized steps when you need the specific functionality they provide. For general image processing tasks, use the base ``Step`` class. The specialized steps are designed to work seamlessly with the orchestrator to handle plate-specific operations.
+
+.. _specialized-steps-best-practices:
 
 Specialized Step Best Practices
 -----------------------------
@@ -151,3 +165,112 @@ Specialized Step Best Practices
 3. **Pipeline Integration**:
    - Use specialized steps within a pipeline for automatic directory resolution
    - The steps will automatically access the orchestrator through the context
+
+.. _typical-stitching-workflows:
+
+Typical Stitching Workflows
+-------------------------
+
+Here are some common workflows that use specialized steps:
+
+Basic Stitching Workflow
+^^^^^^^^^^^^^^^^^^^^^
+
+A typical stitching workflow involves these main steps:
+
+1. Process images to enhance features (optional)
+2. Generate position files that describe how the tiles fit together
+3. Stitch the images using these position files
+
+.. code-block:: python
+
+    from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.image_processor import ImageProcessor as IP
+
+    # Create a pipeline for stitching
+    stitching_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched",
+        steps=[
+            # Process images (optional)
+            Step(
+                func=IP.stack_percentile_normalize,
+                input_dir=orchestrator.workspace_path
+            ),
+
+            # Generate positions
+            PositionGenerationStep(),
+
+            # Stitch images
+            ImageStitchingStep()
+        ],
+        name="Stitching Pipeline"
+    )
+
+    # Run the pipeline
+    orchestrator.run(pipelines=[stitching_pipeline])
+
+Multi-Channel Stitching
+^^^^^^^^^^^^^^^^^^^^
+
+When working with multiple channels, it's important to create a composite image before position generation:
+
+.. code-block:: python
+
+    # Create a pipeline for multi-channel stitching
+    multi_channel_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched",
+        steps=[
+            # Process channels
+            Step(
+                func=IP.stack_percentile_normalize,
+                variable_components=['channel'],
+                input_dir=orchestrator.workspace_path
+            ),
+
+            # Create composite image for position generation
+            Step(
+                func=IP.create_composite,  # Equal weighting for all channels
+                variable_components=['channel']
+            ),
+
+            # Generate positions
+            PositionGenerationStep(),
+
+            # Stitch images
+            ImageStitchingStep()
+        ],
+        name="Multi-Channel Stitching Pipeline"
+    )
+
+Using Original Images for Stitching
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes you want to process images for position generation but use the original images for stitching:
+
+.. code-block:: python
+
+    # Create a pipeline that uses processed images for position generation
+    # but original images for stitching
+    original_stitching_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched",
+        steps=[
+            # Process images for position generation
+            Step(
+                func=IP.stack_percentile_normalize,
+                input_dir=orchestrator.workspace_path,
+                output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"
+            ),
+
+            # Generate positions using processed images
+            PositionGenerationStep(),
+
+            # Stitch using original images
+            ImageStitchingStep(
+                input_dir=orchestrator.workspace_path  # Use original images for stitching
+            )
+        ],
+        name="Original Image Stitching Pipeline"
+    )

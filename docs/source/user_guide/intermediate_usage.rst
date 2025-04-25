@@ -326,53 +326,14 @@ You can combine multiple channels into a composite image. For detailed explanati
 Position Generation and Stitching
 -------------------------------
 
-EZStitcher provides specialized steps for generating position files and stitching images. For detailed explanations of these specialized steps, see :doc:`../concepts/specialized_steps`.
+EZStitcher provides specialized steps for generating position files and stitching images. For detailed explanations of these specialized steps, see :ref:`specialized-steps`.
 
 .. important::
    When working with multiple channels, always create a composite image before position generation.
    This ensures that position files are generated based on all available information rather than
    defaulting to a single channel, which may not have the best features for alignment.
 
-Basic Stitching Workflow
-^^^^^^^^^^^^^^^^^^^^^
-
-A typical stitching workflow involves these main steps:
-
-1. Process images to enhance features (optional)
-2. Create a composite image if multiple channels exist
-3. Generate position files that describe how the tiles fit together
-4. Stitch the images using these position files
-
-.. code-block:: python
-
-    from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
-
-    # Create a pipeline for stitching
-    stitching_pipeline = Pipeline(
-        steps=[
-            # Step 1: Process images (optional)
-            Step(
-                name="Image Processing",
-                func=IP.stack_percentile_normalize,
-                variable_components=['channel'],
-                input_dir=orchestrator.workspace_path
-            ),
-
-            # This is important when working with multiple channels
-            Step(
-                func=IP.create_composite,  # Equal weighting for all channels
-                variable_components=['channel']
-            ),
-
-            PositionGenerationStep(),
-
-            # By default, uses previous step's output directory (position files)
-            ImageStitchingStep(
-                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
-            )
-        ],
-        name="Stitching Pipeline"
-    )
+For typical stitching workflows, including basic stitching, multi-channel stitching, and using original images for stitching, see :ref:`typical-stitching-workflows`.
 
 
 Combining Multiple Techniques
