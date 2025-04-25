@@ -30,15 +30,13 @@ jobs:
           pytest --cov=ezstitcher \
                 --cov-report=xml \
                 --cov-report=json \
-                --cov-report=json-summary \
                 tests/
 
       - name: Get coverage percentage
         run: |
           COV=$(node -p '
-            const coverage = require("./coverage-summary.json");
-            const total = coverage.total;
-            Math.floor(total.lines.pct)
+            const coverage = require("./coverage.json");
+            Math.floor(coverage.totals.percent_covered)
           ')
           echo "COVERAGE=$COV" >> $GITHUB_ENV
 
