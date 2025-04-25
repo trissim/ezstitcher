@@ -61,6 +61,18 @@ tests/integration/tests_data/
 *.log
 *.tmp
 
+# Python version file
+.python-version
+
+# Coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
+# Examples directory (if you want to ignore it)
+examples/
+!examples/
+
 # Image files - exceptions first, then exclusions
 !docs/source/_static/images/
 !docs/source/_static/images/*.png
