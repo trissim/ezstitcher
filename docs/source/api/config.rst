@@ -16,13 +16,7 @@ PipelineConfig
       :type: str
       :value: "_out"
 
-      Suffix for regular processing steps output directories.
-
-   .. py:attribute:: processed_dir_suffix
-      :type: str
-      :value: "_processed"
-
-      Suffix for intermediate processing steps output directories.
+      Suffix for processing steps output directories.
 
    .. py:attribute:: positions_dir_suffix
       :type: str

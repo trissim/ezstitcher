@@ -55,7 +55,7 @@ class Step:
     def __init__(
         self,
         func: ProcessingFunc,
-        variable_components: VariableComponents = None,
+        variable_components: VariableComponents = ['site'],
         group_by: GroupBy = None,
         input_dir: str = None,
         output_dir: str = None,
@@ -79,7 +79,7 @@ class Step:
             name: Human-readable name for the step
         """
         self.func = func
-        self.variable_components = variable_components or []
+        self.variable_components = variable_components 
         self.group_by = group_by
         self.input_dir = input_dir
         self.output_dir = output_dir

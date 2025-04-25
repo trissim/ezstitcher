@@ -284,9 +284,8 @@ EZStitcher allows you to configure the directory suffixes used for different typ
     # Create a configuration with custom directory suffixes
     config = PipelineConfig(
         out_dir_suffix="_output",           # For regular processing steps (default: "_out")
-        processed_dir_suffix="_proc",       # For intermediate processing steps (default: "_processed")
         positions_dir_suffix="_pos",        # For position generation steps (default: "_positions")
-        stitched_dir_suffix="_stitched_images"  # For stitching steps (default: "_stitched")
+        stitched_dir_suffix="_stitched"     # For stitching steps (default: "_stitched")
     )
 
     # Create an orchestrator with the custom configuration
@@ -294,9 +293,10 @@ EZStitcher allows you to configure the directory suffixes used for different typ
 
     # Now all pipelines run with this orchestrator will use the custom suffixes
     pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        name="Basic Pipeline",
         steps=[
-            # Steps will use the custom suffixes for their output directories
-            Step(name="First Step", func=IP.stack_percentile_normalize, input_dir=orchestrator.workspace_path),
+            Step(name="First Step", func=IP.stack_percentile_normalize),
             PositionGenerationStep(),
             ImageStitchingStep()
         ]

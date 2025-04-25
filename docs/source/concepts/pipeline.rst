@@ -162,9 +162,11 @@ Pipelines can be run in a multithreaded environment through the orchestrator:
 
 .. code-block:: python
 
-    # Create configuration with multithreaded processing
+    # Create configuration with custom directory suffixes
     config = PipelineConfig(
-        num_workers=4  # Use 4 worker threads
+        out_dir_suffix="_output",           # For regular steps
+        positions_dir_suffix="_pos",        # For position generation
+        stitched_dir_suffix="_stitched"     # For stitching
     )
 
     # Create orchestrator with multithreading
