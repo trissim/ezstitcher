@@ -1,8 +1,12 @@
+.. _function-handling:
+
 =================
 Function Handling
 =================
 
-The Step class supports several patterns for processing functions, providing flexibility in how images are processed.
+The Step class supports several patterns for processing functions, providing flexibility in how images are processed. This page explains the different patterns available.
+
+.. _function-single:
 
 Single Function
 -------------
@@ -17,6 +21,8 @@ A callable that takes a list of images and returns a list of processed images:
         func=IP.stack_percentile_normalize
         # variable_components defaults to ['site']
     )
+
+.. _function-with-arguments:
 
 Function with Arguments
 ---------------------
@@ -34,6 +40,8 @@ A tuple containing a function and its arguments:
         })
         # variable_components defaults to ['site']
     )
+
+.. _function-lists:
 
 List of Functions
 ---------------
@@ -56,6 +64,8 @@ A sequence of functions applied one after another:
 
 The ``stack()`` utility function adapts a single-image function to work with stacks of images. It applies the original function to each image in the stack and returns a new stack of processed images. This is particularly useful when you want to use functions from libraries like scikit-image that operate on single images.
 
+.. _function-lists-with-arguments:
+
 List of Functions with Arguments
 -----------------------------
 
@@ -77,6 +87,8 @@ A sequence of function tuples applied in sequence:
         ]
         # variable_components defaults to ['site']
     )
+
+.. _function-dictionaries:
 
 Dictionary of Functions
 ---------------------
@@ -106,6 +118,8 @@ A mapping from component values to functions, allowing different processing for 
         group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
     )
 
+.. _function-dictionary-tuples:
+
 Dictionary of Function Tuples
 ---------------------------
 
@@ -123,6 +137,8 @@ A mapping from component values to function tuples:
         # variable_components defaults to ['site']
         group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
     )
+
+.. _function-dictionary-lists:
 
 Dictionary of Lists with Mixed Function Types
 ------------------------------------------
@@ -159,6 +175,8 @@ When using a dictionary of functions:
 - Files are processed by the function that matches their component value
 - For example, with `group_by='channel'`, files with channel="1" are processed by the function at key "1"
 
+.. _function-mixed-types:
+
 Mixed Function Types
 ------------------
 
@@ -189,6 +207,8 @@ You can mix plain functions and function tuples in the same list or dictionary. 
         group_by='channel'  # Specifies that keys "1", "2", and "3" refer to channel values
     )
 
+.. _function-when-to-use:
+
 When to Use Each Pattern
 ----------------------
 
@@ -198,6 +218,8 @@ When to Use Each Pattern
 * **List of Functions with Arguments**: When you need to apply multiple processing steps with specific parameters
 * **Dictionary of Functions**: When you need to apply different processing to different components with default parameters
 * **Dictionary of Function Tuples**: When you need to apply different processing to different components with specific parameters
+
+.. _function-stack-utility:
 
 The stack() Utility Function
 --------------------------

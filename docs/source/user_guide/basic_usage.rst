@@ -167,7 +167,9 @@ For faster processing, you can use multiple worker threads. For detailed informa
 Common Image Processing Operations
 --------------------------------
 
-EZStitcher provides a variety of image processing functions through the ImageProcessor class. Here are some common operations:
+EZStitcher provides a variety of image processing functions through the ImageProcessor class. For detailed information about function handling patterns, see :ref:`function-handling`.
+
+Here are some common operations:
 
 Normalization
 ^^^^^^^^^^^
@@ -236,7 +238,7 @@ You can apply multiple operations in sequence:
 Channel-Specific Processing
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-Apply different processing to different channels using a dictionary of functions:
+Apply different processing to different channels using a dictionary of functions. For detailed information about this pattern, see :ref:`function-dictionaries`.
 
 .. code-block:: python
 
@@ -262,12 +264,6 @@ Apply different processing to different channels using a dictionary of functions
         },
         group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
     )
-
-In this example:
-- The dictionary keys ("1" and "2") correspond to channel values
-- `group_by='channel'` tells EZStitcher that the keys refer to channels
-- Files with channel="1" are processed by `process_dapi`
-- Files with channel="2" are processed by `process_gfp`
 
 Saving and Loading Pipelines
 --------------------------

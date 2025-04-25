@@ -44,7 +44,7 @@ Step Parameters
 Processing Arguments
 ------------------
 
-Processing arguments are passed directly with the function using the tuple pattern ``(func, kwargs)``:
+Processing arguments are passed directly with the function using the tuple pattern ``(func, kwargs)``. For detailed information about function handling patterns, see :ref:`function-handling`.
 
 .. code-block:: python
 
@@ -56,7 +56,11 @@ Processing arguments are passed directly with the function using the tuple patte
         input_dir=orchestrator.workspace_path
     )
 
-This pattern can be used with single functions, in lists, or in dictionaries. See :doc:`function_handling` for detailed examples.
+This pattern can be used with:
+* Single functions (:ref:`function-single`, :ref:`function-with-arguments`)
+* Lists of functions (:ref:`function-lists`, :ref:`function-lists-with-arguments`)
+* Dictionaries of functions (:ref:`function-dictionaries`, :ref:`function-dictionary-tuples`)
+* Mixed function types (:ref:`function-mixed-types`)
 
 .. note::
    Always use the tuple pattern ``(func, kwargs)`` to pass arguments to processing functions.
