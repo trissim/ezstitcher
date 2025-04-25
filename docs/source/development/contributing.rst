@@ -198,13 +198,24 @@ Release Process
 
 1. **Update version number** in `ezstitcher/__init__.py`
 2. **Prepare a detailed changelog** for the release
-3. **Create a new release** on GitHub
-4. **Build and upload** the package to PyPI:
+3. **Create and push a new tag**:
 
    .. code-block:: bash
 
+       git tag -a v{version} -m "Release version {version}"
+       git push origin v{version}
+
+4. **Build and upload** the package to PyPI manually:
+
+   .. code-block:: bash
+
+       # Build the package
        python -m build
+
+       # Upload to PyPI (you'll need your PyPI token)
        python -m twine upload dist/*
+
+   Note: Make sure you have build and twine installed: `pip install build twine`
 
 Code of Conduct
 ------------
