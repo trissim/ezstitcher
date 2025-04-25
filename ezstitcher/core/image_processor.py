@@ -1,10 +1,6 @@
 import numpy as np
 import logging
-import re
-from pathlib import Path
-import tifffile
-from skimage import color, filters, exposure, morphology as morph, transform as trans
-from scipy.ndimage import shift as subpixel_shift
+from skimage import filters, exposure, morphology as morph, transform as trans
 
 logger = logging.getLogger(__name__)
 
