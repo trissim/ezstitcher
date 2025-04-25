@@ -52,6 +52,8 @@ ENV/
 *.JPG
 *.png
 *.PNG
+!docs/source/_static/mages/*.png  # Allow png files in assets/images
+!docs/source/_static/mages/*.jpg  # Allow jpg files in assets/images
 
 # Test directories
 # Ignore test data but not test files
