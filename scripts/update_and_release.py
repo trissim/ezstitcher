@@ -71,34 +71,27 @@ def create_release():
 def main():
     # 1. Get modified files
     modified_files = [f for f in get_modified_files() if f]
-    if not modified_files:
-        print("No modified files found.")
-        sys.exit(0)
     
-    # 2. Show modified files and confirm
-    print("\nModified files:")
-    for f in modified_files:
-        print(f"- {f}")
+    # Handle existing changes if any
+    if modified_files:
+        print("\nModified files:")
+        for f in modified_files:
+            print(f"- {f}")
+        
+        response = input("\nCommit these changes before release? [y/N] ")
+        if response.lower() == 'y':
+            commit_message = input("\nEnter commit message: ")
+            if not commit_message:
+                print("Commit message cannot be empty.")
+                sys.exit(1)
+            
+            print("\nCommitting changes...")
+            commit_changes(modified_files, commit_message)
     
-    response = input("\nProceed with commit and release? [y/N] ")
-    if response.lower() != 'y':
-        print("Operation cancelled.")
-        sys.exit(0)
-    
-    # 3. Commit changes
-    commit_message = input("\nEnter commit message: ")
-    if not commit_message:
-        print("Commit message cannot be empty.")
-        sys.exit(1)
-    
-    print("\nCommitting changes...")
-    commit_changes(modified_files, commit_message)
-    
-    # 4. Update version
+    # Always proceed with version update and release
     print("\nUpdating version...")
     update_version()
     
-    # 5. Create release
     print("\nCreating release...")
     create_release()
     
