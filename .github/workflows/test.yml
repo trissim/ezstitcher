@@ -37,9 +37,8 @@ jobs:
       - name: Get coverage percentage
         run: |
           COV=$(node -p '
-            const data = require("./coverage/coverage-summary.json");
-            const totals = data.totals;
-            Math.floor(totals.percent_covered || totals.line_rate * 100)
+            t=require(`./coverage/coverage-summary.json`).total;
+            Math.min(...`lines|statements|functions|branches`.split(`|`).map(k=>t[k].pct))
           ')
           echo "COVERAGE=$COV" >> $GITHUB_ENV
 
