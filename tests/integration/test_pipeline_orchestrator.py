@@ -294,12 +294,9 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
                  ],
             ),
 
-            # Step 3: Create composites (must use variable_components=['channel'])
-            Step(name="Composite Creation",
-                 func=(IP.create_composite, {'weights': [0.7, 0.3]}),
+            Step(func=(IP.create_composite, {'weights': [0.7, 0.3]}),
                  variable_components=['channel']),
 
-            # Step 4: Generate positions
             PositionGenerationStep()
         ],
         name="Position Generation Pipeline"
@@ -320,7 +317,6 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
                  func=IP.stack_percentile_normalize,
             ),
 
-            # Step 3: Stitch images
             ImageStitchingStep()
         ],
         name="Image Assembly Pipeline"
@@ -363,8 +359,7 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
             Step(name="Feature Enhancement",
                  func=stack(IP.sharpen)),
 
-            Step(name="Composite Creation",
-                 func=IP.create_composite,
+            Step(func=IP.create_composite,
                  variable_components=['channel']),
 
             # Step 3: Generate positions
@@ -387,8 +382,7 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
                  func=(IP.create_projection, {'method': 'best_focus'}),
                  variable_components=['z_index']),
 
-            ImageStitchingStep(input_dir=focus_dir)
-            #ImageStitchingStep()
+            ImageStitchingStep()
         ],
         name="Focused Image Assembly Pipeline"
     )
@@ -452,9 +446,6 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
 
             # Step 2: Stitch images
             ImageStitchingStep()
-#                name="Stitch Images",
-#                positions_dir=dirs['positions'],
-#                output_dir=dirs['stitched']),
         ],
         name="Image Assembly Pipeline"
     )
@@ -495,16 +486,10 @@ def test_minimal_pipeline_with_defaults(flat_plate_dir, base_pipeline_config, th
                 func=IP.stack_percentile_normalize
             ),
 
-            # Step 2: Generate positions
-            PositionGenerationStep(
-                name="Generate Positions"
-            ),
+            PositionGenerationStep(),
 
-            # Step 3: Stitch images
-            # No input_dir specified - should use pipeline's input_dir by default
-            # No output_dir specified - should be handled automatically
             ImageStitchingStep(
-                name="Stitch Images"
+                input_dir=orchestrator.workspace_path
             )
         ],
         name="Absolute Minimal Pipeline"

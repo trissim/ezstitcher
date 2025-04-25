@@ -95,14 +95,12 @@ In most cases, you don't need to set this explicitly as it defaults to ``['site'
 
     # Without weights (equal weighting for all channels)
     step = Step(
-        name="Create Composite",
         func=IP.create_composite,
         variable_components=['channel']  # Group images by channel
     )
 
     # With custom weights (70% channel 1, 30% channel 2)
     step = Step(
-        name="Create Composite with Weights",
         func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Pass weights as a list
         variable_components=['channel']  # Group images by channel
     )

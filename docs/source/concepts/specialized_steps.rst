@@ -15,7 +15,6 @@ The ``PositionGenerationStep`` generates position files for stitching by leverag
 
     # Create a position generation step
     step = PositionGenerationStep(
-        name="Generate Positions",
         input_dir=None,  # Optional: Input directory containing images to analyze
         output_dir=None  # Optional: Output directory for position files
     )
@@ -59,7 +58,6 @@ The ``ImageStitchingStep`` stitches images using position files and the orchestr
 
     # Create an image stitching step
     step = ImageStitchingStep(
-        name="Stitch Images",
         input_dir=None,      # Optional: Directory containing images to stitch
         positions_dir=None,  # Optional: Directory containing position files
         output_dir=None      # Optional: Directory to save stitched images
@@ -90,7 +88,7 @@ Behind the scenes, the step uses the orchestrator's `stitch_images` method, whic
             well=context.well,
             input_dir=context.input_dir,
             output_dir=context.output_dir,
-            positions_path=positions_file
+            positions_file=positions_file
         )
 
         return context
@@ -116,7 +114,6 @@ Specialized Step Parameters
 PositionGenerationStep Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``name``: Human-readable name for the step (default: "Position Generation")
 * ``input_dir``: Directory containing images to analyze (optional)
 * ``output_dir``: Directory to save position files (optional)
 
@@ -125,7 +122,6 @@ The ``PositionGenerationStep`` doesn't use the ``func``, ``variable_components``
 ImageStitchingStep Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* ``name``: Human-readable name for the step (default: "Image Stitching")
 * ``input_dir``: Directory containing images to stitch (optional)
 * ``positions_dir``: Directory containing position files (optional)
 * ``output_dir``: Directory to save stitched images (optional)
@@ -143,7 +139,9 @@ Specialized Step Best Practices
 1. **Directory Resolution**:
    - Let EZStitcher automatically resolve directories when possible
    - Only specify directories when you need a specific directory structure
-   - The ``positions_dir`` for ``ImageStitchingStep`` is automatically determined from previous steps
+   - The ``ImageStitchingStep`` follows the standard directory resolution logic, using the previous step's output directory as its input
+   - You can explicitly set ``input_dir=orchestrator.workspace_path`` to use original images for stitching instead of processed images
+   - The ``positions_dir`` for ``ImageStitchingStep`` is automatically determined if not specified
 
 2. **Step Order**:
    - Place ``PositionGenerationStep`` after image processing steps

@@ -106,9 +106,8 @@ position_pipeline = Pipeline(
         # Step 1: Flatten Z-stacks using maximum projection
         # This reduces 3D z-stacks to 2D images for position calculation
         Step(name="Z-Stack Flattening",
-             func=IP.create_projection,
+             func=(IP.create_projection, {'method': 'max_projection'}),  # Function with parameters
              variable_components=['z_index'],  # Process each z-index separately
-             processing_args={'method': 'max_projection'},  # Use maximum intensity projection
              input_dir=dirs['input'],
              output_dir=dirs['processed']),
 
@@ -122,7 +121,6 @@ position_pipeline = Pipeline(
         # Step 3: Generate position files for stitching
         # This specialized step calculates the relative positions of tiles
         PositionGenerationStep(
-            name="Generate Positions",
             output_dir=dirs['positions']  # Save position files here
         )
     ],
@@ -136,9 +134,8 @@ assembly_pipeline = Pipeline(
         # Step 1: Flatten Z-stacks for final images
         # This reduces 3D z-stacks to 2D images for final stitching
         Step(name="Z-Stack Flattening",
-             func=IP.create_projection,
+             func=(IP.create_projection, {'method': 'max_projection'}),  # Function with parameters
              variable_components=['z_index'],  # Process each z-index separately
-             processing_args={'method': 'max_projection'},  # Use maximum intensity projection
              input_dir=dirs['input'],
              output_dir=dirs['post_processed']
         ),
@@ -179,13 +176,11 @@ focus_pipeline = Pipeline(
 
         # Step 2: Apply best focus
         Step(name="Focus",
-             func=IP.create_projection,
-             variable_components=['z_index'],
-             processing_args={'method': 'best_focus'}),
+             func=(IP.create_projection, {'method': 'best_focus'}),
+             variable_components=['z_index']),
 
         # Step 3: Stitch focused images
         ImageStitchingStep(
-            name="Stitch Focused Images",
             positions_dir=dirs['positions'],
             output_dir=dirs['stitched']),
     ],

@@ -315,11 +315,8 @@ You can combine multiple channels into a composite image. For detailed explanati
 
             # Create composite images
             Step(
-                name="Create Composite",
                 func=IP.create_composite,
                 variable_components=['channel'],  # Process each channel separately
-
-
                 output_dir=Path("path/to/composite")
             )
         ],
@@ -361,22 +358,17 @@ A typical stitching workflow involves these main steps:
                 input_dir=orchestrator.workspace_path
             ),
 
-            # Step 2: Create composite for position generation
             # This is important when working with multiple channels
             Step(
-                name="Create Composite",
                 func=IP.create_composite,  # Equal weighting for all channels
                 variable_components=['channel']
             ),
 
-            # Step 3: Generate positions using the composite
-            PositionGenerationStep(
-                name="Generate Positions",
-            ),
+            PositionGenerationStep(),
 
-            # Step 4: Stitch images
+            # By default, uses previous step's output directory (position files)
             ImageStitchingStep(
-                name="Stitch Images",
+                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
             )
         ],
         name="Stitching Pipeline"
@@ -413,22 +405,17 @@ Process Z-stacks and then stitch the resulting images:
                 variable_components=['channel']
             ),
 
-            # Step 3: Create composite for position generation
             # This is important when working with multiple channels
             Step(
-                name="Create Composite",
                 func=IP.create_composite,  # Equal weighting for all channels
                 variable_components=['channel']
             ),
 
-            # Step 4: Generate positions using the composite
-            PositionGenerationStep(
-                name="Generate Positions",
-            ),
+            PositionGenerationStep(),
 
-            # Step 5: Stitch images
+            # By default, uses previous step's output directory (position files)
             ImageStitchingStep(
-                name="Stitch Images",
+                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
             )
         ],
         name="Z-Stack Stitching Pipeline"
@@ -455,22 +442,17 @@ Apply different processing to different channels and then stitch the results:
                 input_dir=orchestrator.workspace_path
             ),
 
-            # Step 2: Create composite for position generation
             # This is important when working with multiple channels
             Step(
-                name="Create Composite",
                 func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Custom weighting: 70% channel 1, 30% channel 2
                 variable_components=['channel']
             ),
 
-            # Step 3: Generate positions using the composite
-            PositionGenerationStep(
-                name="Generate Positions",
-            ),
+            PositionGenerationStep(),
 
-            # Step 4: Stitch images
+            # By default, uses previous step's output directory (position files)
             ImageStitchingStep(
-                name="Stitch Images",
+                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
             )
         ],
         name="Channel Stitching Pipeline"
@@ -510,23 +492,15 @@ A complete workflow that combines Z-stack processing, channel-specific processin
                 group_by='channel',
             ),
 
-            # Step 3: Create composite for position generation
             # This is important when working with multiple channels
             Step(
-                name="Create Composite",
                 func=(IP.create_composite, {'weights': [0.6, 0.4]}),  # Custom weighting: 60% channel 1, 40% channel 2
                 variable_components=['channel']
             ),
 
-            # Step 4: Generate positions using the composite
-            PositionGenerationStep(
-                name="Generate Positions",
-            ),
+            PositionGenerationStep(),
 
-            # Step 5: Stitch images
-            ImageStitchingStep(
-                name="Stitch Images",
-            )
+            ImageStitchingStep()
         ],
         name="Complete Workflow Pipeline"
     )

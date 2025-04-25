@@ -67,10 +67,10 @@ EZStitcher automatically resolves directories for steps in a pipeline, minimizin
    - Subsequent steps will use their input directory as their output directory (in-place processing) if no output directory is specified
    - This allows for more efficient processing by avoiding unnecessary file copying
 
-4. **ImageStitchingStep Special Handling**:
-   - The ``ImageStitchingStep`` has special directory handling to ensure stitched images are saved separately
+4. **ImageStitchingStep Behavior**:
+   - The ``ImageStitchingStep`` follows the standard directory resolution logic, using the previous step's output directory as its input
    - By default, its output directory is set to ``{workspace_path}/_stitched``
-   - This ensures stitched images are not mixed with processed individual tiles
+   - This ensures stitched images are saved separately from processed individual tiles
 
 Example Directory Flow
 --------------------
@@ -93,9 +93,13 @@ Here's an example of how directories flow through a pipeline:
       input_dir = /data/plates/plate1_workspace/_out
       output_dir = /data/plates/plate1_workspace/_out  # In-place processing
 
-    Step 3 (Image Stitching):
+    Step 3 (Position Generation):
       input_dir = /data/plates/plate1_workspace/_out
-      positions_dir = /data/plates/plate1_workspace/_positions
+      output_dir = /data/plates/plate1_workspace/_positions  # New directory for position files
+
+    Step 4 (Image Stitching):
+      input_dir = /data/plates/plate1_workspace/_positions  # Uses previous step's output
+      positions_dir = /data/plates/plate1_workspace/_positions  # Same as input_dir
       output_dir = /data/plates/plate1_workspace/_stitched  # New directory for stitched images
 
 This automatic directory resolution simplifies pipeline creation and ensures a consistent directory structure.
@@ -151,8 +155,8 @@ When initializing steps, follow these best practices for directory specification
        # Image stitching step
        stitch_step = ImageStitchingStep(
            name="Stitch Images"
-           # input_dir is automatically set
-           # positions_dir is automatically determined from previous steps
+           # input_dir is automatically set to previous step's output_dir
+           # positions_dir is automatically determined
            # output_dir is automatically determined
        )
 

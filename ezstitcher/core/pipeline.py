@@ -114,12 +114,7 @@ class Pipeline:
                 logger.debug(f"First step using pipeline input_dir: {step.input_dir}")
             return
 
-        # Special handling for ImageStitchingStep
-        if isinstance(step, ImageStitchingStep) and not step.input_dir:
-            # Use the pipeline's input directory by default
-            step.input_dir = self.input_dir
-            logger.info(f"ImageStitchingStep using pipeline input_dir: {step.input_dir}")
-            return
+        # No special handling for ImageStitchingStep - it will use the normal directory resolution logic
 
         # Normal directory resolution for other steps
         prev_step = self.steps[-1]

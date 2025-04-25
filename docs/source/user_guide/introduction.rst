@@ -145,13 +145,11 @@ Here's a simple example that demonstrates how to create and run a pipeline for p
                 func=IP.stack_percentile_normalize,
                 input_dir=orchestrator.workspace_path
             ),
-            # Step 2: Generate positions for stitching
-            PositionGenerationStep(
-                name="Generate Positions"
-            ),
-            # Step 3: Image stitching - combine processed tiles
+            PositionGenerationStep(),
+
+            # By default, uses previous step's output directory (position files)
             ImageStitchingStep(
-                name="Stitch Images"
+                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
             )
         ],
         name="Simple Pipeline"
@@ -172,9 +170,9 @@ Here's a simple example that demonstrates how to create and run a pipeline for p
 
 **Expected Output:**
 
-* Processed images will be saved in the workspace directory with the suffix `/_out` (e.g., `plate_workspace/_out`)
-* Position files will be saved in the workspace directory with the suffix `/_positions` (e.g., `plate_workspace/_positions`)
-* Stitched images will be saved in the workspace directory with the suffix `/_stitched` (e.g., `plate_workspace/_stitched`)
+* Processed images will be saved in the workspace directory with the suffix `_out` (e.g., `plate_workspace_out`)
+* Position files will be saved in the workspace directory with the suffix `_positions` (e.g., `plate_workspace_positions`)
+* Stitched images will be saved in the workspace directory with the suffix `_stitched` (e.g., `plate_workspace_stitched`)
 
 **Common Issues:**
 

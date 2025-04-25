@@ -171,14 +171,11 @@ Here's an example of an integration test:
                      ]),
 
                 # Step 3: Create composite with weights (70% channel 1, 30% channel 2)
-                Step(name="Create Composite",
-                     func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Pass weights as a list
+                Step(func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Pass weights as a list
                      variable_components=['channel']),
 
                 # Step 4: Generate positions
-                PositionGenerationStep(
-                    name="Generate Positions"
-                )
+                PositionGenerationStep()
             ],
             name="Position Generation Pipeline"
         )
@@ -192,9 +189,7 @@ Here's an example of an integration test:
                      input_dir=orchestrator.workspace_path),
 
                 # Step 2: Stitch images
-                ImageStitchingStep(
-                    name="Stitch Images"
-                )
+                ImageStitchingStep()
             ],
             name="Image Assembly Pipeline"
         )
