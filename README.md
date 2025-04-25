@@ -7,7 +7,7 @@
 [![PyPI version](https://badge.fury.io/py/ezstitcher.svg)](https://badge.fury.io/py/ezstitcher)
 [![Documentation Status](https://readthedocs.org/projects/ezstitcher/badge/?version=latest)](https://ezstitcher.readthedocs.io/en/latest/?badge=latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Coverage](https://raw.githubusercontent.com/trissim/ezstitcher/main/.github/badges/coverage.svg)]
+[!Coverage(https://raw.githubusercontent.com/trissim/ezstitcher/main/.github/badges/coverage.svg)]
 
 ## Powerful Microscopy Image Processing Made Simple
 
