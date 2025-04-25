@@ -76,9 +76,21 @@ def update_version(new_version=None):
         readme_file = Path("README.md")
         if readme_file.exists():
             readme_content = readme_file.read_text()
+            # Fix potential duplicate URL paths
+            github_base = 'https://raw.githubusercontent.com/trissim/ezstitcher/main'
+            logo_path = 'docs/source/_static/ezstitcher_logo.png'
+            
+            # First, normalize any existing URLs to the relative path
+            readme_content = re.sub(
+                rf'{github_base}/{github_base}/{logo_path}|{github_base}/{logo_path}|{logo_path}',
+                logo_path,
+                readme_content
+            )
+            
+            # Then, add the correct absolute URL
             updated_readme = re.sub(
-                r'docs/source/_static/ezstitcher_logo\.png',
-                'https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png',
+                logo_path,
+                f'{github_base}/{logo_path}',
                 readme_content
             )
             readme_file.write_text(updated_readme)
