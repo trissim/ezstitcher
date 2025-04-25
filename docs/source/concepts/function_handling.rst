@@ -23,6 +23,7 @@ A callable that takes a list of images and returns a list of processed images:
     )
 
 .. _function-with-arguments:
+.. _function-arguments:
 
 Function with Arguments
 ---------------------
@@ -176,6 +177,7 @@ When using a dictionary of functions:
 - For example, with `group_by='channel'`, files with channel="1" are processed by the function at key "1"
 
 .. _function-mixed-types:
+.. _function-advanced-patterns:
 
 Mixed Function Types
 ------------------

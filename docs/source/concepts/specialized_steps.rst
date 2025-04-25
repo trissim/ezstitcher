@@ -152,6 +152,8 @@ Specialized Step Best Practices
 
 Here are some key recommendations for using specialized steps:
 
+.. _specialized-steps-directory-resolution:
+
 1. **Directory Resolution**:
    - Let EZStitcher automatically resolve directories when possible
    - Only specify directories when you need a specific directory structure

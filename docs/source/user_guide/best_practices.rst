@@ -147,6 +147,8 @@ Pipeline Best Practices
 Directory Management Best Practices
 --------------------------------
 
+For comprehensive information on directory structure and management in EZStitcher, see :doc:`../concepts/directory_structure`. Here are the key best practices:
+
 1. **Always specify input_dir for the first step**:
 
    - Use ``orchestrator.workspace_path`` to ensure processing happens on workspace copies
@@ -189,20 +191,7 @@ Directory Management Best Practices
    - Each step's output directory automatically becomes the next step's input directory
    - This reduces code verbosity and potential for errors
 
-   .. code-block:: python
-
-       pipeline = Pipeline(
-           steps=[
-               Step(
-                   func=IP.stack_percentile_normalize,
-                   input_dir=orchestrator.workspace_path
-               ),
-               # No input_dir needed - automatically uses previous step's output
-               PositionGenerationStep(),
-               # No input_dir needed - automatically uses previous step's output
-               ImageStitchingStep()
-           ]
-       )
+   For more details on directory resolution logic, see :ref:`directory-resolution`.
 
 4. **Use consistent directory naming**:
 
@@ -210,14 +199,7 @@ Directory Management Best Practices
    - Or configure custom suffixes through PipelineConfig for consistent naming
    - This makes it easier to understand the directory structure
 
-   .. code-block:: python
-
-       # Configure custom directory suffixes
-       config = PipelineConfig(
-           output_suffix="_processed",
-           positions_suffix="_pos",
-           stitched_suffix="_stitched"
-       )
+   For more information on custom directory structures, see :ref:`directory-custom-structures`.
 
 5. **Consider performance**:
 
@@ -230,19 +212,24 @@ Directory Management Best Practices
 Specialized Steps Best Practices
 -----------------------------
 
+For comprehensive information on specialized steps in EZStitcher, see :doc:`../concepts/specialized_steps`. Here are the key best practices:
+
 1. **Directory Resolution**:
 
    - Let EZStitcher automatically resolve directories when possible
    - Only specify directories when you need a specific directory structure
    - The ``ImageStitchingStep`` follows the standard directory resolution logic, using the previous step's output directory as its input
    - You can explicitly set ``input_dir=orchestrator.workspace_path`` to use original images for stitching instead of processed images
-   - The ``positions_dir`` for ``ImageStitchingStep`` is automatically determined if not specified
+
+   For more details on specialized step directory resolution, see :ref:`specialized-steps-directory-resolution`.
 
 2. **Step Order**:
 
    - Place ``PositionGenerationStep`` after image processing steps
    - Place ``ImageStitchingStep`` after ``PositionGenerationStep``
    - This ensures that position generation works with processed images
+
+   For more information on typical stitching workflows, see :ref:`typical-stitching-workflows`.
 
 3. **Pipeline Integration**:
 
@@ -284,6 +271,8 @@ Specialized Steps Best Practices
 Function Handling Best Practices
 -----------------------------
 
+For comprehensive information on function handling patterns in EZStitcher, see :doc:`../concepts/function_handling`. Here are the key best practices:
+
 1. **Use the tuple pattern for function arguments**:
 
    - Always use ``(func, kwargs)`` to pass arguments to functions
@@ -306,6 +295,8 @@ Function Handling Best Practices
            args={'low_percentile': 1.0, 'high_percentile': 99.0}  # Don't do this
        )
 
+   For more details on function argument patterns, see :ref:`function-arguments`.
+
 2. **Keep function lists focused**:
 
    - When using lists of functions, each function should have a clear purpose
@@ -322,18 +313,7 @@ Function Handling Best Practices
            ]
        )
 
-       # Avoid: Overly long lists with unclear purposes
-       step = Step(
-           func=[
-               stack(IP.gaussian_blur),
-               stack(IP.tophat),
-               stack(IP.sharpen),
-               stack(IP.median_filter),
-               stack(IP.gaussian_blur),
-               IP.stack_percentile_normalize,
-               # ... many more functions
-           ]
-       )
+   For more information on function lists, see :ref:`function-lists`.
 
 3. **Use descriptive variable names in processing functions**:
 
@@ -354,11 +334,6 @@ Function Handling Best Practices
                processed.append(bg_removed)
            return processed
 
-       # Avoid: Non-descriptive parameter names
-       def process_images(imgs, p1=1.0, p2=15):
-           # ... similar processing but with unclear parameter names
-           pass
-
 4. **Document complex processing chains**:
 
    - Add comments explaining what each function in a chain does
@@ -376,6 +351,8 @@ Function Handling Best Practices
                })
            ]
        )
+
+   For more information on advanced function patterns, see :ref:`function-dictionaries` and :ref:`function-advanced-patterns`.
 
 .. _best-practices-performance:
 

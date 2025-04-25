@@ -155,6 +155,17 @@ EZStitcher creates a dynamic directory structure during processing. By default, 
     plate_folder_workspace_positions/  # CSV files with stitching positions
     plate_folder_workspace_stitched/   # Final stitched images
 
+For comprehensive information on directory structure and management in EZStitcher, including:
+
+- Default directory structure
+- Directory resolution logic
+- Step initialization best practices
+- Custom directory structures
+- When to specify directories explicitly
+- Common mistakes to avoid
+
+See :doc:`../concepts/directory_structure`.
+
 However, the actual directory structure is determined by the specific steps in your pipeline. Each step can specify its own input and output directories, and the pipeline will create them as needed.
 
 File Naming Conventions

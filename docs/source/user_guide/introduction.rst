@@ -28,28 +28,20 @@ EZStitcher is designed for researchers working with microscopy data who need a f
 Supported Microscope Types
 ------------------------
 
-EZStitcher currently supports the following microscope types:
+EZStitcher currently supports multiple microscope types, including ImageXpress and Opera Phenix.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 20 40 40
-
-   * - Microscope
-     - File Format
-     - Naming Convention
-   * - ImageXpress
-     - TIFF + HTD/XML metadata
-     - ``[Well]_s[Site]_w[Channel].tif``
-   * - Opera Phenix
-     - TIFF + Index.xml metadata
-     - ``r[Row]c[Col]f[Field]p[Plane]-ch[Channel]sk[Skip]fk[Fk]fl[Fl].tiff``
+For detailed information about supported microscope types, including file formats, naming conventions, and directory structures, see :ref:`microscope-formats` and :ref:`microscope-comparison`.
 
 Support for additional microscope types can be added by implementing the appropriate interfaces. See the :doc:`../development/extending` guide for details.
 
 Core Architecture Overview
 ------------------------
 
-EZStitcher uses a pipeline architecture that organizes processing into a logical sequence of steps.
+EZStitcher uses a pipeline architecture that organizes processing into a logical sequence of steps. The architecture consists of three main components:
+
+* **PipelineOrchestrator**: Coordinates the execution of pipelines across wells
+* **Pipeline**: A sequence of processing steps that are executed in order
+* **Step**: A single processing operation that can be applied to images
 
 .. figure:: ../_static/architecture_overview.png
    :alt: EZStitcher Architecture Overview
@@ -58,15 +50,17 @@ EZStitcher uses a pipeline architecture that organizes processing into a logical
 
    EZStitcher's pipeline architecture showing the relationship between Orchestrator, Pipeline, and Steps.
 
-The architecture consists of three main components:
+For comprehensive information about EZStitcher's architecture, including:
 
-* **Pipeline**: A sequence of processing steps that can be applied to microscopy images
-* **Orchestrator**: Manages plate-level operations and provides services to steps
-* **Step**: A single processing operation that can be applied to images
+* Detailed component descriptions
+* Processing workflow and modularity
+* Component interactions
+* Typical processing flow
 
-For detailed information about EZStitcher's architecture, see:
+See :doc:`../concepts/architecture_overview`.
 
-* :doc:`../concepts/architecture_overview` - Overview of the architecture
+For details about specific components, see:
+
 * :doc:`../concepts/pipeline_orchestrator` - Details about the Orchestrator
 * :doc:`../concepts/pipeline` - Details about Pipelines
 * :doc:`../concepts/step` - Details about Steps
@@ -180,24 +174,35 @@ Here's a simple example that demonstrates how to create and run a pipeline for p
 * **Missing Dependencies**: Make sure all required dependencies are installed
 * **Image Format Issues**: Verify that your images are in a supported format
 
-Key Concepts Preview
-------------------
+Key Concepts
+-----------
 
-EZStitcher includes several key concepts that are important to understand for effective use:
+EZStitcher is built around several key concepts that work together to provide a flexible and powerful image processing framework:
 
-* **Pipeline Architecture**: The overall structure of EZStitcher's processing framework
-* **Function Handling Patterns**: Different ways to specify processing functions
-* **Directory Structure and Resolution**: How EZStitcher manages directories
-* **Step Parameters**: How to configure processing steps
-* **Specialized Steps**: Pre-built steps for common tasks
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
 
-For detailed explanations of these concepts, see the following documentation:
+   * - Concept
+     - Documentation
+   * - **Architecture Overview**
+     - :doc:`../concepts/architecture_overview`
+   * - **Pipeline Orchestrator**
+     - :doc:`../concepts/pipeline_orchestrator`
+   * - **Pipeline**
+     - :doc:`../concepts/pipeline`
+   * - **Steps**
+     - :doc:`../concepts/step`
+   * - **Specialized Steps**
+     - :doc:`../concepts/specialized_steps`
+   * - **Function Handling**
+     - :doc:`../concepts/function_handling`
+   * - **Directory Structure**
+     - :doc:`../concepts/directory_structure`
+   * - **Best Practices**
+     - :doc:`best_practices`
 
-* :doc:`../concepts/architecture_overview` - Overview of the architecture
-* :doc:`../concepts/function_handling` - Function handling patterns
-* :doc:`../concepts/directory_structure` - Directory structure and resolution
-* :doc:`../concepts/step` - Step parameters and configuration
-* :doc:`../concepts/specialized_steps` - Specialized steps for common tasks
+Understanding these concepts will help you create effective image processing workflows tailored to your specific needs.
 
 How to Use This Guide
 -------------------
@@ -210,30 +215,44 @@ This user guide is organized into several sections:
 
 For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
 
-Next Steps
+.. _learning-path:
+
+Learning Path
 ---------
 
-Now that you have a basic understanding of EZStitcher, here are some recommendations for next steps:
+EZStitcher provides a flexible framework for processing and stitching microscopy images. By understanding its core concepts and architecture, you can create powerful pipelines tailored to your specific needs.
 
-**For All Users:**
+Here's a recommended learning path based on your experience level:
 
-* Read the :doc:`intermediate_usage` guide for detailed examples
-* Explore the concepts documentation to understand the core architecture
+**Getting Started:**
 
-**For Intermediate Users:**
+* Read the :doc:`basic_usage` guide to learn the fundamentals
+* Try the Quick Start example above to get hands-on experience
+* Review the :doc:`../concepts/architecture_overview` to understand the big picture
 
-* Explore :doc:`../concepts/function_handling` to learn about advanced function patterns
-* Learn about :doc:`../concepts/directory_structure` to understand how directories are managed
+**Building Basic Pipelines:**
 
-**For Advanced Users:**
+* Learn about Z-stack processing in :doc:`intermediate_usage`
+* Explore channel-specific processing in :doc:`intermediate_usage`
+* Understand position generation and stitching in :doc:`intermediate_usage`
+* Review best practices in :doc:`best_practices`
+
+**Advanced Topics:**
+
+* Create custom processing functions as shown in :doc:`advanced_usage`
+* Optimize performance with multithreaded processing in :doc:`advanced_usage`
+* Extend EZStitcher to support new microscope types using :doc:`../development/extending`
+* Integrate with other tools as described in :doc:`integration`
+
+**Mastering EZStitcher:**
 
 * Dive into :doc:`../concepts/pipeline` to create custom pipelines
 * Study :doc:`../concepts/step` to understand step parameters in detail
+* Explore :doc:`../concepts/function_handling` to learn about advanced function patterns
+* Learn about :doc:`../concepts/directory_structure` to understand how directories are managed
 
 **Getting Help:**
 
 * Consult the documentation for detailed information
 * Check the GitHub repository for issues and updates
 * Join the community for support and discussions
-
-EZStitcher provides a flexible framework for processing and stitching microscopy images. By understanding its core concepts and architecture, you can create powerful pipelines tailored to your specific needs.
