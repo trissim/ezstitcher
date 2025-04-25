@@ -43,7 +43,31 @@ ENV/
 *.swp
 *~
 
-# Project specific
+# Documentation build files
+docs/build/
+
+# Test directories
+tests/**/tests_data/
+tests/**/test_data/
+tests/**/__pycache__/
+tests/integration/tests_data/
+
+# Specific test files to ignore
+*.HTD
+*.xml
+*.csv
+
+# Temporary files
+*.log
+*.tmp
+
+# Image files - exceptions first, then exclusions
+!docs/source/_static/images/
+!docs/source/_static/images/*.png
+!docs/source/_static/images/*.jpg
+!docs/source/_static/*.png
+
+# Then exclude all images
 *.tif
 *.TIF
 *.tiff
@@ -52,30 +76,6 @@ ENV/
 *.JPG
 *.png
 *.PNG
-!docs/source/_static/images/*.png  # Allow png files in assets/images
-!docs/source/_static/*.png  # Allow png files in assets/images
-!docs/source/_static/images/*.jpg  # Allow jpg files in assets/images
-
-# Test directories
-# Ignore test data but not test files
-tests/**/tests_data/
-tests/**/test_data/
-tests/**/__pycache__/
-
-# Specific test files to ignore
-*.HTD
-*.xml
-*.csv
-tests/integration/tests_data/
-
-# Documentation build files
-docs/build/
-
-# Temporary files
-*.log
-*.tmp
-
-# Keep this section for any future deprecated files
 
 # Planning documents
 plans/
