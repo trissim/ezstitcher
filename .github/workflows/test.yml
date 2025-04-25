@@ -34,11 +34,22 @@ jobs:
                 tests/
           coverage json -o coverage/coverage-summary.json
 
+      - name: Debug coverage JSON
+        run: |
+          echo "Coverage JSON content:"
+          cat coverage/coverage-summary.json
+          echo "JSON structure:"
+          node -p 'JSON.stringify(require(`./coverage/coverage-summary.json`), null, 2)'
+
       - name: Get coverage percentage
         run: |
           COV=$(node -p '
-            t=require(`./coverage/coverage-summary.json`).total;
-            Math.min(...`lines|statements|functions|branches`.split(`|`).map(k=>t[k].pct))
+            const data = require(`./coverage/coverage-summary.json`);
+            console.error("Data:", JSON.stringify(data, null, 2));
+            const total = data.totals || data.total || data;
+            console.error("Total:", JSON.stringify(total, null, 2));
+            const coverage = total.percent_covered || total.line_rate * 100 || 0;
+            coverage.toFixed(2)
           ')
           echo "COVERAGE=$COV" >> $GITHUB_ENV
 
