@@ -17,7 +17,15 @@ def run_command(command, check=True):
 
 def get_modified_files():
     """Get list of modified files"""
-    return run_command(['git', 'diff', '--name-only']).split('\n')
+    # Get both staged and unstaged changes
+    staged = run_command(['git', 'diff', '--staged', '--name-only']).split('\n')
+    unstaged = run_command(['git', 'diff', '--name-only']).split('\n')
+    # Combine and remove duplicates while preserving order
+    all_files = []
+    for f in staged + unstaged:
+        if f and f not in all_files:
+            all_files.append(f)
+    return all_files
 
 def check_unstaged_changes():
     """Check for unstaged changes"""
@@ -27,29 +35,32 @@ def check_unstaged_changes():
 def commit_changes(files, message):
     """Commit specified files with a message"""
     try:
-        # Check for unstaged changes first
-        if check_unstaged_changes():
-            print("You have unstaged changes. Please commit or stash them first.")
-            print("\nYou can:")
-            print("1. Stage and commit: git add . && git commit -m 'your message'")
-            print("2. Or stash: git stash")
-            sys.exit(1)
-            
-        # Pull latest changes
-        subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'], check=True)
-        
-        # Add files
+        # Add files explicitly first
         for file in files:
+            print(f"Adding file: {file}")
             subprocess.run(['git', 'add', file], check=True)
         
+        # Show what's being committed
+        print("\nFiles staged for commit:")
+        subprocess.run(['git', 'status', '--short'], check=True)
+        
         # Commit
+        print(f"\nCommitting with message: {message}")
         subprocess.run(['git', 'commit', '-m', message], check=True)
         
+        # Now pull with rebase (after changes are committed)
+        print("\nPulling latest changes...")
+        subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'], check=True)
+        
         # Push
+        print("\nPushing to origin main...")
         subprocess.run(['git', 'push', 'origin', 'main'], check=True)
+        
+        print("Changes committed and pushed successfully!")
+        
     except subprocess.CalledProcessError as e:
         print(f"Git operation failed: {e}")
-        print(f"Error output: {e.stderr}")
+        print(f"Error output: {e.stderr if e.stderr else 'None'}")
         sys.exit(1)
 
 def update_version():
