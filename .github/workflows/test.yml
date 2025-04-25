@@ -3,9 +3,9 @@ name: Tests
 
 on:
   push:
-    branches: ['main']
+    branches: [main]
   pull_request:
-    branches: ['main']
+    branches: [main]
 
 jobs:
   test:
@@ -27,24 +27,31 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=ezstitcher --cov-report=xml --cov-report=json tests/
+          pytest --cov=ezstitcher \
+                --cov-report=xml \
+                --cov-report=json \
+                --cov-report=json-summary \
+                tests/
 
       - name: Get coverage percentage
         run: |
           COV=$(node -p '
-            const coverage = require("./coverage.json");
-            coverage.totals.percent_covered.toFixed(2)
+            const coverage = require("./coverage-summary.json");
+            const total = coverage.total;
+            Math.floor(total.lines.pct)
           ')
           echo "COVERAGE=$COV" >> $GITHUB_ENV
 
       - name: Coverage Badge
         uses: we-cli/coverage-badge-action@v1.0.1
-        # The 'with' block was removed as inputs were reported as
-        # invalid for we-cli/coverage-badge-action@v1.0.1
+        with:
+          badges-directory: .github/badges
+          coverage: ${{ env.COVERAGE }}
 
       - name: Commit and push if coverage has changed
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.email \
+            "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add .github/badges/coverage.svg
           git commit -m "chore: update coverage badge" || exit 0
