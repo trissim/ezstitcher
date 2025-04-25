@@ -55,10 +55,11 @@ pip install ezstitcher
 ## 📊 Basic Usage
 
 ```python
-from ezstitcher import Pipeline, Step, IP
-from ezstitcher.steps import PositionGenerationStep, ImageStitchingStep
 from ezstitcher.core.config import PipelineConfig
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+from ezstitcher.core.pipeline import Pipeline
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.image_processor import ImageProcessor as IP
 from pathlib import Path
 
 # Initialize configuration and orchestrator
@@ -89,10 +90,15 @@ success = orchestrator.run(pipelines=[pipeline])
 ## 📊 Advanced Usage Example
 
 ```python
-from ezstitcher import Pipeline, Step, IP
-from ezstitcher.steps import PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.config import PipelineConfig
+from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+from ezstitcher.core.pipeline import Pipeline
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.image_processor import ImageProcessor as IP
+from ezstitcher.core.utils import stack
 from n2v.models import N2V
 from basicpy import BaSiC
+from pathlib import Path
 import numpy as np
 
 # Custom processing functions
