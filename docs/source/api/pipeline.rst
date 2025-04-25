@@ -5,6 +5,17 @@ Pipeline
 
 This module contains the Pipeline class and related components for the EZStitcher pipeline architecture.
 
+For comprehensive information about pipelines, including:
+
+* Creating and configuring pipelines
+* Running pipelines
+* Pipeline context and data flow
+* Multithreaded processing
+* Directory resolution
+* Best practices
+
+See :ref:`pipeline-concept` in the :doc:`../concepts/pipeline` documentation.
+
 Pipeline
 -------
 
@@ -78,6 +89,9 @@ ProcessingContext
    The ProcessingContext holds input/output directories, well filter, configuration,
    and results during pipeline execution. It serves as a communication mechanism
    between steps in a pipeline, allowing each step to access and modify shared state.
+
+   For detailed information about how the context is used for communication between steps,
+   see :ref:`pipeline-context` in the :doc:`../concepts/pipeline` documentation.
 
    :param input_dir: The input directory
    :type input_dir: str or Path

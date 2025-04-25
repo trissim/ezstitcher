@@ -9,7 +9,15 @@ This module contains the core processing pipeline architecture for EZStitcher, w
 2. **Pipeline**: A sequence of processing steps
 3. **Step**: A single processing operation (with specialized subclasses)
 
-For a detailed overview of the pipeline architecture, see :doc:`../development/pipeline_architecture`.
+For comprehensive information about the pipeline orchestrator, including:
+
+* Role and responsibilities
+* Creating an orchestrator
+* Plate-specific services
+* Running pipelines
+* Orchestrator-pipeline relationship
+
+See :ref:`pipeline-orchestrator` in the :doc:`../concepts/pipeline_orchestrator` documentation.
 
 PipelineOrchestrator
 -------------------
@@ -17,6 +25,10 @@ PipelineOrchestrator
 .. py:class:: PipelineOrchestrator(plate_path=None, workspace_path=None, config=None, fs_manager=None, image_preprocessor=None, focus_analyzer=None)
 
    The central coordinator that manages the execution of multiple pipelines across wells.
+
+   For detailed information about how the orchestrator runs pipelines, see :ref:`orchestrator-running-pipelines` in the :doc:`../concepts/pipeline_orchestrator` documentation.
+
+   For information about the relationship between the orchestrator and pipeline, see :ref:`orchestrator-pipeline-relationship` in the :doc:`../concepts/pipeline_orchestrator` documentation.
 
    :param plate_path: Path to the plate folder (optional, can be provided later in run())
    :type plate_path: str or Path
