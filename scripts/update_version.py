@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+import subprocess
+import sys
+import re
+from pathlib import Path
+import argparse
+from packaging import version
+
+def get_current_version():
+    """Get the current version from __init__.py"""
+    init_file = Path("ezstitcher/__init__.py")
+    content = init_file.read_text()
+    match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
+    return match.group(1) if match else None
+
+def validate_version(new_version):
+    """Validate the new version string"""
+    try:
+        v = version.parse(new_version)
+        if not isinstance(v, version.Version):
+            raise ValueError("Invalid version format")
+        return True
+    except version.InvalidVersion:
+        raise ValueError("Invalid version format. Use semantic versioning (e.g., 1.2.3)")
+
+def check_for_uncommitted_changes():
+    """Check if there are any uncommitted changes"""
+    result = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
+def update_version(new_version=None):
+    """Update version in files and create git commit"""
+    try:
+        # Check for uncommitted changes first
+        if check_for_uncommitted_changes():
+            print("Error: You have uncommitted changes. Please commit or stash them first.")
+            sys.exit(1)
+
+        current_version = get_current_version()
+        if not current_version:
+            print("Error: Could not find current version in __init__.py")
+            sys.exit(1)
+
+        if new_version is None:
+            # Auto-increment patch version if no version specified
+            v = version.parse(current_version)
+            new_version = f"{v.major}.{v.minor}.{v.micro + 1}"
+        
+        # Validate new version
+        validate_version(new_version)
+        if version.parse(new_version) <= version.parse(current_version):
+            print(f"Error: New version ({new_version}) must be greater than current version ({current_version})")
+            sys.exit(1)
+
+        # Pull latest changes with merge strategy
+        try:
+            # First, set the pull strategy globally
+            subprocess.run(['git', 'config', '--global', 'pull.rebase', 'false'], check=True)
+            # Then pull with explicit merge strategy
+            subprocess.run(['git', 'pull', '--no-rebase', 'origin', 'main'], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error: Failed to pull latest changes: {e}")
+            sys.exit(1)
+        
+        # Update version in __init__.py
+        init_file = Path("ezstitcher/__init__.py")
+        content = init_file.read_text()
+        new_content = re.sub(
+            r'(__version__\s*=\s*[\'"])[^\'"]+([\'"])',
+            rf'\g<1>{new_version}\2',
+            content
+        )
+        init_file.write_text(new_content)
+        
+        # Update README.md with absolute image URL
+        readme_file = Path("README.md")
+        readme_content = readme_file.read_text()
+        updated_readme = re.sub(
+            r'docs/source/_static/ezstitcher_logo\.png',
+            'https://raw.githubusercontent.com/trissim/ezstitcher/main/docs/source/_static/ezstitcher_logo.png',
+            readme_content
+        )
+        readme_file.write_text(updated_readme)
+        
+        # Commit and push changes
+        subprocess.run(['git', 'add', 'ezstitcher/__init__.py', 'README.md'], check=True)
+        subprocess.run(['git', 'commit', '-m', f'bump version to {new_version}'], check=True)
+        subprocess.run(['git', 'push', 'origin', 'main'], check=True)
+        
+        print(f"Successfully updated version to {new_version}")
+        print("Now run: python scripts/release.py")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Error during version update: {e}")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description='Update EZStitcher version number')
+    parser.add_argument('--version', '-v', 
+                      help='New version number (e.g., 1.2.3). If not provided, will increment patch version.')
+    args = parser.parse_args()
+    
+    update_version(args.version)
+
+if __name__ == "__main__":
+    main()
