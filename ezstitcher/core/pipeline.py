@@ -69,148 +69,68 @@ class Pipeline:
     def add_step(self, step: Step, output_dir: str = None) -> 'Pipeline':
         """
         Add a step to the pipeline with improved directory resolution.
-
-        This method ensures a coherent data flow through the pipeline:
-        - Each step's output directory must match the next step's input directory
-        - If a step specifies an input directory, the previous step's output is set to match
-        - If a step specifies an output directory, it's used for that step only
-        - The last step uses the pipeline's output directory (if specified)
-
-        Args:
-            step: The step to add
-            output_dir: Optional output directory for the step
-
-        Returns:
-            Self, for method chaining
+        
+        Directory resolution follows these rules:
+        1. Input directory is resolved first based on previous step
+        2. Output directory is set based on input directory
+        3. Explicit output_dir overrides automatic resolution
         """
-        # Override step's output_dir if explicitly provided to this method
-        if output_dir:
-            step.output_dir = output_dir
-
-        # Handle input directory and ensure coherent flow with previous step
+        # First ensure input directory is coherent
         self._ensure_coherent_input_directory(step)
-
-        # Set output directory if not specified
-        self._set_step_output_directory(step)
-
-        # Update pipeline directories if needed
-        self._update_pipeline_directories(step)
-
-        # Add the step to the pipeline
+        
+        # Set output directory if not explicitly provided
+        if not output_dir and not step.output_dir:
+            self._set_step_output_directory(step)
+        elif output_dir:
+            step.output_dir = output_dir
+        
+        # Add step and update pipeline directories
         self.steps.append(step)
+        self._update_pipeline_directories(step)
         return self
 
     def _ensure_coherent_input_directory(self, step: Step):
-        """
-        Ensure the step's input directory is coherent with the appropriate previous step's output.
-        For ImageStitchingStep, use the pipeline's input directory by default.
-        """
-        logger.debug(f"Resolving input directory for step: {step.name}")
-
+        """Ensure step's input directory is coherent with pipeline flow."""
         if not self.steps:  # First step
-            # If no input directory specified, use pipeline's input directory
             if not step.input_dir:
                 step.input_dir = self.input_dir
-                logger.debug(f"First step using pipeline input_dir: {step.input_dir}")
             return
 
-        # No special handling for ImageStitchingStep - it will use the normal directory resolution logic
-
-        # Normal directory resolution for other steps
         prev_step = self.steps[-1]
+        
+        # If no input specified, use previous step's output
+        if not step.input_dir:
+            step.input_dir = prev_step.output_dir or prev_step.input_dir
 
-        if step.input_dir:
-            # This step has a specified input directory
-            # Update previous step's output to match this step's input
-            prev_step.output_dir = step.input_dir
-            logger.debug(f"Updated previous step output_dir to match current step input_dir: {step.input_dir}")
-        else:
-            # No input directory specified, use previous step's output
-            if not prev_step.output_dir:
-                # If previous step has no output directory, use a default
-                prev_step.output_dir = self.output_dir or prev_step.input_dir
-                logger.debug("Set previous step output_dir to default: %s", prev_step.output_dir)
-
-            # Set this step's input to previous step's output
-            step.input_dir = prev_step.output_dir
-            logger.debug("Set current step input_dir to previous step output_dir: %s", step.input_dir)
-
-    def _find_last_processing_step(self):
-        """Find the last processing step in the pipeline (excluding PositionGenerationStep)."""
-        for s in reversed(self.steps):
-            # Skip PositionGenerationStep as it's not an image processing step
-            if s.__class__.__name__ != "PositionGenerationStep":
-                return s
-        return None
-
-    def _check_directory_conflicts(self, step, proposed_dir):
+    def _check_directory_conflicts(self, step: Step, proposed_dir: Path) -> bool:
         """
-        Check if the proposed directory conflicts with existing directories.
-
+        Check for directory conflicts in pipeline.
+        
         Args:
-            step: The step being configured
-            proposed_dir: The proposed output directory
+            step: Step being configured
+            proposed_dir: Proposed output directory
 
         Returns:
-            bool: True if there's a conflict, False otherwise
+            bool: True if conflict exists
         """
-        # Check for conflict with last processing step
-        last_processing_step = self._find_last_processing_step()
-
-        if last_processing_step and last_processing_step.output_dir == proposed_dir:
-            logger.info("Avoiding output directory conflict with last processing step.")
-            return True
-
-        # Check for conflict with input directory
-        if step.input_dir == proposed_dir:
-            logger.info("Avoiding output directory conflict with input directory.")
-            return True
-
-        # Check for conflicts with previous steps
-        for prev_step in self.steps:
-            if prev_step.output_dir and Path(prev_step.output_dir) == proposed_dir:
-                logger.info("Avoiding output directory conflict with previous step.")
-                return True
-
-        return False
+        proposed_dir = Path(proposed_dir)
+        last_processing = next((s for s in reversed(self.steps) 
+                              if s.__class__.__name__ != "PositionGenerationStep"), None)
+        return (last_processing and Path(last_processing.output_dir) == proposed_dir) or \
+               (step.input_dir and Path(step.input_dir) == proposed_dir)
 
     def _set_stitching_step_output_directory(self, step):
         """Set output directory for ImageStitchingStep."""
-        # Get the stitched_dir_suffix from the orchestrator's config if available
-        stitched_suffix = "_stitched"  # Default suffix
-        if hasattr(self, 'orchestrator') and self.orchestrator and hasattr(self.orchestrator, 'config'):
-            stitched_suffix = self.orchestrator.config.stitched_dir_suffix
-
-        if self.output_dir:
-            # Use pipeline's output_dir if specified
-            step.output_dir = self.output_dir
-
-            # Check for conflicts
-            if self._check_directory_conflicts(step, step.output_dir):
-                # If there's a conflict, create a unique directory with the configured stitched suffix
-                workspace_dir = Path(self.input_dir)
-                step.output_dir = workspace_dir.parent / f"{workspace_dir.name}{stitched_suffix}"
-                logger.info("Using alternative directory: %s", step.output_dir)
-        else:
-            # Find the appropriate base directory
-            if self.steps:
-                # Get the workspace directory (parent of the first step's input)
-                workspace_dir = Path(self.input_dir)
-                step.output_dir = workspace_dir.parent / f"{workspace_dir.name}{stitched_suffix}"
-            else:
-                # For standalone stitching step, use input directory as base
-                input_path = Path(step.input_dir)
-                step.output_dir = input_path.parent / f"{input_path.name}{stitched_suffix}"
-
-            # Check for conflicts
-            if self._check_directory_conflicts(step, step.output_dir):
-                # If there's a conflict, create a unique directory with _stitched_final suffix
-                workspace_dir = Path(self.input_dir)
-                step.output_dir = workspace_dir.parent / f"{workspace_dir.name}{stitched_suffix}_final"
-                logger.info("Using alternative directory: %s", step.output_dir)
-
-            logger.info("ImageStitchingStep has no output directory specified. "
-                       "Using default stitched directory: %s", step.output_dir)
+        stitched_suffix = getattr(self.orchestrator.config, 'stitched_dir_suffix', '_stitched') if hasattr(self, 'orchestrator') else '_stitched'
+        
+        last_processing = next((s for s in reversed(self.steps) 
+                              if s.__class__.__name__ != "PositionGenerationStep"), None)
+        base_dir = Path(last_processing.output_dir if last_processing else self.input_dir)
+        
+        step.output_dir = base_dir.parent / f"{base_dir.name}{stitched_suffix}"
+        
+        if self._check_directory_conflicts(step, step.output_dir):
+            step.output_dir = base_dir.parent / f"{base_dir.name}{stitched_suffix}_final"
 
     def _set_step_output_directory(self, step: Step):
         """Set the step's output directory if not already specified."""
@@ -218,15 +138,13 @@ class Pipeline:
             return  # Output directory already specified
 
         # Get directory suffixes from orchestrator's config if available
-        out_suffix = "_out"  # Default suffix for regular steps
-        processed_suffix = "_processed"  # Default suffix for intermediate steps
+        out_suffix = "_out"  # Default suffix for all processing steps
         positions_suffix = "_positions"  # Default suffix for position generation steps
 
         # Try to get suffixes from orchestrator config
         if hasattr(self, 'orchestrator') and self.orchestrator and hasattr(self.orchestrator, 'config'):
             config = self.orchestrator.config
             out_suffix = config.out_dir_suffix
-            processed_suffix = config.processed_dir_suffix
             positions_suffix = config.positions_dir_suffix
 
         # Check if this is a stitching step
@@ -235,10 +153,6 @@ class Pipeline:
         # Check if this is a position generation step
         is_position_generation = step.__class__.__name__ == "PositionGenerationStep"
 
-        # Check if pipeline has a stitching step (including this one)
-        has_stitching_step = is_stitching or any(
-            s.__class__.__name__ == "ImageStitchingStep" for s in self.steps)
-
         # Special handling for ImageStitchingStep
         if is_stitching:
             self._set_stitching_step_output_directory(step)
@@ -246,43 +160,18 @@ class Pipeline:
 
         # Special handling for PositionGenerationStep
         if is_position_generation:
-            # Use positions suffix for position generation steps
             input_path = Path(step.input_dir)
             step.output_dir = input_path.parent / f"{input_path.name}{positions_suffix}"
             logger.info("PositionGenerationStep using default directory: %s", step.output_dir)
             return
 
-        # Get input path for non-stitching steps
-        input_path = Path(step.input_dir)
-
-        # Determine default output directory based on step type and pipeline context
-        if self.output_dir and has_stitching_step:
-            # For processing steps in a pipeline with stitching and output_dir,
-            # create intermediate directories
-            suffix = processed_suffix
-            log_msg = "Processing step in pipeline with stitching step."
-        elif not self.steps and self.output_dir:
-            # For first step with pipeline output specified
-            step.output_dir = self.output_dir
-            return
-        elif not self.steps:
-            # For first step with no output specified
-            suffix = out_suffix
-            log_msg = "First step has no output directory specified."
+        # For all other processing steps
+        if not self.output_dir:
+            input_path = Path(step.input_dir)
+            step.output_dir = input_path.parent / f"{input_path.name}{out_suffix}"
+            logger.info("Processing step using default directory: %s", step.output_dir)
         else:
-            # For other steps, use pipeline's output_dir or step's input_dir
-            step.output_dir = self.output_dir or step.input_dir
-            return
-
-        # Create default directory without checking for conflicts
-        # This aligns with the default behavior of in-place processing
-        default_dir = input_path.parent / f"{input_path.name}{suffix}"
-
-        # Set the output directory
-        step.output_dir = default_dir
-
-        # Log the decision
-        logger.info("%s Using default directory: %s", log_msg, step.output_dir)
+            step.output_dir = self.output_dir
 
     def _update_pipeline_directories(self, step: Step):
         """Update pipeline directories based on the step if needed."""

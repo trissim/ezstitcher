@@ -1,6 +1,9 @@
+from ezstitcher.core.config import PipelineConfig, StitcherConfig
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-from ezstitcher.core.config import StitcherConfig, PipelineConfig
+from ezstitcher.core.pipeline import Pipeline
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
+from pathlib import Path
 
 def calcein_process(stack):
     """Apply tophat filter to Calcein images."""
@@ -11,21 +14,17 @@ def dapi_process(stack):
     stack = IP.stack_percentile_normalize(stack, low_percentile=0.1, high_percentile=99.9)
     return [IP.tophat(img) for img in stack]
 
-# Create a simplified configuration
+
 config = PipelineConfig(
     stitcher=StitcherConfig(
         tile_overlap=10.0,
         max_shift=50,
         margin_ratio=0.1
     ),
-    num_workers=4
+    num_workers=8
 )
 
 plate_folders = []
-# Example plate paths (commented out for reference)
-# plate_folders.append('/path/to/plate1')
-# plate_folders.append('/path/to/plate2')
-
 # Add your plate paths here
 def add_plate_path(base, suffix):
     """Helper function to create and add plate paths."""
@@ -44,13 +43,59 @@ add_plate_path(
 )
 
 
+def gen_pos_pipeline_generator(plate_folder):
+    return Pipeline(
+        steps=[
+
+            Step(
+                func=(IP.create_projection, {'method': 'max_projection'}),
+                variable_components=['z_index'],
+                input_dir=plate_folder,
+            ),
+
+            Step(
+                func=(IP.stack_percentile_normalize,
+                     {'low_percentile': 0.01, 'high_percentile': 99.9}),
+            ),
+
+            Step(
+                func=(IP.create_composite,
+                    {'weights':[0.5, 0.5,0]}),
+                variable_components=['channel']
+            ),
+
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+def best_focus_assembly_pipeline_generator(plate_folder):
+    return Pipeline(
+        steps=[
+            Step(
+                func=(IP.stack_percentile_normalize,
+                     {'low_percentile': 0.01, 'high_percentile': 99.9}),
+                input_dir=plate_folder
+            ),
+            Step(
+                func=(IP.create_projection, {'method': 'best_focus'}),
+                variable_components=['z_index'],
+            ),
+            ImageStitchingStep()
+        ],
+        name="Best Focus Pipeline"
+    )
+
 # Create and run pipeline
-for plate_folder in plate_folders:
-    print(f"\nProcessing plate: {plate_folder}")
-
-
+def run_pipeline(plate_folder, pipeline_generator, config):
+    print(f"Processing plate: {plate_folder}")
     print(f"Number of worker threads: {config.num_workers}")
+    print(f"Initiaing orchestrator")
+    orchestrator = PipelineOrchestrator(config=config, plate_path=plate_folder)
+    pipeline = pipeline_generator(orchestrator.workspace_path)
+    print(f"Initiated pipeline: {pipeline.name}")
+    orchestrator.run(pipelines=[pipeline])
+    print(f"Finished processing plate: {plate_folder}")
 
-    # Create and run the pipeline
-    pipeline = PipelineOrchestrator(config)
-    pipeline.run(plate_folder)
+for plate_folder in plate_folders:
+    run_pipeline(plate_folder, best_focus_assembly_pipeline_generator, config)

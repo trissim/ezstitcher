@@ -32,8 +32,7 @@ class FocusAnalyzerConfig:
 class PipelineConfig:
     """Configuration for the pipeline orchestrator."""
     # Directory configuration
-    out_dir_suffix: str = "_out"  # Default suffix for regular processing steps
-    processed_dir_suffix: str = "_processed"  # Suffix for intermediate processing steps
+    out_dir_suffix: str = "_out"  # Default suffix for processing steps
     positions_dir_suffix: str = "_positions"  # Suffix for position generation step
     stitched_dir_suffix: str = "_stitched"  # Suffix for stitching step
 

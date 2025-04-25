@@ -189,7 +189,11 @@ class Step:
 
                     # Process the images with component-specific args
                     # Process the images
-                    images = self._apply_processing(images, func=component_func)
+                    try:
+                        images = self._apply_processing(images, func=component_func)
+                    except Exception as e:
+                        logger.error("Error applying processing function: %s", str(e))
+                        continue
 
                     # Save images and get output files
                     pattern_files = self._save_images(actual_input_dir, output_dir, images, matching_files)

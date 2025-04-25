@@ -44,7 +44,7 @@ class PipelineOrchestrator:
         if workspace_path:
             workspace_path_to_use = workspace_path
         else:
-            workspace_path_to_use = plate_path.parent / f"{plate_path.name}_workspace"
+            workspace_path_to_use = self.plate_path.parent / f"{self.plate_path.name}_workspace"
 
         # Convert to Path
         self.workspace_path = Path(workspace_path_to_use)
