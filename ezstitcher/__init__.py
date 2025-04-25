@@ -1,3 +1,3 @@
 """EZStitcher: An easy-to-use microscopy image stitching and processing tool."""
 
-__version__ = "0.1.5"  # Update this version number
+__version__ = "0.1.5"

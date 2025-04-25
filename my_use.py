@@ -1,3 +1,11 @@
+import logging
+
+# Set up logging at the start of script
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 from ezstitcher.core.config import PipelineConfig, StitcherConfig
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 from ezstitcher.core.pipeline import Pipeline
@@ -21,7 +29,7 @@ config = PipelineConfig(
         max_shift=50,
         margin_ratio=0.1
     ),
-    num_workers=8
+    num_workers=4
 )
 
 plate_folders = []
