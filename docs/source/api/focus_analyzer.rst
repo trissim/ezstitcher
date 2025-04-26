@@ -8,7 +8,7 @@ This module contains the FocusAnalyzer class for analyzing focus quality in micr
 FocusAnalyzer
 ------------
 
-.. py:class:: FocusAnalyzer(config)
+.. py:class:: FocusAnalyzer(metric="combined", roi=None, weights=None)
 
    Provides focus metrics and best focus selection.
 
@@ -16,8 +16,12 @@ FocusAnalyzer
    the best focused image in a Z-stack. It uses the FileSystemManager for
    image handling to avoid code duplication.
 
-   :param config: Configuration for focus analysis
-   :type config: :class:`~ezstitcher.core.config.FocusAnalyzerConfig`
+   :param metric: Focus detection method. Options: "combined", "normalized_variance", "laplacian", "tenengrad", "fft".
+   :type metric: str
+   :param roi: Optional region of interest as (x, y, width, height).
+   :type roi: tuple, optional
+   :param weights: Optional dictionary with weights for each metric in combined focus measure.
+   :type weights: dict, optional
 
    .. py:method:: normalized_variance(img)
 
@@ -72,71 +76,48 @@ FocusAnalyzer
 
       :param img: Input grayscale image
       :type img: numpy.ndarray
-      :param weights: Optional dictionary with weights for each metric
+      :param weights: Weights for each metric. If None, uses the weights specified in the constructor or defaults.
       :type weights: dict, optional
       :return: Combined focus quality score
       :rtype: float
 
-   .. py:method:: find_best_focus(image_stack, method='combined', roi=None)
+   .. py:method:: find_best_focus(image_stack, method=None, roi=None)
 
       Find the best focused image in a stack using specified method.
 
       :param image_stack: List of images
       :type image_stack: list
-      :param method: Focus detection method
-      :type method: str
-      :param roi: Optional region of interest as (x, y, width, height)
+      :param method: Focus detection method. If None, uses the method specified in the constructor.
+      :type method: str, optional
+      :param roi: Optional region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
       :type roi: tuple, optional
       :return: Tuple of (best_focus_index, focus_scores)
       :rtype: tuple
 
-   .. py:method:: select_best_focus(image_stack, method='combined', roi=None)
+   .. py:method:: select_best_focus(image_stack, method=None, roi=None)
 
       Select the best focus plane from a stack of images.
 
       :param image_stack: List of images
       :type image_stack: list
-      :param method: Focus detection method
-      :type method: str
-      :param roi: Optional region of interest as (x, y, width, height)
+      :param method: Focus detection method. If None, uses the method specified in the constructor.
+      :type method: str, optional
+      :param roi: Optional region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
       :type roi: tuple, optional
       :return: Tuple of (best_focus_image, best_focus_index, focus_scores)
       :rtype: tuple
 
-   .. py:method:: compute_focus_metrics(image_stack, method='combined', roi=None)
+   .. py:method:: compute_focus_metrics(image_stack, method=None, roi=None)
 
       Compute focus metrics for a stack of images.
 
       :param image_stack: List of images
       :type image_stack: list
-      :param method: Focus detection method
-      :type method: str
-      :param roi: Optional region of interest as (x, y, width, height)
+      :param method: Focus detection method. If None, uses the method specified in the constructor.
+      :type method: str, optional
+      :param roi: Optional region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
       :type roi: tuple, optional
       :return: List of focus scores for each image
       :rtype: list
 
-FocusAnalyzerConfig
------------------
 
-.. py:class:: FocusAnalyzerConfig
-
-   Configuration for the FocusAnalyzer class.
-
-   .. py:attribute:: method
-      :type: str
-      :value: "combined"
-
-      Focus detection method. Options: "combined", "normalized_variance", "laplacian", "tenengrad", "fft".
-
-   .. py:attribute:: roi
-      :type: tuple or None
-      :value: None
-
-      Optional region of interest as (x, y, width, height).
-
-   .. py:attribute:: weights
-      :type: dict or None
-      :value: None
-
-      Optional dictionary with weights for each metric in combined focus measure.

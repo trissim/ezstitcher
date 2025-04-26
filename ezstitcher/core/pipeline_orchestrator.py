@@ -13,7 +13,7 @@ from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
-from ezstitcher.core.config import PipelineConfig, FocusAnalyzerConfig
+from ezstitcher.core.config import PipelineConfig
 
 # Import the pipeline architecture
 from ezstitcher.core.pipeline import Step, Pipeline
@@ -61,8 +61,7 @@ class PipelineOrchestrator:
         self.image_preprocessor = image_preprocessor or ImageProcessor()
 
         # Initialize focus analyzer
-        focus_config = self.config.focus_config or FocusAnalyzerConfig()
-        self.focus_analyzer = focus_analyzer or FocusAnalyzer(focus_config)
+        self.focus_analyzer = focus_analyzer or FocusAnalyzer()
 
 
     def run(self,pipelines=None):

@@ -16,7 +16,6 @@ from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 # Import configuration classes
 from ezstitcher.core.config import (
     StitcherConfig,
-    FocusAnalyzerConfig,
     PipelineConfig
 )
 

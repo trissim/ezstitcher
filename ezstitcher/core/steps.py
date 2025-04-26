@@ -14,6 +14,7 @@ import numpy as np
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import prepare_patterns_and_functions
 from ezstitcher.core.image_locator import ImageLocator
+from ezstitcher.core.abstract_step import AbstractStep
 # Removed adapt_func_to_stack import
 
 
@@ -33,7 +34,7 @@ T = TypeVar('T')  # For generic return types
 logger = logging.getLogger(__name__)
 
 
-class Step:
+class Step(AbstractStep):
     """
     A processing step in a pipeline.
 
@@ -79,12 +80,12 @@ class Step:
             name: Human-readable name for the step
         """
         self.func = func
-        self.variable_components = variable_components 
+        self.variable_components = variable_components
         self.group_by = group_by
-        self.input_dir = input_dir
-        self.output_dir = output_dir
+        self._input_dir = input_dir
+        self._output_dir = output_dir
         self.well_filter = well_filter
-        self.name = name or self._generate_name()
+        self._name = name or self._generate_name()
 
     def _generate_name(self) -> str:
         """
@@ -114,12 +115,35 @@ class Step:
         # Single function or function tuple
         return f"Step({get_func_name(self.func)})"
 
-    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
+    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
         """
-        Process the step with the given context.
+        Process a group of images.
 
-        This method applies the step's processing function to the input files
-        and saves the results to the output directory.
+        This implementation of the AbstractStep.process method adapts the Step class
+        to work with the AbstractStep interface. It processes a group of images
+        according to the step's configuration.
+
+        Args:
+            group: Group of images to process
+            context: Pipeline context for sharing data between steps
+
+        Returns:
+            Processed result (typically an image or list of images)
+        """
+        # For backward compatibility, if this method is called directly with a ProcessingContext
+        # object as the first argument, treat it as the old-style process method
+        if hasattr(group, 'orchestrator') and context is None:
+            return self._process_with_context_object(group)
+
+        # Otherwise, process the group of images directly
+        return self._apply_processing(group)
+
+    def _process_with_context_object(self, context: 'ProcessingContext') -> 'ProcessingContext':
+        """
+        Process the step with the given context object (legacy method).
+
+        This method maintains backward compatibility with the old process method
+        that takes a ProcessingContext object.
 
         Args:
             context: The processing context
@@ -450,6 +474,36 @@ class Step:
             logger.error("Error saving images: %s", str(e))
             return []
 
+    @property
+    def name(self) -> str:
+        """The name of this step."""
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        """Set the name of this step."""
+        self._name = value
+
+    @property
+    def input_dir(self) -> str:
+        """The input directory for this step."""
+        return self._input_dir
+
+    @input_dir.setter
+    def input_dir(self, value: str):
+        """Set the input directory for this step."""
+        self._input_dir = value
+
+    @property
+    def output_dir(self) -> str:
+        """The output directory for this step."""
+        return self._output_dir
+
+    @output_dir.setter
+    def output_dir(self, value: str):
+        """Set the output directory for this step."""
+        self._output_dir = value
+
     def __repr__(self) -> str:
         """
         String representation of the step.
@@ -530,9 +584,30 @@ class PositionGenerationStep(Step):
             output_dir=output_dir
         )
 
-    def process(self, context):
+    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
         """
         Generate positions for stitching and store them in the context.
+
+        This implementation adapts the specialized step to the AbstractStep interface.
+
+        Args:
+            group: Group of images to process (not used in this step)
+            context: Pipeline context for sharing data between steps
+
+        Returns:
+            The processed result
+        """
+        # For backward compatibility, if this method is called with a ProcessingContext
+        # object as the first argument, treat it as the old-style process method
+        if hasattr(group, 'orchestrator') and context is None:
+            return self._process_with_context_object(group)
+
+        # This step doesn't process images directly, so return the group unchanged
+        return group
+
+    def _process_with_context_object(self, context):
+        """
+        Legacy method for backward compatibility.
         """
         logger.info("Processing step: %s", self.name)
 
@@ -586,9 +661,30 @@ class ImageStitchingStep(Step):
         )
         self.positions_dir = positions_dir
 
-    def process(self, context):
+    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
         """
         Stitch images using the positions file.
+
+        This implementation adapts the specialized step to the AbstractStep interface.
+
+        Args:
+            group: Group of images to process (not used in this step)
+            context: Pipeline context for sharing data between steps
+
+        Returns:
+            The processed result
+        """
+        # For backward compatibility, if this method is called with a ProcessingContext
+        # object as the first argument, treat it as the old-style process method
+        if hasattr(group, 'orchestrator') and context is None:
+            return self._process_with_context_object(group)
+
+        # This step doesn't process images directly, so return the group unchanged
+        return group
+
+    def _process_with_context_object(self, context):
+        """
+        Legacy method for backward compatibility.
 
         Args:
             context: Processing context containing orchestrator and other metadata

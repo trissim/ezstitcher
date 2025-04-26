@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 import logging
-from ezstitcher.core.config import FocusAnalyzerConfig
 from ezstitcher.core.file_system_manager import FileSystemManager
 
 logger = logging.getLogger(__name__)
@@ -14,8 +13,19 @@ class FocusAnalyzer:
     the best focused image in a Z-stack. It uses the FileSystemManager for
     image handling to avoid code duplication.
     """
-    def __init__(self, config: FocusAnalyzerConfig):
-        self.config = config
+    def __init__(self, metric="combined", roi=None, weights=None):
+        """
+        Initialize a focus analyzer.
+
+        Args:
+            metric (str): Focus detection method. Options: "combined",
+                         "normalized_variance", "laplacian", "tenengrad", "fft".
+            roi (tuple, optional): Region of interest as (x, y, width, height).
+            weights (dict, optional): Weights for each metric in combined focus measure.
+        """
+        self.metric = metric
+        self.roi = roi
+        self.weights = weights
         self.fs_manager = FileSystemManager()
 
     def normalized_variance(self, img):
@@ -121,14 +131,14 @@ class FocusAnalyzer:
 
         Args:
             img (numpy.ndarray): Input grayscale image
-            weights (dict): Optional dictionary with weights for each metric
+            weights (dict, optional): Weights for each metric. If None, uses the weights specified in the constructor or defaults.
 
         Returns:
             float: Combined focus quality score
         """
-        # Default weights if none provided
+        # Use provided weights, instance weights, or defaults
         if weights is None:
-            weights = {
+            weights = self.weights or {
                 'nvar': 0.3,
                 'lap': 0.3,
                 'ten': 0.2,
@@ -183,28 +193,32 @@ class FocusAnalyzer:
         else:
             raise ValueError(f"Unknown focus method: {method}")
 
-    def find_best_focus(self, image_stack, method='combined', roi=None):
+    def find_best_focus(self, image_stack, method=None, roi=None):
         """
         Find the best focused image in a stack using specified method.
 
         Args:
             image_stack (list): List of images
-            method (str): Focus detection method
-            roi (tuple): Optional region of interest as (x, y, width, height)
+            method (str, optional): Focus detection method. If None, uses the method specified in the constructor.
+            roi (tuple, optional): Region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
 
         Returns:
             tuple: (best_focus_index, focus_scores)
         """
         focus_scores = []
 
+        # Use provided method or fall back to instance variable
+        method_to_use = method if method is not None else self.metric
+        roi_to_use = roi if roi is not None else self.roi
+
         # Get the appropriate focus measure function
-        focus_func = self._get_focus_function(method)
+        focus_func = self._get_focus_function(method_to_use)
 
         # Process each image in stack
         for i, img in enumerate(image_stack):
             # Extract ROI if specified
-            if roi is not None:
-                x, y, w, h = roi
+            if roi_to_use is not None:
+                x, y, w, h = roi_to_use
                 img_roi = img[y:y+h, x:x+w]
             else:
                 img_roi = img
@@ -218,14 +232,14 @@ class FocusAnalyzer:
 
         return best_focus_idx, focus_scores
 
-    def select_best_focus(self, image_stack, method='combined', roi=None):
+    def select_best_focus(self, image_stack, method=None, roi=None):
         """
         Select the best focus plane from a stack of images.
 
         Args:
             image_stack (list): List of images
-            method (str): Focus detection method
-            roi (tuple): Optional region of interest as (x, y, width, height)
+            method (str, optional): Focus detection method. If None, uses the method specified in the constructor.
+            roi (tuple, optional): Region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
 
         Returns:
             tuple: (best_focus_image, best_focus_index, focus_scores)
@@ -233,28 +247,32 @@ class FocusAnalyzer:
         best_idx, scores = self.find_best_focus(image_stack, method, roi)
         return image_stack[best_idx], best_idx, scores
 
-    def compute_focus_metrics(self, image_stack, method='combined', roi=None):
+    def compute_focus_metrics(self, image_stack, method=None, roi=None):
         """
         Compute focus metrics for a stack of images.
 
         Args:
             image_stack (list): List of images
-            method (str): Focus detection method
-            roi (tuple): Optional region of interest as (x, y, width, height)
+            method (str, optional): Focus detection method. If None, uses the method specified in the constructor.
+            roi (tuple, optional): Region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
 
         Returns:
             list: List of focus scores for each image
         """
         focus_scores = []
 
+        # Use provided method or fall back to instance variable
+        method_to_use = method if method is not None else self.metric
+        roi_to_use = roi if roi is not None else self.roi
+
         # Get the appropriate focus measure function
-        focus_func = self._get_focus_function(method)
+        focus_func = self._get_focus_function(method_to_use)
 
         # Process each image in stack
         for img in image_stack:
             # Extract ROI if specified
-            if roi is not None:
-                x, y, w, h = roi
+            if roi_to_use is not None:
+                x, y, w, h = roi_to_use
                 img_roi = img[y:y+h, x:x+w]
             else:
                 img_roi = img

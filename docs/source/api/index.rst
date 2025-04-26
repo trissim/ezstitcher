@@ -12,6 +12,7 @@ Core Components
    pipeline_orchestrator
    pipeline
    steps
+   step_factories
    stitcher
    focus_analyzer
    image_processor
