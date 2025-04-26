@@ -1,4 +1,4 @@
-name: Tests and Coverage
+name: Tests, Coverage and Pages
 
 on:
   push:
@@ -16,8 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  test-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,9 +64,6 @@ jobs:
           </html>
           EOF
       
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
-      
       - name: Commit and push if coverage badge changed
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -72,6 +72,10 @@ jobs:
           git add .github/badges/coverage.svg
           git commit -m "chore: update coverage badge" || exit 0
           git push
+      
+      - name: Setup Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v3
           
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -79,19 +83,9 @@ jobs:
         with:
           path: 'site'
           retention-days: 1
-
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
         
       - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: deployment
         uses: actions/deploy-pages@v3
         timeout-minutes: 10
