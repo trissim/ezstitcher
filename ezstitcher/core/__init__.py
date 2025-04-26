@@ -22,3 +22,11 @@ from ezstitcher.core.config import (
 # Import utility classes
 from ezstitcher.core.microscope_interfaces import FilenameParser
 from ezstitcher.core.image_locator import ImageLocator
+
+# Import pipeline factories
+from ezstitcher.core.pipeline_factories import (
+    create_basic_pipeline,
+    create_multichannel_pipeline,
+    create_zstack_pipeline,
+    create_focus_pipeline
+)

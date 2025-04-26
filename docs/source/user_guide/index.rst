@@ -23,6 +23,7 @@ This user guide provides a comprehensive overview of EZStitcher, from basic conc
 
    introduction
    basic_usage
+   pipeline_factories
    intermediate_usage
    advanced_usage
    best_practices
