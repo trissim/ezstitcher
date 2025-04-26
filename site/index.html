@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="refresh" content="0; url=./coverage/">
+    <title>EZStitcher Coverage Reports</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #333;
+      }
+      a {
+        color: #0366d6;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>EZStitcher Coverage Reports</h1>
+      <p>Redirecting to coverage report... <a href="./coverage/">Click here if not redirected</a></p>
+
+      <div id="fallback" style="display:none; margin-top: 30px;">
+        <h2>Troubleshooting</h2>
+        <p>If the coverage report is not available, it might be because:</p>
+        <ul>
+          <li>The tests haven't been run yet</li>
+          <li>There was an issue generating the coverage reports</li>
+          <li>The GitHub Pages deployment is still in progress</li>
+        </ul>
+        <p>Check the <a href="https://github.com/trissim/ezstitcher/actions">GitHub Actions</a> page for more information.</p>
+      </div>
+
+      <script>
+        // Show fallback content if redirect doesn't happen after 3 seconds
+        setTimeout(function() {
+          document.getElementById('fallback').style.display = 'block';
+        }, 3000);
+      </script>
+    </div>
+  </body>
+</html>
