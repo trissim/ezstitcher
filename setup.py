@@ -14,7 +14,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     # Ensure logo URL is absolute and points to main branch
     github_base = 'https://raw.githubusercontent.com/trissim/ezstitcher/main'
     logo_path = 'docs/source/_static/ezstitcher_logo.png'
-    
+
     # Replace any relative or malformed paths with the absolute GitHub URL
     long_description = re.sub(
         rf'{github_base}/{github_base}/{logo_path}|{github_base}/{logo_path}|{logo_path}',
@@ -51,4 +51,16 @@ setup(
         "opencv-python>=4.5.0",
         "PyYAML>=6.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest==7.4.0",
+            "pytest-cov==4.1.0",
+            "coverage==7.3.2",
+            "genbadge[coverage]",
+            "sphinx",
+            "sphinx-rtd-theme",
+            "black",
+            "flake8",
+        ],
+    },
 )
