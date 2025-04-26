@@ -97,35 +97,50 @@ This modular design allows you to:
 5. **Handle complex data structures**: Process Z-stacks, multi-channel images, and tiled images with consistent patterns.
 6. **Scale from simple to complex**: Start with basic workflows and gradually add complexity as needed.
 
-**Typical Processing Flow**
+Typical Processing Flow
+--------------------
 
-A typical image processing and stitching workflow might include:
+A typical image processing and stitching workflow includes:
 
 1. **Load and organize images**:
-   - Detect microscope type
-   - Find image directory
-   - Organize Z-stack folders
-   - Pad filenames for consistent sorting
+   
+   .. code-block:: python
+   
+       from ezstitcher.core import create_basic_pipeline
+       from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+       
+       orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
-2. **Process reference images** (for position generation):
-   - Flatten Z-stacks if needed
-   - Apply channel-specific processing functions
-   - Create composite images for better feature detection
-   - Save processed reference images
+2. **Process reference images**:
+   
+   .. code-block:: python
+   
+       pipeline = create_basic_pipeline(
+           input_dir=orchestrator.workspace_path,
+           output_dir="path/to/output",
+           normalize=True
+       )
 
 3. **Generate stitching positions**:
-   - Calculate relative positions of tiles using reference images
-   - Save positions to CSV files
+   
+   This is handled automatically by the pipeline factories.
 
-4. **Process final images** (for stitching):
-   - Apply channel-specific processing functions to all channels
-   - Flatten Z-stacks if needed
-   - Save processed images for stitching
+4. **Process final images**:
+   
+   Channel-specific processing is available through:
+   
+   .. code-block:: python
+   
+       from ezstitcher.core import create_multichannel_pipeline
+       
+       pipeline = create_multichannel_pipeline(
+           input_dir=orchestrator.workspace_path,
+           output_dir="path/to/output",
+           weights=[0.7, 0.3]
+       )
 
 5. **Stitch images**:
-   - Load processed images
-   - Apply positions from reference channels
-   - Blend overlapping regions
-   - Save final stitched images
+   
+   The final stitching step is handled automatically by all pipeline factories.
 
 A key advantage of EZStitcher's design is that these steps aren't hardcoded—they're composed through the API, allowing you to create custom workflows tailored to your specific microscopy needs. By combining regular processing Steps with specialized PositionGenerationStep and ImageStitchingStep, you can create seamless end-to-end workflows that handle everything from initial image processing to final stitched image assembly.

@@ -2,28 +2,14 @@
 Basic Usage
 ==========
 
-This section provides detailed examples of basic EZStitcher usage to help you get started with common tasks.
+Getting Started
+--------------
 
-Setting Up a Simple Pipeline
----------------------------
-
-Let's start by creating a simple pipeline for processing microscopy images. For a detailed explanation of pipeline concepts, see :ref:`pipeline-concept`. For information about supported file formats, see :ref:`file-formats`.
-
-EZStitcher provides two approaches to creating pipelines:
-
-1. **Using Pipeline Factories (Recommended)**: Pre-configured pipelines for common workflows
-2. **Building Custom Pipelines**: Manually constructing pipelines for specialized needs
-
-Using Pipeline Factories (Recommended)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Pipeline factories provide a simple way to create pre-configured pipelines for common workflows. For a detailed guide to all available factories, see :doc:`pipeline_factories`.
-
-Here's how to create a basic stitching pipeline using a factory:
+Here's a basic example of using EZStitcher:
 
 .. code-block:: python
 
-    from ezstitcher.core import create_basic_stitching_pipeline
+    from ezstitcher.core import create_basic_pipeline
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from pathlib import Path
 
@@ -34,7 +20,7 @@ Here's how to create a basic stitching pipeline using a factory:
     orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
     # Create a basic stitching pipeline
-    pipelines = create_basic_stitching_pipeline(
+    pipelines = create_basic_pipeline(
         input_dir=plate_path,
         output_dir=plate_path.parent / f"{plate_path.name}_stitched",
         normalize=True  # Apply normalization (default)

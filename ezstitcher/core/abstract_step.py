@@ -6,10 +6,12 @@ ensuring a consistent interface across different step implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import List, Any, Optional, Dict
+from .pipeline_base import StepInterface
+from .context import Context
 
 
-class AbstractStep(ABC):
+class AbstractStep(StepInterface):
     """
     Abstract base class defining the interface for all steps in EZStitcher.
 
@@ -18,7 +20,7 @@ class AbstractStep(ABC):
     """
 
     @abstractmethod
-    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
+    def process(self, group: List[Any], context: Optional[Context] = None) -> Any:
         """
         Process a group of images.
 
@@ -34,20 +36,4 @@ class AbstractStep(ABC):
         """
         pass
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """The name of this step."""
-        pass
 
-    @property
-    @abstractmethod
-    def input_dir(self) -> str:
-        """The input directory for this step."""
-        pass
-
-    @property
-    @abstractmethod
-    def output_dir(self) -> str:
-        """The output directory for this step."""
-        pass

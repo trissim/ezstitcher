@@ -63,6 +63,39 @@ After processing with EZStitcher, you can export data for analysis with other to
         name="Export Pipeline"
     )
 
+Integration Examples
+------------------
+
+Basic Integration
+^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    from ezstitcher.core import create_basic_pipeline
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step
+    from pathlib import Path
+
+    # Create a pipeline with export step
+    export_pipeline = Pipeline(
+        steps=[
+            # Process and stitch images
+            # ...
+
+            # Export data for analysis
+            Step(
+                name="Export Data",
+                func=lambda images: export_for_analysis(
+                    stitched_image_path=dirs['stitched'] / "A01_stitched.tif",
+                    output_csv=dirs['stitched'] / "A01_analysis.csv"
+                ) and images,  # Return images unchanged
+                input_dir=dirs['stitched'],
+                output_dir=dirs['stitched']
+            )
+        ],
+        name="Export Pipeline"
+    )
+
 Integration with Deep Learning Frameworks
 --------------------------------------
 

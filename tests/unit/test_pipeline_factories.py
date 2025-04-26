@@ -8,8 +8,7 @@ pipelines for common workflows.
 import unittest
 from pathlib import Path
 
-# Import directly from the module
-from ezstitcher.core.pipeline_factories import (
+from ezstitcher.core import (
     create_basic_pipeline,
     create_multichannel_pipeline,
     create_zstack_pipeline,

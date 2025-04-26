@@ -18,48 +18,40 @@ This section covers more advanced topics in EZStitcher, building on the basic co
 Z-Stack Processing
 ----------------
 
-Z-stacks are 3D image stacks where each image represents a different focal plane. EZStitcher provides several methods for processing Z-stacks. For detailed explanations of Z-stack processing and the `variable_components` parameter, see :ref:`variable-components` in the :doc:`../concepts/step` documentation. For a comprehensive guide to all Z-stack processing operations, see :ref:`operation-z-projection` in the :doc:`../api/image_processing_operations` documentation.
-
-.. important::
-   Z-stack flattening is a one-way operation that converts a 3D stack into a single 2D image. Once a Z-stack is flattened, it cannot be flattened again using a different method. You should choose the most appropriate flattening method for your data based on your specific needs.
-
-Z-Stack Flattening
-^^^^^^^^^^^^^^^
-
-One common operation is to flatten a Z-stack into a single 2D image using a projection method:
+EZStitcher provides several methods for processing Z-stacks:
 
 .. code-block:: python
 
-    from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-    from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step
-    from ezstitcher.core.image_processor import ImageProcessor as IP
+    from ezstitcher.core import (
+        create_zstack_pipeline,
+        create_focus_pipeline,
+        FocusAnalyzer
+    )
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from pathlib import Path
 
-    # Create configuration and orchestrator
-    config = PipelineConfig(num_workers=1)
-    orchestrator = PipelineOrchestrator(
-        config=config,
-        plate_path=Path("/path/to/plate")
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+    # Maximum intensity projection
+    max_projection_pipeline = create_zstack_pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=Path("path/to/max_projection"),
+        method="projection",
+        method_options={'method': 'max'}
     )
 
-    # Create a pipeline for Z-stack flattening
-    z_flatten_pipeline = Pipeline(
-        steps=[
-            # Z-stack flattening step
-            Step(
-                name="Z-Stack Flattening",
-                func=(IP.create_projection, {'method': 'max_projection'}),  # Function with projection method
-                variable_components=['z_index'],  # Process each z-index separately
-                input_dir=orchestrator.workspace_path
-            )
-        ],
-        name="Z-Stack Flattening Pipeline"
+    # Best focus pipeline
+    focus_pipeline = create_focus_pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=Path("path/to/best_focus"),
+        metric='variance_of_laplacian'
     )
 
-    # Run the pipeline
-    orchestrator.run(pipelines=[z_flatten_pipeline])
+    # Run pipelines
+    orchestrator.run(pipelines=[max_projection_pipeline])
+    # or
+    orchestrator.run(pipelines=[focus_pipeline])
 
 Projection Methods
 ^^^^^^^^^^^^^^^
