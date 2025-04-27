@@ -1,29 +1,34 @@
 """
 Pipeline factory system for the EZStitcher pipeline architecture.
 
-This module contains factory classes that create pre-configured pipelines 
-for common workflows, leveraging specialized steps to reduce boilerplate code.
+This module contains the AutoPipelineFactory class that creates pre-configured pipelines
+for all common workflows, leveraging specialized steps to reduce boilerplate code.
 
-Available factory classes:
-- PipelineFactory: Base class for creating pipeline configurations
-- BasicPipelineFactory: For single-channel, single-Z stitching
-- MultichannelPipelineFactory: For multi-channel stitching
-- ZStackPipelineFactory: For Z-stack stitching with projection
-- FocusPipelineFactory: For Z-stack stitching with focus selection
+The AutoPipelineFactory uses a unified approach that handles 2D multichannel, z-stack per plane stitch,
+and z-stack projection stitch with a single implementation, simplifying the pipeline architecture.
 """
 
 from typing import List, Optional, Union, Dict, Any
 from pathlib import Path
-from abc import ABC, abstractmethod
 
 from .pipeline import Pipeline
 from .steps import Step, PositionGenerationStep, ImageStitchingStep
-from .step_factories import ZFlatStep, FocusStep, CompositeStep
+from .step_factories import ZFlatStep, CompositeStep
 from .image_processor import ImageProcessor as IP
 
 
-class PipelineFactory:
-    """Base class for creating pipeline configurations."""
+class AutoPipelineFactory:
+    """
+    Unified factory for creating pipelines for all common use cases.
+
+    This factory handles all types of stitching workflows with a single implementation:
+    - 2D multichannel stitching
+    - Z-stack per plane stitching
+    - Z-stack projection stitching
+
+    It automatically configures the appropriate steps based on the input parameters,
+    with no need to differentiate between different types of pipelines.
+    """
 
     def __init__(
         self,
@@ -31,148 +36,96 @@ class PipelineFactory:
         output_dir: Optional[Union[str, Path]] = None,
         normalize: bool = True,
         normalization_params: Optional[Dict[str, Any]] = None,
-        preprocessing_steps: Optional[List[Step]] = None,
         well_filter: Optional[List[str]] = None,
-        weights: Optional[Union[List[float], Dict[str, float]]] = None,
-        roi: Optional[Dict[str, Any]] = None,
+        flatten_z: bool = False,
+        z_method: str = "max",
+        channel_weights: Optional[Union[List[float], Dict[str, float]]] = None,
     ):
-        """Initialize with common pipeline parameters.
-        
+        """
+        Initialize with pipeline parameters.
+
         Args:
             input_dir: Input directory containing images
             output_dir: Output directory for stitched images
             normalize: Whether to include normalization
             normalization_params: Parameters for normalization
-            preprocessing_steps: Additional preprocessing steps
             well_filter: Wells to process
-            stitch_original: Whether to stitch original stack
-            weights: Weights for channel compositing or focus metrics
-            roi: Region of interest for processing
+            flatten_z: Whether to flatten Z-stacks (if Z-stacks are present)
+            z_method: Z-stack flattening method ("max", "mean", "median", etc.)
+            channel_weights: Weights for channel compositing (for reference image only).
+                           Should be a list with length equal to the number of channels.
         """
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir) if output_dir else self.input_dir.parent / f"{self.input_dir.name}_stitched"
         self.normalize = normalize
-        self.normalization_params = normalization_params or {}
-        self.preprocessing_steps = preprocessing_steps or []
+        self.normalization_params = normalization_params or {'low_percentile': 1.0, 'high_percentile': 99.0}
         self.well_filter = well_filter
-        self.weights = weights
-        self.roi = roi
-
-    def create_normalization_step(self) -> Optional[Step]:
-        """Create normalization step if enabled."""
-        if not self.normalize:
-            return None
-        
-        norm_params = self.normalization_params or {
-            'low_percentile': 1.0,
-            'high_percentile': 99.0
-        }
-        
-        return Step(
-            func=(IP.stack_percentile_normalize, norm_params),
-            name="Normalization"
-        )
+        self.flatten_z = flatten_z
+        self.z_method = z_method
+        self.channel_weights = channel_weights
 
     def create_pipelines(self) -> List[Pipeline]:
-        """Create pipeline configuration based on parameters."""
+        """
+        Create pipeline configuration based on parameters.
+
+        This method creates two pipelines:
+        1. Position generation pipeline - Creates position files for stitching
+        2. Image assembly pipeline - Stitches images using the position files
+
+        The method automatically configures the appropriate steps based on the input parameters,
+        handling 2D multichannel, z-stack per plane, and z-stack projection stitching with a
+        single unified implementation.
+        """
+        # Create steps for reuse
+        norm_step = Step(
+            func=(IP.stack_percentile_normalize, self.normalization_params),
+            name="Normalization"
+        ) if self.normalize else None
+
+        z_flat_step = ZFlatStep(
+            method=self.z_method,
+            well_filter=self.well_filter
+        ) if self.flatten_z else None
+
+        # Position generation pipeline with hardwired order:
+        # [flatten Z, normalize, create_composite, generate positions]
         position_steps = []
-        
-        norm_step = self.create_normalization_step()
+        if z_flat_step:
+            position_steps.append(z_flat_step)
         if norm_step:
             position_steps.append(norm_step)
 
-        self._add_specialized_steps(position_steps)
+        # Always include CompositeStep for channel compositing (for reference image)
+        position_steps.append(CompositeStep(
+            weights=self.channel_weights,
+            well_filter=self.well_filter
+        ))
+
+        # Always include PositionGenerationStep
         position_steps.append(PositionGenerationStep())
 
-        return [
-            Pipeline(
-                input_dir=self.input_dir,
-                output_dir=self.output_dir,
-                steps=position_steps,
-                well_filter=self.well_filter,
-                name="Position Generation Pipeline"
-            ),
-            Pipeline(
-                input_dir=self.input_dir,
-                output_dir=self.output_dir,
-                steps=[ImageStitchingStep(well_filter=self.well_filter)],
-                well_filter=self.well_filter,
-                name=self._get_stitching_name()
-            )
-        ]
+        # Create position generation pipeline
+        pos_pipeline = Pipeline(
+            input_dir=self.input_dir,
+            steps=position_steps,
+            well_filter=self.well_filter,
+            name="Position Generation Pipeline"
+        )
 
-    def _add_specialized_steps(self, position_steps: List[Step]) -> None:
-        """Add specialized processing steps. Override in subclasses."""
-        pass
+        # Create image assembly pipeline (with output_dir)
+        assembly_pipeline = Pipeline(
+            input_dir=self.input_dir,
+            output_dir=self.output_dir,
+            steps=[
+                step for step in [
+                    norm_step,
+                    z_flat_step,
+                    ImageStitchingStep(well_filter=self.well_filter)
+                ] if step is not None
+            ],
+            well_filter=self.well_filter,
+            name="Image Assembly Pipeline"  # Use a single name for all pipeline types
+        )
 
-    def _get_stitching_name(self) -> str:
-        """Get name for stitching pipeline."""
-        return "Image Stitching Pipeline"
-
-
-class BasicPipelineFactory(PipelineFactory):
-    """Factory for creating basic single-channel, single-Z pipelines."""
-    pass
-
-
-class MultichannelPipelineFactory(PipelineFactory):
-    """Factory for creating multi-channel pipelines."""
-
-    def _add_specialized_steps(self, position_steps: List[Step]) -> None:
-        """Add channel compositing step."""
-        if self.weights:
-            position_steps.append(CompositeStep(
-                weights=self.weights,
-                well_filter=self.well_filter
-            ))
-
-    def _get_stitching_name(self) -> str:
-        return "Channel-Specific Stitching Pipeline"
-
-
-class ZStackPipelineFactory(PipelineFactory):
-    """Factory for creating Z-stack pipelines with projection."""
-
-    def __init__(
-        self,
-        method: str = "max",
-        method_options: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        """Initialize with Z-stack specific parameters."""
-        super().__init__(**kwargs)
-        self.method = method
-        self.method_options = method_options or {'method': 'max'}
-
-    def _add_specialized_steps(self, position_steps: List[Step]) -> None:
-        """Add Z-stack processing step."""
-        position_steps.append(ZFlatStep(
-            method=self.method_options.get('method', 'max'),
-            well_filter=self.well_filter
-        ))
-
-    def _get_stitching_name(self) -> str:
-        return "Z-Stack Stitching Pipeline"
-
-
-class FocusPipelineFactory(PipelineFactory):
-    """Factory for creating focus-based Z-stack pipelines."""
-
-    def __init__(
-        self,
-        focus_options: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        """Initialize with focus-specific parameters."""
-        super().__init__(**kwargs)
-        self.focus_options = focus_options or {'metric': 'variance_of_laplacian'}
-
-    def _add_specialized_steps(self, position_steps: List[Step]) -> None:
-        """Add focus selection step."""
-        position_steps.append(FocusStep(
-            focus_options=self.focus_options,
-            well_filter=self.well_filter
-        ))
-
-    def _get_stitching_name(self) -> str:
-        return "Focus-Based Stitching Pipeline"
+        # Return both pipelines
+        return [pos_pipeline, assembly_pipeline]

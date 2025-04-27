@@ -13,14 +13,8 @@ from ezstitcher.core.config import (
     PipelineConfig
 )
 
-# Import pipeline factory classes
-from ezstitcher.core.pipeline_factories import (
-    PipelineFactory,
-    BasicPipelineFactory,
-    MultichannelPipelineFactory,
-    ZStackPipelineFactory,
-    FocusPipelineFactory
-)
+# Import pipeline factory class
+from ezstitcher.core.pipeline_factories import AutoPipelineFactory
 
 __all__ = [
     'ImageProcessor',
@@ -30,9 +24,5 @@ __all__ = [
     'PipelineOrchestrator',
     'StitcherConfig',
     'PipelineConfig',
-    'PipelineFactory',
-    'BasicPipelineFactory',
-    'MultichannelPipelineFactory',
-    'ZStackPipelineFactory',
-    'FocusPipelineFactory',
+    'AutoPipelineFactory',
 ]

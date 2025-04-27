@@ -11,6 +11,9 @@ from typing import Dict, List, Any
 import logging
 from pathlib import Path
 
+# Import base interface
+from .pipeline_base import PipelineInterface
+
 # Import Step classes from steps module
 from ezstitcher.core.steps import ImageStitchingStep
 from ezstitcher.core.steps import Step, WellFilter
@@ -20,7 +23,7 @@ from ezstitcher.core.utils import prepare_patterns_and_functions
 logger = logging.getLogger(__name__)
 
 
-class Pipeline:
+class Pipeline(PipelineInterface):
     """
     A sequence of processing steps.
 
@@ -188,6 +191,7 @@ class Pipeline:
             self.input_dir = step.input_dir
 
         # If pipeline's output_dir is not set, use the step's output_dir
+        # Let each step handle its own directory logic
         if not self.output_dir and step.output_dir:
             self.output_dir = step.output_dir
 

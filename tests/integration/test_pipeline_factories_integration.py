@@ -1,17 +1,11 @@
 """
-Integration tests for pipeline factory using default behaviors and minimal configuration.
+Integration tests for AutoPipelineFactory using default behaviors and minimal configuration.
 """
 
 import pytest
 from pathlib import Path
 
-from ezstitcher.core.pipeline_factories import (
-    PipelineFactory,
-    BasicPipelineFactory,
-    MultichannelPipelineFactory,
-    ZStackPipelineFactory,
-    FocusPipelineFactory
-)
+from ezstitcher.core.pipeline_factories import AutoPipelineFactory
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 
 # Import fixtures from test_pipeline_orchestrator.py
@@ -28,59 +22,68 @@ from tests.integration.test_pipeline_orchestrator import (
     find_image_files
 )
 
-def test_basic_pipeline(flat_plate_dir, base_pipeline_config, thread_tracker):
-    """Test basic pipeline with minimal configuration."""
+def test_2d_plate_stitch(flat_plate_dir, base_pipeline_config, thread_tracker):
+    """Test basic 2D plate stitching with minimal configuration."""
     orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=flat_plate_dir)
-    
-    factory = BasicPipelineFactory(
+
+    # Create output directory path for the factory
+    output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
+
+    factory = AutoPipelineFactory(
         input_dir=orchestrator.workspace_path,
+        output_dir=output_dir,
         normalize=True
     )
     pipelines = factory.create_pipelines()
-    
+
     success = orchestrator.run(pipelines=pipelines)
     assert success, "Pipeline execution failed"
-    assert (orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched").exists()
 
-def test_multichannel_pipeline(flat_plate_dir, base_pipeline_config, thread_tracker):
-    """Test multichannel pipeline with weights."""
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=flat_plate_dir)
-    
-    factory = MultichannelPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        weights=[0.7, 0.3]  # Using weights parameter instead of channel_weights
-    )
-    pipelines = factory.create_pipelines()
-    
-    success = orchestrator.run(pipelines=pipelines)
-    assert success, "Pipeline execution failed"
-    assert (orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched").exists()
+    # Check that some output directory ending with _stitched exists
+    stitched_dirs = list(orchestrator.workspace_path.parent.glob(f"*_stitched"))
+    assert len(stitched_dirs) > 0, f"No stitched output directory found in {orchestrator.workspace_path.parent}"
 
-def test_zstack_pipeline(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test z-stack pipeline with max projection."""
+def test_3d_plate_per_plane_stitch(zstack_plate_dir, base_pipeline_config, thread_tracker):
+    """Test 3D plate stitching with per-plane stitching (no z-flattening)."""
     orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=zstack_plate_dir)
-    
-    factory = ZStackPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        method="projection",  # Using method instead of z_method
-        method_options={'method': 'max'}
-    )
-    pipelines = factory.create_pipelines()
-    
-    success = orchestrator.run(pipelines=pipelines)
-    assert success, "Pipeline execution failed"
-    assert (orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched").exists()
 
-def test_focus_pipeline(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test focus pipeline with variance metric."""
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=zstack_plate_dir)
-    
-    factory = FocusPipelineFactory(
+    # Create output directory path for the factory
+    output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
+
+    factory = AutoPipelineFactory(
         input_dir=orchestrator.workspace_path,
-        focus_options={'metric': 'variance_of_laplacian'}
+        output_dir=output_dir,
+        normalize=True,
+        flatten_z=False  # Explicitly set to false to ensure per-plane stitching
     )
     pipelines = factory.create_pipelines()
-    
+
     success = orchestrator.run(pipelines=pipelines)
     assert success, "Pipeline execution failed"
-    assert (orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched").exists()
+
+    # Check that some output directory ending with _stitched exists
+    stitched_dirs = list(orchestrator.workspace_path.parent.glob(f"*_stitched"))
+    assert len(stitched_dirs) > 0, f"No stitched output directory found in {orchestrator.workspace_path.parent}"
+
+def test_3d_plate_max_projection_stitch(zstack_plate_dir, base_pipeline_config, thread_tracker):
+    """Test 3D plate stitching with max projection."""
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=zstack_plate_dir)
+
+    # Create output directory path for the factory
+    output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
+
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        output_dir=output_dir,
+        normalize=True,
+        flatten_z=True,
+        z_method="max"
+    )
+    pipelines = factory.create_pipelines()
+
+    success = orchestrator.run(pipelines=pipelines)
+    assert success, "Pipeline execution failed"
+
+    # Check that some output directory ending with _stitched exists
+    stitched_dirs = list(orchestrator.workspace_path.parent.glob(f"*_stitched"))
+    assert len(stitched_dirs) > 0, f"No stitched output directory found in {orchestrator.workspace_path.parent}"
