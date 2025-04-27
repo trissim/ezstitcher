@@ -10,8 +10,7 @@ from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
-from ezstitcher.core.image_locator import ImageLocator
-from ezstitcher.core.file_system_manager import FileSystemManager as fs_manager
+from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import stack
 
 
@@ -35,7 +34,7 @@ def find_image_files(directory: Union[str, Path], pattern: str = "*", recursive:
     # Use rglob for recursive search or glob for non-recursive
     glob_func = directory.rglob if recursive else directory.glob
 
-    for ext in ImageLocator.DEFAULT_EXTENSIONS:
+    for ext in FileSystemManager.default_extensions:
         image_files.extend(list(glob_func(f"**/{pattern}{ext}" if recursive else f"{pattern}{ext}")))
 
     return sorted(image_files)

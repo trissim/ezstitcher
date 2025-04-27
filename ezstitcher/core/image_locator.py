@@ -62,42 +62,6 @@ class ImageLocator:
 
 
     @staticmethod
-    def find_images_by_pattern(directory: Union[str, Path],
-                              pattern: Union[str, Pattern],
-                              extensions: Optional[List[str]] = None) -> List[Path]:
-        """
-        Find images matching a pattern in a directory.
-
-        Args:
-            directory: Directory to search
-            pattern: Regex pattern to match
-            extensions: List of file extensions to include. If None, uses DEFAULT_EXTENSIONS.
-
-        Returns:
-            List of Path objects for matching image files
-        """
-        directory = Path(directory)
-        if not directory.exists():
-            logger.warning(f"Directory does not exist: {directory}")
-            return []
-
-        if extensions is None:
-            extensions = ImageLocator.DEFAULT_EXTENSIONS
-
-        # Compile pattern if it's a string
-        if isinstance(pattern, str):
-            pattern = re.compile(pattern)
-
-        image_files = []
-        for ext in extensions:
-            for file_path in directory.glob(f"*{ext}"):
-                if pattern.search(file_path.name):
-                    image_files.append(file_path)
-
-        return sorted(image_files)
-
-
-    @staticmethod
     def find_z_stack_dirs(root_dir: Union[str, Path],
                          pattern: str = r"ZStep_\d+",
                          recursive: bool = True) -> List[Tuple[int, Path]]:

@@ -53,54 +53,6 @@ class ImageProcessor:
     """
 
     @staticmethod
-    def preprocess(image, channel: str, preprocessing_funcs=None):
-        """
-        Apply preprocessing to a single image for a given channel.
-
-        Args:
-            image (numpy.ndarray): Input image
-            channel (str): Channel identifier
-            preprocessing_funcs (dict, optional): Dictionary mapping channels to preprocessing functions
-
-        Returns:
-            numpy.ndarray: Processed image
-        """
-        if preprocessing_funcs is None:
-            preprocessing_funcs = {}
-
-        func = preprocessing_funcs.get(channel)
-        if func:
-            return func(image)
-        return image
-
-    @staticmethod
-    def blur(image, sigma=1):
-        """
-        Apply Gaussian blur to an image.
-
-        Args:
-            image (numpy.ndarray): Input image
-            sigma (float): Standard deviation for Gaussian kernel
-
-        Returns:
-            numpy.ndarray: Blurred image
-        """
-        # Convert to float for processing
-        image_float = image.astype(np.float32) / np.max(image)
-
-        # Apply Gaussian blur
-        if image_float.ndim == 3:
-            blurred = filters.gaussian(image_float, sigma=sigma, channel_axis=-1)
-        else:
-            blurred = filters.gaussian(image_float, sigma=sigma)
-
-        # Scale back to original range
-        blurred = exposure.rescale_intensity(blurred, in_range='image', out_range=(0, 65535))
-        blurred = blurred.astype(np.uint16)
-
-        return blurred
-
-    @staticmethod
     def sharpen(image, radius=1, amount=1.0):
         """
         Sharpen an image using unsharp masking.
@@ -133,33 +85,6 @@ class ImageProcessor:
         sharpened = sharpened.astype(np.uint16)
 
         return sharpened
-
-    @staticmethod
-    def normalize(image, target_min=0, target_max=65535):
-        """
-        Normalize image to specified range.
-
-        Args:
-            image (numpy.ndarray): Input image
-            target_min (int): Target minimum value
-            target_max (int): Target maximum value
-
-        Returns:
-            numpy.ndarray: Normalized image
-        """
-        # Get current min and max
-        img_min = np.min(image)
-        img_max = np.max(image)
-
-        # Avoid division by zero
-        if img_max == img_min:
-            return np.ones_like(image) * target_min
-
-        # Normalize to target range
-        normalized = (image - img_min) * (target_max - target_min) / (img_max - img_min) + target_min
-        normalized = normalized.astype(np.uint16)
-
-        return normalized
 
     @staticmethod
     def percentile_normalize(image, low_percentile=1, high_percentile=99, target_min=0, target_max=65535):

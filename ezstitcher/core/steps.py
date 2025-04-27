@@ -13,7 +13,6 @@ import numpy as np
 # Import core components
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import prepare_patterns_and_functions
-from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.abstract_step import AbstractStep
 # Removed adapt_func_to_stack import
 
@@ -163,9 +162,9 @@ class Step(AbstractStep):
         if not input_dir:
             raise ValueError("Input directory must be specified")
 
-        # Use ImageLocator to find the actual directory containing images
+        # Find the actual directory containing images
         # This works whether input_dir is a plate folder or a subfolder
-        actual_input_dir = ImageLocator.find_image_directory(Path(input_dir))
+        actual_input_dir = FileSystemManager.find_image_directory(Path(input_dir))
         logger.debug("Using actual image directory: %s", actual_input_dir)
 
         # Get patterns with variable components
@@ -515,44 +514,7 @@ class Step(AbstractStep):
         output_dir_str = f"→ {str(self.output_dir)}" if self.output_dir else ""
         return f"{self.name} [components={components}, group_by={self.group_by}] {output_dir_str}"
 
-    def _context_wrapper(self, images, **kwargs):
-        """
-        Common wrapper for context-aware steps.
 
-        Args:
-            images: Images to process
-            **kwargs: Additional arguments
-
-        Returns:
-            Processed images
-        """
-        context = kwargs.get('context')
-        if not context:
-            return images
-
-        # Extract common context attributes
-        well = context.well
-        dirs = context.dirs
-        stitcher = getattr(context, 'stitcher', None)
-
-        # Call the step-specific implementation
-        self._process_with_context(context, well, dirs, stitcher)
-
-        return images
-
-    def _process_with_context(self, context, well, dirs, stitcher):
-        """
-        Process using context information.
-
-        This method should be implemented by subclasses that need context access.
-
-        Args:
-            context: Processing context
-            well: Well identifier
-            dirs: Directory dictionary
-            stitcher: Stitcher instance
-        """
-        # Default implementation does nothing
 
 
 class PositionGenerationStep(Step):

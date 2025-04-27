@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 from ezstitcher.core.microscope_interfaces import create_microscope_handler
-from ezstitcher.core.image_locator import ImageLocator
 from ezstitcher.core.stitcher import Stitcher
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.image_processor import ImageProcessor
@@ -159,7 +158,7 @@ class PipelineOrchestrator:
         # Auto-detect all wells
         all_wells = set()
 
-        image_paths = ImageLocator.find_images_in_directory(input_dir, recursive=True)
+        image_paths = FileSystemManager.list_image_files(input_dir, recursive=True)
 
         # Extract wells from filenames
         logger.info("Found %d image files. Extracting well information...", len(image_paths))
@@ -243,7 +242,7 @@ class PipelineOrchestrator:
         start_time = time.time()
 
         # Find the image directory
-        image_dir = ImageLocator.find_image_directory(plate_path)
+        image_dir = FileSystemManager.find_image_directory(plate_path)
         logger.info("Found image directory: %s", image_dir)
 
         # Always rename files with consistent padding, even for Opera Phenix datasets
@@ -269,7 +268,7 @@ class PipelineOrchestrator:
 
         # Return the image directory (which may have changed if Z-stack folders were organized)
         logger.info("Image preparation completed in %.2f seconds", time.time() - start_time)
-        return ImageLocator.find_image_directory(plate_path)
+        return FileSystemManager.find_image_directory(plate_path)
 
     def _get_patterns_for_well(self, well, directory):
         """
@@ -369,8 +368,8 @@ class PipelineOrchestrator:
         output_dir = Path(output_dir)
         input_dir = Path(input_dir)
 
-        # Use ImageLocator to find the actual image directory
-        actual_input_dir = ImageLocator.find_image_directory(input_dir)
+        # Find the actual image directory
+        actual_input_dir = FileSystemManager.find_image_directory(input_dir)
         logger.info("Using actual image directory: %s", actual_input_dir)
 
         # Ensure output directory exists

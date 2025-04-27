@@ -19,7 +19,6 @@ Core Components
    image_processor
    image_processing_operations
    file_system_manager
-   image_locator
 
 Interfaces and Configuration
 ---------------------------
