@@ -8,7 +8,9 @@ ensuring a consistent interface across different step implementations.
 from abc import ABC, abstractmethod
 from typing import List, Any, Optional, Dict
 from .pipeline_base import StepInterface
-from .context import Context
+
+# ProcessingContext is defined in pipeline.py
+# Using string literal for type annotations to avoid circular imports
 
 
 class AbstractStep(StepInterface):
@@ -20,7 +22,7 @@ class AbstractStep(StepInterface):
     """
 
     @abstractmethod
-    def process(self, group: List[Any], context: Optional[Context] = None) -> Any:
+    def process(self, group: List[Any], context: Optional['ProcessingContext'] = None) -> Any:
         """
         Process a group of images.
 
@@ -35,5 +37,3 @@ class AbstractStep(StepInterface):
             Processed result (typically an image or list of images)
         """
         pass
-
-

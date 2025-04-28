@@ -6,13 +6,15 @@ It contains no implementation details, only interfaces and type definitions.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
-from .context import Context  # Updated import
+
+# Use string literal for type annotations to avoid circular imports
+# The actual ProcessingContext class is defined in pipeline.py
 
 class StepInterface(ABC):
     """Base interface for all pipeline steps."""
-    
+
     @abstractmethod
     def __init__(
         self,
@@ -33,7 +35,7 @@ class StepInterface(ABC):
         pass
 
     @abstractmethod
-    def process(self, context: Context) -> Context:
+    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
         """
         Process data according to the step's functionality.
 
@@ -47,7 +49,7 @@ class StepInterface(ABC):
 
 class PipelineInterface(ABC):
     """Base interface for pipeline implementations."""
-    
+
     @abstractmethod
     def __init__(
         self,
@@ -89,7 +91,7 @@ class PipelineInterface(ABC):
         input_dir: Optional[Union[str, Path]] = None,
         output_dir: Optional[Union[str, Path]] = None,
         well_filter: Optional[List[str]] = None
-    ) -> Context:
+    ) -> 'ProcessingContext':
         """
         Execute the pipeline.
 
@@ -106,7 +108,7 @@ class PipelineInterface(ABC):
 
 class PipelineFactoryInterface(ABC):
     """Base interface for pipeline factories."""
-    
+
     @abstractmethod
     def __init__(
         self,
