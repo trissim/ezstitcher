@@ -1,7 +1,7 @@
-Step Factories
-=============
+Specialized Steps
+===============
 
-.. module:: ezstitcher.core.step_factories
+.. module:: ezstitcher.core.specialized_steps
 
 This module contains specialized step implementations that inherit from the regular Step class
 and pre-configure parameters for common operations like Z-stack flattening, focus selection,
@@ -30,7 +30,7 @@ ZFlatStep
 
    .. code-block:: python
 
-      from ezstitcher.core.step_factories import ZFlatStep
+      from ezstitcher.core.specialized_steps import ZFlatStep
 
       # Create a maximum intensity projection step
       step = ZFlatStep(
@@ -69,7 +69,7 @@ FocusStep
 
    .. code-block:: python
 
-      from ezstitcher.core.step_factories import FocusStep
+      from ezstitcher.core.specialized_steps import FocusStep
 
       # Create a best focus step with default metric (combined)
       step = FocusStep(
@@ -111,7 +111,7 @@ CompositeStep
 
    .. code-block:: python
 
-      from ezstitcher.core.step_factories import CompositeStep
+      from ezstitcher.core.specialized_steps import CompositeStep
 
       # Create a composite step with equal weights
       step = CompositeStep(
