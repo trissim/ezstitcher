@@ -9,7 +9,7 @@ Here's a basic example of using EZStitcher:
 
 .. code-block:: python
 
-    from ezstitcher.core import create_basic_pipeline
+    from ezstitcher.core import AutoPipelineFactory
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from pathlib import Path
 
@@ -19,14 +19,17 @@ Here's a basic example of using EZStitcher:
     # Create orchestrator
     orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
-    # Create a basic stitching pipeline
-    pipelines = create_basic_pipeline(
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(
         input_dir=plate_path,
         output_dir=plate_path.parent / f"{plate_path.name}_stitched",
         normalize=True  # Apply normalization (default)
     )
 
-    # Run the pipeline
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
     orchestrator.run(pipelines=pipelines)
 
 Building Custom Pipelines
@@ -277,7 +280,7 @@ Here's a practical example of how to create a reusable pipeline configuration us
 .. code-block:: python
 
     # pipeline_config.py
-    from ezstitcher.core import create_basic_stitching_pipeline
+    from ezstitcher.core import AutoPipelineFactory
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.config import PipelineConfig
     from pathlib import Path
@@ -290,12 +293,13 @@ Here's a practical example of how to create a reusable pipeline configuration us
             plate_path=plate_path
         )
 
-        # Create pipelines using factory function
-        pipelines = create_basic_stitching_pipeline(
+        # Create pipelines using AutoPipelineFactory
+        factory = AutoPipelineFactory(
             input_dir=plate_path,
             output_dir=plate_path.parent / f"{plate_path.name}_stitched",
             normalize=normalize
         )
+        pipelines = factory.create_pipelines()
 
         # Run the pipeline and return success status
         return orchestrator.run(pipelines=pipelines)

@@ -118,7 +118,7 @@ The specialized steps leverage the orchestrator's services to handle plate-speci
 
 3. **Position Generation**: The orchestrator handles the details of generating positions based on the plate format.
 
-4. **Image Loading**: The orchestrator uses ImageLocator to find the actual image directory within the plate path.
+4. **Image Loading**: The orchestrator uses FileSystemManager to find the actual image directory within the plate path.
 
 This abstraction allows the steps to focus on their specific tasks without needing to know the details of different plate formats.
 
@@ -158,6 +158,8 @@ Step factories follow the "factory pattern" design principle, creating pre-confi
 - **Semantic Names**: Clear naming that indicates the step's purpose
 - **Reduced Boilerplate**: Less code to write for common operations
 - **Consistent Patterns**: Standardized approach to common tasks
+
+These specialized steps are also used by the :doc:`pipeline_factory` to create pre-configured pipelines for common workflows. The ``AutoPipelineFactory`` uses these specialized steps internally to create position generation and image assembly pipelines with appropriate configurations.
 
 Here's a comparison of raw Steps vs. specialized steps for common operations:
 
@@ -242,6 +244,10 @@ This step pre-configures:
 - ``group_by=None``
 - ``func=(IP.create_projection, {'method': method})``
 
+The ``ZFlatStep`` is used by the ``AutoPipelineFactory``:
+- Always used in the position generation pipeline to flatten Z-stacks for position generation
+- Optionally used in the image assembly pipeline when ``flatten_z=True``
+
 FocusStep
 ^^^^^^^
 
@@ -273,7 +279,7 @@ The ``CompositeStep`` is a specialized step for creating composite images from m
 
     # Create a composite step with custom weights
     step = CompositeStep(
-        weights=[0.7, 0.3],  # 70% channel 1, 30% channel 2
+        weights=[0.7, 0.3, 0],  # 70% channel 1, 30% channel 2, 0% channel 3
         input_dir=orchestrator.workspace_path
     )
 
@@ -281,6 +287,11 @@ This step pre-configures:
 - ``variable_components=['channel']``
 - ``group_by=None``
 - ``func=(IP.create_composite, {'weights': weights})``
+
+The ``CompositeStep`` is used by the ``AutoPipelineFactory``:
+- Always used in the position generation pipeline to create a reference image for position generation
+- If ``channel_weights`` is None, weights are distributed evenly across all channels
+- Weights control which channels contribute to the reference image (e.g., [0.7, 0.3, 0] uses only the first two channels)
 
 .. _when-to-use-specialized-steps:
 
@@ -299,6 +310,7 @@ When to Use Specialized Steps
 - You want to reduce boilerplate code and simplify your pipeline
 - You prefer a more intuitive interface for common tasks
 - You're building pipelines for non-expert users
+- You're extending pipelines created by the ``AutoPipelineFactory``
 
 **Use raw Steps when:**
 
@@ -308,6 +320,29 @@ When to Use Specialized Steps
 - You're creating your own specialized steps
 
 As a general rule, start with specialized steps for common operations before falling back to raw Steps. This approach will make your code more concise, readable, and maintainable.
+
+.. _specialized-steps-and-pipeline-factory:
+
+Specialized Steps and AutoPipelineFactory
+--------------------------------------
+
+The specialized steps described in this document are used by the :doc:`pipeline_factory` to create pre-configured pipelines for common workflows. The ``AutoPipelineFactory`` creates two pipelines:
+
+1. **Position Generation Pipeline**: Creates position files for stitching
+   - Steps: [flatten Z (always), normalize (optional), create_composite (always), generate positions (always)]
+   - Uses: ``ZFlatStep``, ``CompositeStep``, and ``PositionGenerationStep``
+
+2. **Image Assembly Pipeline**: Stitches images using the position files
+   - Steps: [normalize (optional), flatten Z (optional), stitch_images (always)]
+   - Uses: ``ZFlatStep`` (optional) and ``ImageStitchingStep``
+
+The factory parameters control which specialized steps are included and how they are configured:
+
+- ``flatten_z``: Controls whether Z-stacks are flattened in the assembly pipeline (Z-stacks are always flattened for position generation)
+- ``z_method``: Specifies the projection method when flattening Z-stacks (default: "max")
+- ``channel_weights``: Controls which channels contribute to the reference image for position generation
+
+For more information about the ``AutoPipelineFactory``, see :doc:`pipeline_factory`.
 
 .. _specialized-steps-best-practices:
 
@@ -357,7 +392,29 @@ A typical stitching workflow involves these main steps:
 2. Generate position files that describe how the tiles fit together
 3. Stitch the images using these position files
 
-Here's an example using both specialized steps and step factories:
+The simplest approach is to use the ``AutoPipelineFactory``:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True  # Apply normalization (default)
+    )
+
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
+Alternatively, you can build the pipeline manually using specialized steps:
 
 .. code-block:: python
 
@@ -394,7 +451,30 @@ Here's an example using both specialized steps and step factories:
 Multi-Channel Stitching
 ^^^^^^^^^^^^^^^^^^^^
 
-When working with multiple channels, it's important to create a composite image before position generation. Using step factories makes this more concise:
+When working with multiple channels, it's important to create a composite image before position generation. The simplest approach is to use the ``AutoPipelineFactory`` with channel weights:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+    # Create a factory for multi-channel stitching
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True,
+        channel_weights=[0.7, 0.3, 0]  # Use only first two channels for reference image
+    )
+
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
+Alternatively, you can build the pipeline manually using specialized steps:
 
 .. code-block:: python
 
@@ -429,7 +509,35 @@ When working with multiple channels, it's important to create a composite image 
 Using Original Images for Stitching
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes you want to process images for position generation but use the original images for stitching:
+Sometimes you want to process images for position generation but use the original images for stitching. With the ``AutoPipelineFactory``, you can customize the pipelines after creation:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True
+    )
+
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
+
+    # Access the image assembly pipeline
+    assembly_pipeline = pipelines[1]
+
+    # Modify the image stitching step to use original images
+    assembly_pipeline.steps[-1].input_dir = orchestrator.workspace_path
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
+Alternatively, you can build the pipeline manually:
 
 .. code-block:: python
 

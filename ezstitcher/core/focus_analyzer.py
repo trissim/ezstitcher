@@ -1,7 +1,7 @@
+from typing import Dict, List, Tuple, Union, Optional
+import logging
 import numpy as np
 import cv2
-import logging
-from ezstitcher.core.file_system_manager import FileSystemManager
 
 logger = logging.getLogger(__name__)
 
@@ -10,78 +10,66 @@ class FocusAnalyzer:
     Provides focus metrics and best focus selection.
 
     This class implements various focus measure algorithms and methods to find
-    the best focused image in a Z-stack. It uses the FileSystemManager for
-    image handling to avoid code duplication.
+    the best focused image in a Z-stack. All methods are static and do not require
+    an instance.
     """
-    def __init__(self, metric="combined", roi=None, weights=None):
-        """
-        Initialize a focus analyzer.
 
-        Args:
-            metric (str): Focus detection method. Options: "combined",
-                         "normalized_variance", "laplacian", "tenengrad", "fft".
-            roi (tuple, optional): Region of interest as (x, y, width, height).
-            weights (dict, optional): Weights for each metric in combined focus measure.
-        """
-        self.metric = metric
-        self.roi = roi
-        self.weights = weights
-        self.fs_manager = FileSystemManager()
+    # Default weights for combined focus measure
+    DEFAULT_WEIGHTS = {
+        'nvar': 0.3,  # Normalized variance
+        'lap': 0.3,   # Laplacian energy
+        'ten': 0.2,   # Tenengrad variance
+        'fft': 0.2    # FFT-based focus
+    }
 
-    def normalized_variance(self, img):
+    @staticmethod
+    def normalized_variance(img: np.ndarray) -> float:
         """
         Normalized variance focus measure.
         Robust to illumination changes.
 
         Args:
-            img (numpy.ndarray): Input grayscale image
+            img: Input grayscale image
 
         Returns:
-            float: Focus quality score
+            Focus quality score
         """
-        # FileSystemManager.load_image already ensures grayscale
-        # No need for additional conversion
-
         mean_val = np.mean(img)
         if mean_val == 0:  # Avoid division by zero
             return 0
 
         return np.var(img) / mean_val
 
-    def laplacian_energy(self, img, ksize=3):
+    @staticmethod
+    def laplacian_energy(img: np.ndarray, ksize: int = 3) -> float:
         """
         Laplacian energy focus measure.
         Sensitive to edges and high-frequency content.
 
         Args:
-            img (numpy.ndarray): Input grayscale image
-            ksize (int): Kernel size for Laplacian
+            img: Input grayscale image
+            ksize: Kernel size for Laplacian
 
         Returns:
-            float: Focus quality score
+            Focus quality score
         """
-        # FileSystemManager.load_image already ensures grayscale
-        # No need for additional conversion
-
         lap = cv2.Laplacian(img, cv2.CV_64F, ksize=ksize)
         return np.mean(np.square(lap))
 
-    def tenengrad_variance(self, img, ksize=3, threshold=0):
+    @staticmethod
+    def tenengrad_variance(img: np.ndarray, ksize: int = 3, threshold: float = 0) -> float:
         """
         Tenengrad variance focus measure.
         Based on gradient magnitude.
 
         Args:
-            img (numpy.ndarray): Input grayscale image
-            ksize (int): Kernel size for Sobel operator
-            threshold (float): Threshold for gradient magnitude
+            img: Input grayscale image
+            ksize: Kernel size for Sobel operator
+            threshold: Threshold for gradient magnitude
 
         Returns:
-            float: Focus quality score
+            Focus quality score
         """
-        # FileSystemManager.load_image already ensures grayscale
-        # No need for additional conversion
-
         gx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=ksize)
         gy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=ksize)
         fm = gx**2 + gy**2
@@ -89,27 +77,25 @@ class FocusAnalyzer:
 
         return np.mean(fm)
 
-    def adaptive_fft_focus(self, img):
+    @staticmethod
+    def adaptive_fft_focus(img: np.ndarray) -> float:
         """
         Adaptive FFT focus measure optimized for low-contrast microscopy images.
         Uses image statistics to set threshold adaptively.
 
         Args:
-            img (numpy.ndarray): Input grayscale image
+            img: Input grayscale image
 
         Returns:
-            float: Focus quality score
+            Focus quality score
         """
-        # FileSystemManager.load_image already ensures grayscale
-        # No need for additional conversion
-
         # Apply FFT
         fft = np.fft.fft2(img)
         fft_shift = np.fft.fftshift(fft)
         magnitude = np.abs(fft_shift)
 
         # Calculate image statistics for adaptive thresholding
-        img_mean = np.mean(img)
+        # Only img_std is used for thresholding
         img_std = np.std(img)
 
         # Adaptive threshold based on image statistics
@@ -124,107 +110,103 @@ class FocusAnalyzer:
 
         return score
 
-    def combined_focus_measure(self, img, weights=None):
+    @staticmethod
+    def combined_focus_measure(
+        img: np.ndarray,
+        weights: Optional[Dict[str, float]] = None
+    ) -> float:
         """
         Combined focus measure using multiple metrics.
         Optimized for microscopy images, especially low-contrast specimens.
 
         Args:
-            img (numpy.ndarray): Input grayscale image
-            weights (dict, optional): Weights for each metric. If None, uses the weights specified in the constructor or defaults.
+            img: Input grayscale image
+            weights: Weights for each metric. If None, uses default weights.
 
         Returns:
-            float: Combined focus quality score
+            Combined focus quality score
         """
-        # Use provided weights, instance weights, or defaults
+        # Use provided weights or defaults
         if weights is None:
-            weights = self.weights or {
-                'nvar': 0.3,
-                'lap': 0.3,
-                'ten': 0.2,
-                'fft': 0.2
-            }
-
-        # FileSystemManager.load_image already ensures grayscale
-        # No need for additional conversion
+            weights = FocusAnalyzer.DEFAULT_WEIGHTS
 
         # Calculate individual metrics
-        nvar = self.normalized_variance(img)
-        lap = self.laplacian_energy(img)
-        ten = self.tenengrad_variance(img)
-        fft = self.adaptive_fft_focus(img)
+        nvar = FocusAnalyzer.normalized_variance(img)
+        lap = FocusAnalyzer.laplacian_energy(img)
+        ten = FocusAnalyzer.tenengrad_variance(img)
+        fft = FocusAnalyzer.adaptive_fft_focus(img)
 
         # Weighted combination
         score = (
-            weights['nvar'] * nvar +
-            weights['lap'] * lap +
-            weights['ten'] * ten +
-            weights['fft'] * fft
+            weights.get('nvar', 0.3) * nvar +
+            weights.get('lap', 0.3) * lap +
+            weights.get('ten', 0.2) * ten +
+            weights.get('fft', 0.2) * fft
         )
 
         return score
 
-    def _get_focus_function(self, method):
+    @staticmethod
+    def _get_focus_function(metric: Union[str, Dict[str, float]]):
         """
-        Get the appropriate focus measure function based on method name.
-
-        This helper method centralizes the logic for selecting the focus measure function,
-        avoiding code duplication in find_best_focus and compute_focus_metrics methods.
+        Get the appropriate focus measure function based on metric.
 
         Args:
-            method (str): Focus detection method name
+            metric: Focus detection method name or weights dictionary
+                   If string: "combined", "normalized_variance", "laplacian", "tenengrad", "fft"
+                   If dict: Weights for combined focus measure
 
         Returns:
-            callable: The focus measure function
+            callable: The focus measure function and any additional arguments
 
         Raises:
             ValueError: If the method is unknown
         """
-        if method == 'combined':
-            return self.combined_focus_measure
-        elif method == 'nvar' or method == 'normalized_variance':
-            return self.normalized_variance
-        elif method == 'lap' or method == 'laplacian':
-            return self.laplacian_energy
-        elif method == 'ten' or method == 'tenengrad':
-            return self.tenengrad_variance
-        elif method == 'fft':
-            return self.adaptive_fft_focus
-        else:
-            raise ValueError(f"Unknown focus method: {method}")
+        # If metric is a dictionary, use it as weights for combined focus measure
+        if isinstance(metric, dict):
+            return lambda img: FocusAnalyzer.combined_focus_measure(img, metric)
 
-    def find_best_focus(self, image_stack, method=None, roi=None):
+        # Otherwise, treat it as a string method name
+        if metric == 'combined':
+            return FocusAnalyzer.combined_focus_measure
+        if metric in ('nvar', 'normalized_variance'):
+            return FocusAnalyzer.normalized_variance
+        if metric in ('lap', 'laplacian'):
+            return FocusAnalyzer.laplacian_energy
+        if metric in ('ten', 'tenengrad'):
+            return FocusAnalyzer.tenengrad_variance
+        if metric == 'fft':
+            return FocusAnalyzer.adaptive_fft_focus
+
+        # If we get here, the metric is unknown
+        raise ValueError(f"Unknown focus method: {metric}")
+
+    @staticmethod
+    def find_best_focus(
+        image_stack: List[np.ndarray],
+        metric: Union[str, Dict[str, float]] = "combined"
+    ) -> Tuple[int, List[Tuple[int, float]]]:
         """
         Find the best focused image in a stack using specified method.
 
         Args:
-            image_stack (list): List of images
-            method (str, optional): Focus detection method. If None, uses the method specified in the constructor.
-            roi (tuple, optional): Region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
+            image_stack: List of images
+            metric: Focus detection method or weights dictionary
+                   If string: "combined", "normalized_variance", "laplacian", "tenengrad", "fft"
+                   If dict: Weights for combined focus measure
 
         Returns:
-            tuple: (best_focus_index, focus_scores)
+            Tuple of (best_focus_index, focus_scores)
         """
         focus_scores = []
 
-        # Use provided method or fall back to instance variable
-        method_to_use = method if method is not None else self.metric
-        roi_to_use = roi if roi is not None else self.roi
-
         # Get the appropriate focus measure function
-        focus_func = self._get_focus_function(method_to_use)
+        focus_func = FocusAnalyzer._get_focus_function(metric)
 
         # Process each image in stack
         for i, img in enumerate(image_stack):
-            # Extract ROI if specified
-            if roi_to_use is not None:
-                x, y, w, h = roi_to_use
-                img_roi = img[y:y+h, x:x+w]
-            else:
-                img_roi = img
-
             # Calculate focus score
-            score = focus_func(img_roi)
+            score = focus_func(img)
             focus_scores.append((i, score))
 
         # Find index with maximum focus score
@@ -232,53 +214,50 @@ class FocusAnalyzer:
 
         return best_focus_idx, focus_scores
 
-    def select_best_focus(self, image_stack, method=None, roi=None):
+    @staticmethod
+    def select_best_focus(
+        image_stack: List[np.ndarray],
+        metric: Union[str, Dict[str, float]] = "combined"
+    ) -> Tuple[np.ndarray, int, List[Tuple[int, float]]]:
         """
         Select the best focus plane from a stack of images.
 
         Args:
-            image_stack (list): List of images
-            method (str, optional): Focus detection method. If None, uses the method specified in the constructor.
-            roi (tuple, optional): Region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
+            image_stack: List of images
+            metric: Focus detection method or weights dictionary
+                   If string: "combined", "normalized_variance", "laplacian", "tenengrad", "fft"
+                   If dict: Weights for combined focus measure
 
         Returns:
-            tuple: (best_focus_image, best_focus_index, focus_scores)
+            Tuple of (best_focus_image, best_focus_index, focus_scores)
         """
-        best_idx, scores = self.find_best_focus(image_stack, method, roi)
+        best_idx, scores = FocusAnalyzer.find_best_focus(image_stack, metric)
         return image_stack[best_idx], best_idx, scores
 
-    def compute_focus_metrics(self, image_stack, method=None, roi=None):
+    @staticmethod
+    def compute_focus_metrics(image_stack: List[np.ndarray],
+                             metric: Union[str, Dict[str, float]] = "combined") -> List[float]:
         """
         Compute focus metrics for a stack of images.
 
         Args:
-            image_stack (list): List of images
-            method (str, optional): Focus detection method. If None, uses the method specified in the constructor.
-            roi (tuple, optional): Region of interest as (x, y, width, height). If None, uses the ROI specified in the constructor.
+            image_stack: List of images
+            metric: Focus detection method or weights dictionary
+                   If string: "combined", "normalized_variance", "laplacian", "tenengrad", "fft"
+                   If dict: Weights for combined focus measure
 
         Returns:
-            list: List of focus scores for each image
+            List of focus scores for each image
         """
         focus_scores = []
 
-        # Use provided method or fall back to instance variable
-        method_to_use = method if method is not None else self.metric
-        roi_to_use = roi if roi is not None else self.roi
-
         # Get the appropriate focus measure function
-        focus_func = self._get_focus_function(method_to_use)
+        focus_func = FocusAnalyzer._get_focus_function(metric)
 
         # Process each image in stack
         for img in image_stack:
-            # Extract ROI if specified
-            if roi_to_use is not None:
-                x, y, w, h = roi_to_use
-                img_roi = img[y:y+h, x:x+w]
-            else:
-                img_roi = img
-
             # Calculate focus score
-            score = focus_func(img_roi)
+            score = focus_func(img)
             focus_scores.append(score)
 
         return focus_scores

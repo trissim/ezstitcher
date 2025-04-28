@@ -118,16 +118,13 @@ class TestImageProcessor:
 
 
 
+
+
     def test_create_composite_empty_list(self):
         """Test the create_composite method with an empty list."""
         # Try to create a composite from an empty list
-        try:
-            # This should raise a ValueError
+        with pytest.raises(ValueError):
             IP.create_composite([])
-            assert False, "Expected ValueError was not raised"
-        except ValueError:
-            # Test passes if ValueError is raised
-            pass
 
     def test_create_composite_invalid_input(self):
         """Test the create_composite method with invalid input."""
@@ -165,7 +162,7 @@ class TestImageProcessor:
         """Test the create_weight_mask method."""
         # Create a weight mask
         height, width = 100, 100
-        mask = IP.create_weight_mask(height, width, margin_ratio=0.1)
+        mask = IP.create_weight_mask((height, width), margin_ratio=0.1)
 
         # Verify the mask
         assert mask.shape == (height, width)

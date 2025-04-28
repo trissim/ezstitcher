@@ -12,6 +12,7 @@ This section explains the core concepts of microscopy image stitching and how EZ
    architecture_overview
    pipeline_orchestrator
    pipeline
+   pipeline_factory
    step
    specialized_steps
    function_handling

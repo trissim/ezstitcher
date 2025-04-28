@@ -161,10 +161,18 @@ class ImageProcessor:
 
         Returns:
             numpy.ndarray: Grayscale composite image (16-bit)
+
+        Raises:
+            TypeError: If images is not a list or weights is not a list
+            ValueError: If images list is empty
         """
         # Ensure images is a list
         if not isinstance(images, list):
             raise TypeError("images must be a list of images")
+
+        # Check for empty list early
+        if not images:
+            raise ValueError("images list cannot be empty")
 
         # Default weights if none provided
         if weights is None:
@@ -178,10 +186,6 @@ class ImageProcessor:
             weights = weights + [0.0] * (len(images) - len(weights))
         # Truncate weights if longer than images
         weights = weights[:len(images)]
-
-        # Get shape and dtype from first image
-        if not images:
-            raise ValueError("images list cannot be empty")
 
         first_image = images[0]
         shape = first_image.shape
@@ -248,7 +252,7 @@ class ImageProcessor:
         Returns:
             numpy.ndarray: Weight mask
         """
-        return create_linear_weight_mask(shape, margin_ratio)
+        return create_linear_weight_mask(shape[0], shape[1], margin_ratio)
 
     @staticmethod
     def max_projection(stack):
@@ -344,20 +348,37 @@ class ImageProcessor:
         """
         if method == "max_projection":
             return ImageProcessor.max_projection(stack)
-        elif method == "mean_projection":
+
+        if method == "mean_projection":
             return ImageProcessor.mean_projection(stack)
-        elif method == "best_focus":
+
+        if method == "best_focus":
             if focus_analyzer is None:
-                logger.warning("No focus analyzer provided for best_focus method, using max_projection instead")
+                logger.warning("No focus analyzer provided for best_focus method, "
+                              "using max_projection instead")
                 return ImageProcessor.max_projection(stack)
             best_idx, _ = focus_analyzer.find_best_focus(stack)
             return stack[best_idx]
-        else:
-            logger.warning("Unknown projection method: %s, using max_projection", method)
-            return ImageProcessor.max_projection(stack)
+
+        # Default case for unknown methods
+        logger.warning("Unknown projection method: %s, using max_projection", method)
+        return ImageProcessor.max_projection(stack)
 
     @staticmethod
     def tophat(image, selem_radius=50, downsample_factor=4):
+        """
+        Apply white top-hat filter to an image for background removal.
+
+        This implementation uses downsampling for efficiency with large structuring elements.
+
+        Args:
+            image (numpy.ndarray): Input image
+            selem_radius (int): Radius of the structuring element disk
+            downsample_factor (int): Factor by which to downsample the image for processing
+
+        Returns:
+            numpy.ndarray: Filtered image with background removed
+        """
         # Store original data type
         input_dtype = image.dtype
 

@@ -67,7 +67,8 @@ class Pipeline(PipelineInterface):
         # Add steps if provided
         if steps:
             for step in steps:
-                self.add_step(step)
+                if step is not None:  # Skip None values in steps list
+                    self.add_step(step)
 
     def add_step(self, step: Step, output_dir: str = None) -> 'Pipeline':
         """
@@ -128,12 +129,14 @@ class Pipeline(PipelineInterface):
         """Set output directory for ImageStitchingStep."""
         stitched_suffix = getattr(self.orchestrator.config, 'stitched_dir_suffix', '_stitched') if hasattr(self, 'orchestrator') else '_stitched'
 
-        last_processing = next((s for s in reversed(self.steps)
-                              if s.__class__.__name__ != "PositionGenerationStep"), None)
-        base_dir = Path(last_processing.output_dir if last_processing else self.input_dir)
+        # Always use the workspace directory (input directory) as the base
+        # This ensures the stitched output is not in the same directory as any processing step
+        base_dir = Path(self.input_dir)
 
+        # Create the stitched output directory
         step.output_dir = base_dir.parent / f"{base_dir.name}{stitched_suffix}"
 
+        # Check for conflicts and adjust if needed
         if self._check_directory_conflicts(step, step.output_dir):
             step.output_dir = base_dir.parent / f"{base_dir.name}{stitched_suffix}_final"
 
@@ -160,29 +163,44 @@ class Pipeline(PipelineInterface):
 
         # Special handling for ImageStitchingStep
         if is_stitching:
+            # If the step's input_dir is the same as the pipeline's input_dir,
+            # always use the default stitched directory to avoid conflicts with regular steps
+            if step.input_dir == self.input_dir:
+                self._set_stitching_step_output_directory(step)
+                return
+
+            # If pipeline has an output_dir, use it for the stitching step
+            if self.output_dir:
+                step.output_dir = self.output_dir
+                logger.info("ImageStitchingStep using pipeline output dir: %s", step.output_dir)
+                return
+            # Otherwise use the default stitching directory
             self._set_stitching_step_output_directory(step)
             return
 
         # Special handling for PositionGenerationStep
         if is_position_generation:
+            # Use the default positions directory
             input_path = Path(step.input_dir)
             step.output_dir = input_path.parent / f"{input_path.name}{positions_suffix}"
             logger.info("PositionGenerationStep using default directory: %s", step.output_dir)
             return
 
-        # For all other processing steps
-        if not self.output_dir:
-            input_path = Path(step.input_dir)
-            step.output_dir = input_path.parent / f"{input_path.name}{out_suffix}"
-            logger.info("Processing step using default directory: %s", step.output_dir)
+        # For regular image processing steps (Step, ZFlatStep, CompositeStep, FocusStep)
+        # Check if there's a previous step with the same input directory
+        if self.steps:
+            prev_step = self.steps[-1]
+            # If this step's input is the previous step's output, use the same directory
+            if step.input_dir == prev_step.output_dir:
+                step.output_dir = step.input_dir
+                logger.info("Step using in-place processing: %s", step.output_dir)
+                return
 
-            # Ensure the output directory exists
-            step.output_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            step.output_dir = self.output_dir
-
-            # Ensure the output directory exists
-            step.output_dir.mkdir(parents=True, exist_ok=True)
+        # Otherwise use default output directory based on input_dir
+        input_path = Path(step.input_dir)
+        step.output_dir = input_path.parent / f"{input_path.name}{out_suffix}"
+        logger.info("Processing step using default directory: %s", step.output_dir)
+        # Don't create the directory yet - let the step create it when it's executed
 
     def _update_pipeline_directories(self, step: Step):
         """Update pipeline directories based on the step if needed."""

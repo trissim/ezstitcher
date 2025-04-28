@@ -64,23 +64,27 @@ class TestFocusStep(unittest.TestCase):
         self.assertIsNone(step.group_by)
         self.assertEqual(step.name, "Best Focus (laplacian)")
 
-    @patch.object(IP, 'create_projection')
-    @patch.object(FocusAnalyzer, '__init__', return_value=None)
-    def test_process(self, mock_focus_analyzer_init, mock_create_projection):
+    @patch.object(FocusAnalyzer, 'select_best_focus')
+    def test_process(self, mock_select_best_focus):
         """Test the process method."""
         # Create a mock image stack
         images = [np.zeros((10, 10)) for _ in range(3)]
+        
+        # Create a distinct "best" image
+        best_image = np.ones((10, 10))  # Different from zeros
+        mock_select_best_focus.return_value = (best_image, 0, [(0, 0.5)])
 
         # Create a step and process the images
         step = FocusStep(focus_options={'metric': 'laplacian'})
-        step.process(images)
+        result = step.process(images)
 
-        # Check that create_projection was called with the correct arguments
-        mock_create_projection.assert_called_once()
-        args, kwargs = mock_create_projection.call_args
-        self.assertEqual(args[0], images)
-        self.assertEqual(kwargs['method'], 'best_focus')
-        self.assertIn('focus_analyzer', kwargs)
+        # Extract the array from the result list
+        result_array = result[0] if isinstance(result, list) else result
+
+        # Check that select_best_focus was called with the correct arguments
+        mock_select_best_focus.assert_called_once_with(images, metric='laplacian')
+        # Verify we get back exactly what the mock returned
+        self.assertTrue(np.array_equal(result_array, best_image))
 
 
 class TestCompositeStep(unittest.TestCase):

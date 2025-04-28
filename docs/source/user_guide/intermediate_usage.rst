@@ -22,35 +22,48 @@ EZStitcher provides several methods for processing Z-stacks:
 
 .. code-block:: python
 
-    from ezstitcher.core import (
-        create_zstack_pipeline,
-        create_focus_pipeline,
-        FocusAnalyzer
-    )
+    from ezstitcher.core import AutoPipelineFactory
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    from ezstitcher.core.step_factories import ZFlatStep, FocusStep
     from pathlib import Path
 
     # Create orchestrator
     orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
-    # Maximum intensity projection
-    max_projection_pipeline = create_zstack_pipeline(
+    # Maximum intensity projection using AutoPipelineFactory
+    max_factory = AutoPipelineFactory(
         input_dir=orchestrator.workspace_path,
         output_dir=Path("path/to/max_projection"),
-        method="projection",
-        method_options={'method': 'max'}
+        flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
+        z_method="max"   # Use maximum intensity projection
     )
+    max_projection_pipelines = max_factory.create_pipelines()
 
-    # Best focus pipeline
-    focus_pipeline = create_focus_pipeline(
+    # Run the maximum intensity projection pipelines
+    orchestrator.run(pipelines=max_projection_pipelines)
+
+    # For best focus selection, we can create a custom pipeline
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
+
+    # Create a pipeline with FocusStep
+    focus_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
         output_dir=Path("path/to/best_focus"),
-        metric='variance_of_laplacian'
+        steps=[
+            # Use FocusStep for best focus selection
+            FocusStep(focus_options={'metric': 'variance_of_laplacian'}),
+
+            # Generate positions
+            PositionGenerationStep(),
+
+            # Stitch images
+            ImageStitchingStep()
+        ],
+        name="Best Focus Pipeline"
     )
 
-    # Run pipelines
-    orchestrator.run(pipelines=[max_projection_pipeline])
-    # or
+    # Run the best focus pipeline
     orchestrator.run(pipelines=[focus_pipeline])
 
 Projection Methods
@@ -69,13 +82,13 @@ Example with different projection methods:
     # Create separate pipelines for different projection methods
     # Note: You would typically choose ONE method, not run multiple in sequence
 
-    # Maximum intensity projection pipeline
+    from ezstitcher.core.step_factories import ZFlatStep, FocusStep
+
+    # Maximum intensity projection pipeline using ZFlatStep
     max_projection_pipeline = Pipeline(
         steps=[
-            Step(
-                name="Max Projection",
-                func=(IP.create_projection, {'method': 'max_projection'}),
-                variable_components=['z_index'],
+            ZFlatStep(
+                method="max",  # Use maximum intensity projection
                 input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/max_projection")
             )
@@ -83,13 +96,11 @@ Example with different projection methods:
         name="Max Projection Pipeline"
     )
 
-    # Mean intensity projection pipeline
+    # Mean intensity projection pipeline using ZFlatStep
     mean_projection_pipeline = Pipeline(
         steps=[
-            Step(
-                name="Mean Projection",
-                func=(IP.create_projection, {'method': 'mean_projection'}),
-                variable_components=['z_index'],
+            ZFlatStep(
+                method="mean",  # Use mean intensity projection
                 input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/mean_projection")
             )
@@ -97,16 +108,11 @@ Example with different projection methods:
         name="Mean Projection Pipeline"
     )
 
-    # Best focus pipeline (requires a focus analyzer)
-    from ezstitcher.core.focus_analyzer import FocusAnalyzer
-
-    focus_analyzer = FocusAnalyzer(metric='variance_of_laplacian')
+    # Best focus pipeline using FocusStep
     best_focus_pipeline = Pipeline(
         steps=[
-            Step(
-                name="Best Focus",
-                func=(IP.create_projection, {'method': 'best_focus', 'focus_analyzer': focus_analyzer}),
-                variable_components=['z_index'],
+            FocusStep(
+                focus_options={'metric': 'variance_of_laplacian'},  # Use variance of Laplacian metric
                 input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/best_focus")
             )
@@ -126,14 +132,14 @@ Instead of using a projection method, you can select the best-focused plane from
 
 .. code-block:: python
 
-    # Create a pipeline for best focus detection
+    from ezstitcher.core.step_factories import FocusStep
+
+    # Create a pipeline for best focus detection using FocusStep
     best_focus_pipeline = Pipeline(
         steps=[
-            # Best focus detection step
-            Step(
-                name="Best Focus Detection",
-                func=(IP.find_best_focus, {'metric': 'variance_of_laplacian'}),
-                variable_components=['z_index'],
+            # Best focus detection step using FocusStep
+            FocusStep(
+                focus_options={'metric': 'variance_of_laplacian'},
                 input_dir=orchestrator.workspace_path
             )
         ],
@@ -159,13 +165,13 @@ Example with different focus metrics:
     # Create separate pipelines for different focus metrics
     # Note: You would typically choose ONE metric, not run multiple in sequence
 
-    # Variance of Laplacian metric pipeline
+    from ezstitcher.core.step_factories import FocusStep
+
+    # Variance of Laplacian metric pipeline using FocusStep
     laplacian_pipeline = Pipeline(
         steps=[
-            Step(
-                name="Variance of Laplacian",
-                func=(IP.find_best_focus, {'metric': 'variance_of_laplacian'}),
-                variable_components=['z_index'],
+            FocusStep(
+                focus_options={'metric': 'variance_of_laplacian'},
                 input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/laplacian_focus")
             )
@@ -173,13 +179,11 @@ Example with different focus metrics:
         name="Laplacian Focus Pipeline"
     )
 
-    # Tenengrad metric pipeline
+    # Tenengrad metric pipeline using FocusStep
     tenengrad_pipeline = Pipeline(
         steps=[
-            Step(
-                name="Tenengrad",
-                func=(IP.find_best_focus, {'metric': 'tenengrad'}),
-                variable_components=['z_index'],
+            FocusStep(
+                focus_options={'metric': 'tenengrad'},
                 input_dir=orchestrator.workspace_path,
                 output_dir=Path("path/to/tenengrad_focus")
             )
@@ -293,6 +297,8 @@ You can combine multiple channels into a composite image. For detailed explanati
 
 .. code-block:: python
 
+    from ezstitcher.core.step_factories import CompositeStep
+
     # Create a pipeline for creating composite images
     composite_pipeline = Pipeline(
         steps=[
@@ -302,17 +308,35 @@ You can combine multiple channels into a composite image. For detailed explanati
                 func=IP.stack_percentile_normalize,
                 variable_components=['channel'],
                 input_dir=orchestrator.workspace_path
-
             ),
 
-            # Create composite images
-            Step(
-                func=IP.create_composite,
-                variable_components=['channel'],  # Process each channel separately
+            # Create composite images using CompositeStep
+            CompositeStep(
+                weights=None,  # Equal weights for all channels (default)
                 output_dir=Path("path/to/composite")
             )
         ],
         name="Composite Image Pipeline"
+    )
+
+    # Alternative with custom weights
+    weighted_composite_pipeline = Pipeline(
+        steps=[
+            # Process individual channels first
+            Step(
+                name="Channel Processing",
+                func=IP.stack_percentile_normalize,
+                variable_components=['channel'],
+                input_dir=orchestrator.workspace_path
+            ),
+
+            # Create composite images with custom weights
+            CompositeStep(
+                weights=[0.7, 0.3, 0],  # 70% channel 1, 30% channel 2, 0% channel 3
+                output_dir=Path("path/to/weighted_composite")
+            )
+        ],
+        name="Weighted Composite Pipeline"
     )
 
 Position Generation and Stitching
@@ -340,14 +364,14 @@ Process Z-stacks and then stitch the resulting images:
 
 .. code-block:: python
 
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+
     # Create a pipeline that combines Z-stack processing and stitching
     z_stack_stitching_pipeline = Pipeline(
         steps=[
-            # Step 1: Flatten Z-stacks
-            Step(
-                name="Z-Stack Flattening",
-                func=(IP.create_projection, {'method': 'max_projection'}),
-                variable_components=['z_index'],
+            # Step 1: Flatten Z-stacks using ZFlatStep
+            ZFlatStep(
+                method="max",  # Use maximum intensity projection
                 input_dir=orchestrator.workspace_path
             ),
 
@@ -359,10 +383,7 @@ Process Z-stacks and then stitch the resulting images:
             ),
 
             # This is important when working with multiple channels
-            Step(
-                func=IP.create_composite,  # Equal weighting for all channels
-                variable_components=['channel']
-            ),
+            CompositeStep(),  # Equal weighting for all channels (default)
 
             PositionGenerationStep(),
 
@@ -374,12 +395,29 @@ Process Z-stacks and then stitch the resulting images:
         name="Z-Stack Stitching Pipeline"
     )
 
+    # Alternatively, use AutoPipelineFactory for a simpler approach
+    from ezstitcher.core import AutoPipelineFactory
+
+    # Create a factory for Z-stack processing and stitching
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True,
+        flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
+        z_method="max"   # Use maximum intensity projection
+    )
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
 Channel-Specific Processing and Stitching
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Apply different processing to different channels and then stitch the results:
 
 .. code-block:: python
+
+    from ezstitcher.core.step_factories import CompositeStep
 
     # Create a pipeline that combines channel-specific processing and stitching
     channel_stitching_pipeline = Pipeline(
@@ -396,9 +434,8 @@ Apply different processing to different channels and then stitch the results:
             ),
 
             # This is important when working with multiple channels
-            Step(
-                func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Custom weighting: 70% channel 1, 30% channel 2
-                variable_components=['channel']
+            CompositeStep(
+                weights=[0.7, 0.3],  # Custom weighting: 70% channel 1, 30% channel 2
             ),
 
             PositionGenerationStep(),
@@ -411,6 +448,20 @@ Apply different processing to different channels and then stitch the results:
         name="Channel Stitching Pipeline"
     )
 
+    # Alternatively, use AutoPipelineFactory with channel weights
+    from ezstitcher.core import AutoPipelineFactory
+
+    # Create a factory for channel-specific processing and stitching
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True,
+        channel_weights=[0.7, 0.3]  # Custom weighting: 70% channel 1, 30% channel 2
+    )
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
 Complete Workflow Example
 ^^^^^^^^^^^^^^^^^^^^^^
 
@@ -418,6 +469,7 @@ A complete workflow that combines Z-stack processing, channel-specific processin
 
 .. code-block:: python
 
+    from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
     from ezstitcher.core.focus_analyzer import FocusAnalyzer
 
     # Create a complete workflow pipeline
@@ -446,9 +498,8 @@ A complete workflow that combines Z-stack processing, channel-specific processin
             ),
 
             # This is important when working with multiple channels
-            Step(
-                func=(IP.create_composite, {'weights': [0.6, 0.4]}),  # Custom weighting: 60% channel 1, 40% channel 2
-                variable_components=['channel']
+            CompositeStep(
+                weights=[0.6, 0.4]  # Custom weighting: 60% channel 1, 40% channel 2
             ),
 
             PositionGenerationStep(),
@@ -457,6 +508,39 @@ A complete workflow that combines Z-stack processing, channel-specific processin
         ],
         name="Complete Workflow Pipeline"
     )
+
+    # Alternatively, use AutoPipelineFactory and customize the pipelines
+    from ezstitcher.core import AutoPipelineFactory
+
+    # Create a factory for a complete workflow
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True,
+        flatten_z=True,
+        z_method="max",
+        channel_weights=[0.6, 0.4]  # Custom weighting: 60% channel 1, 40% channel 2
+    )
+    pipelines = factory.create_pipelines()
+
+    # Access individual pipelines for customization
+    position_pipeline = pipelines[0]
+    assembly_pipeline = pipelines[1]
+
+    # Add channel-specific enhancement to position generation pipeline
+    position_pipeline.add_step(
+        Step(
+            name="Channel Enhancement",
+            func={
+                "1": (stack(IP.tophat), {'size': 15}),
+                "2": (stack(IP.sharpen), {'sigma': 1.0, 'amount': 1.5})
+            },
+            group_by='channel',
+        ),
+        index=1  # Insert after normalization but before composite step
+    )
+
+    # Run the customized pipelines
+    orchestrator.run(pipelines=pipelines)
 
 Next Steps
 ---------

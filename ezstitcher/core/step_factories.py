@@ -72,7 +72,7 @@ class FocusStep(Step):
     """
     Specialized step for focus-based Z-stack processing.
 
-    This step finds the best focus plane in a Z-stack using a FocusAnalyzer.
+    This step finds the best focus plane in a Z-stack using FocusAnalyzer.
     It pre-configures variable_components=['z_index'] and group_by=None.
     """
 
@@ -90,31 +90,27 @@ class FocusStep(Step):
             focus_options: Dictionary of focus analyzer options:
                 - metric: Focus metric. Options: "combined", "normalized_variance",
                          "laplacian", "tenengrad", "fft" (default: "combined")
-                - roi: Region of interest as (x, y, width, height)
-                - weights: Weights for combined focus measure
             input_dir: Input directory
             output_dir: Output directory
             well_filter: Wells to process
         """
         # Initialize focus options
         focus_options = focus_options or {'metric': 'combined'}
+        metric = focus_options.get('metric', 'combined')
 
-        # Create focus analyzer
-        focus_analyzer = FocusAnalyzer(
-            metric=focus_options.get('metric', 'combined'),
-            roi=focus_options.get('roi'),
-            weights=focus_options.get('weights')
-        )
+        def process_func(images):
+            best_image, _, _ = FocusAnalyzer.select_best_focus(images, metric=metric)
+            return best_image
 
         # Initialize the Step with pre-configured parameters
         super().__init__(
-            func=(IP.create_projection, {'method': 'best_focus', 'focus_analyzer': focus_analyzer}),
+            func=(process_func, {}),
             variable_components=['z_index'],
             group_by=None,
             input_dir=input_dir,
             output_dir=output_dir,
             well_filter=well_filter,
-            name=f"Best Focus ({focus_options.get('metric', 'combined')})"
+            name=f"Best Focus ({metric})"
         )
 
 

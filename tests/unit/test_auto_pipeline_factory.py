@@ -33,10 +33,12 @@ class TestAutoPipelineFactory(unittest.TestCase):
         # Check position generation pipeline
         position_pipeline = pipelines[0]
         self.assertEqual(str(position_pipeline.input_dir), input_dir)
-        self.assertEqual(len(position_pipeline.steps), 3)  # Normalization + Composite + PositionGeneration
-        self.assertIsInstance(position_pipeline.steps[0], Step)  # Normalization
-        self.assertIsInstance(position_pipeline.steps[1], CompositeStep)
-        self.assertIsInstance(position_pipeline.steps[2], PositionGenerationStep)
+        # ZFlat + Normalization + Composite + PositionGeneration
+        self.assertEqual(len(position_pipeline.steps), 4)
+        self.assertIsInstance(position_pipeline.steps[0], ZFlatStep)
+        self.assertIsInstance(position_pipeline.steps[1], Step)  # Normalization
+        self.assertIsInstance(position_pipeline.steps[2], CompositeStep)
+        self.assertIsInstance(position_pipeline.steps[3], PositionGenerationStep)
 
         # Check stitching pipeline
         stitching_pipeline = pipelines[1]
@@ -56,9 +58,10 @@ class TestAutoPipelineFactory(unittest.TestCase):
 
         # Check position generation pipeline
         position_pipeline = pipelines[0]
-        self.assertEqual(len(position_pipeline.steps), 2)  # Only Composite + PositionGeneration
-        self.assertIsInstance(position_pipeline.steps[0], CompositeStep)
-        self.assertIsInstance(position_pipeline.steps[1], PositionGenerationStep)
+        self.assertEqual(len(position_pipeline.steps), 3)  # ZFlat + Composite + PositionGeneration
+        self.assertIsInstance(position_pipeline.steps[0], ZFlatStep)
+        self.assertIsInstance(position_pipeline.steps[1], CompositeStep)
+        self.assertIsInstance(position_pipeline.steps[2], PositionGenerationStep)
 
         # Check stitching pipeline
         stitching_pipeline = pipelines[1]
@@ -112,7 +115,7 @@ class TestAutoPipelineFactory(unittest.TestCase):
 
         # Check composite step
         position_pipeline = pipelines[0]
-        composite_step = position_pipeline.steps[1]  # After normalization
+        composite_step = position_pipeline.steps[2]  # After normalization
         self.assertIsInstance(composite_step, CompositeStep)
 
     def test_zstack_pipeline(self):
@@ -127,7 +130,8 @@ class TestAutoPipelineFactory(unittest.TestCase):
 
         # Check position generation pipeline
         position_pipeline = pipelines[0]
-        self.assertEqual(len(position_pipeline.steps), 4)  # ZFlat + Normalization + Composite + PositionGeneration
+        # ZFlat + Normalization + Composite + PositionGeneration
+        self.assertEqual(len(position_pipeline.steps), 4)
         self.assertIsInstance(position_pipeline.steps[0], ZFlatStep)
         self.assertIsInstance(position_pipeline.steps[1], Step)  # Normalization
         self.assertIsInstance(position_pipeline.steps[2], CompositeStep)
@@ -154,7 +158,8 @@ class TestAutoPipelineFactory(unittest.TestCase):
 
         # Check position generation pipeline
         position_pipeline = pipelines[0]
-        self.assertEqual(len(position_pipeline.steps), 4)  # ZFlat + Normalization + Composite + PositionGeneration
+        # ZFlat + Normalization + Composite + PositionGeneration
+        self.assertEqual(len(position_pipeline.steps), 4)
         self.assertIsInstance(position_pipeline.steps[0], ZFlatStep)
         self.assertIsInstance(position_pipeline.steps[1], Step)  # Normalization
         self.assertIsInstance(position_pipeline.steps[2], CompositeStep)
