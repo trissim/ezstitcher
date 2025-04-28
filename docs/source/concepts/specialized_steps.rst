@@ -307,6 +307,32 @@ The ``CompositeStep`` is used by the ``AutoPipelineFactory``:
 When to Use Specialized Steps
 ---------------------------
 
+Specialized steps should be used whenever possible for common operations:
+
+1. **ZFlatStep**: Use for Z-stack flattening instead of manually configuring ``variable_components=['z_index']``
+2. **FocusStep**: Use for focus detection in Z-stacks
+3. **CompositeStep**: Use for channel compositing instead of manually configuring ``variable_components=['channel']``
+
+These specialized steps provide cleaner, more readable code and ensure proper configuration. Use them with minimal parameters unless you need to override defaults.
+
+For channel-specific processing with different functions per channel, using a raw ``Step`` with a dictionary
+of functions and ``group_by='channel'`` is the appropriate approach:
+
+.. code-block:: python
+
+    # Channel-specific processing with function dictionary and group_by
+    Step(
+        name="Channel-Specific Processing",
+        func={
+            "1": process_dapi,  # Apply process_dapi to channel 1
+            "2": process_gfp    # Apply process_gfp to channel 2
+        },
+        group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
+    )
+
+For more information about function dictionaries and the ``group_by`` parameter, see :doc:`function_handling`
+and :ref:`group-by` in :doc:`step`.
+
 **Use orchestrator-specific steps when:**
 
 - You need to generate position files for stitching (``PositionGenerationStep``)
@@ -319,7 +345,7 @@ When to Use Specialized Steps
 - You want to reduce boilerplate code and simplify your pipeline
 - You prefer a more intuitive interface for common tasks
 - You're building pipelines for non-expert users
-- You're extending pipelines created by the ``AutoPipelineFactory``
+- You're creating custom pipelines with standardized components
 
 **Use raw Steps when:**
 
@@ -432,35 +458,79 @@ This automatic directory resolution makes it much easier to create effective pip
    - Consider variable components carefully when creating custom step factories
    - Test step factories thoroughly to ensure they behave as expected
 
-Extending AutoPipelineFactory Pipelines
-------------------------------------
+Using Specialized Steps in Custom Pipelines
+----------------------------------------
 
-You can extend pipelines created by ``AutoPipelineFactory`` with additional specialized steps:
+Specialized steps are designed to work seamlessly in custom pipelines. When building custom pipelines, use specialized steps for common operations instead of configuring raw Steps with variable_components:
 
 .. code-block:: python
 
-    # Create pipelines with AutoPipelineFactory
-    factory = AutoPipelineFactory(
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.image_processor import ImageProcessor as IP
+
+    # Create a custom pipeline with specialized steps
+    position_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
-        normalize=True
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Flatten Z-stacks using specialized step
+            ZFlatStep(method="max"),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(weights=[0.7, 0.3, 0]),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Custom Position Generation Pipeline"
     )
-    pipelines = factory.create_pipelines()
 
-    # Access individual pipelines
-    position_pipeline = pipelines[0]
-    assembly_pipeline = pipelines[1]
+    # Create assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
 
-    # Add a custom specialized step to the position generation pipeline
-    from ezstitcher.core.step_factories import ZFlatStep
+            # Step 2: Flatten Z-stacks using specialized step
+            ZFlatStep(method="max"),
 
-    # Add a ZFlatStep before the CompositeStep
-    position_pipeline.add_step(
-        ZFlatStep(method="max"),
-        index=1  # Insert after normalization but before composite step
+            # Step 3: Stitch images
+            ImageStitchingStep()
+        ],
+        name="Custom Assembly Pipeline"
     )
 
-    # Run the customized pipelines
-    orchestrator.run(pipelines=pipelines)
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
+
+This approach provides several benefits:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Consistency**: Specialized steps ensure consistent behavior for common operations
+
+.. note::
+   For common operations, always prefer specialized steps over raw Steps with variable_components:
+
+   - Use ``ZFlatStep`` instead of ``Step`` with ``variable_components=['z_index']``
+   - Use ``CompositeStep`` instead of ``Step`` with ``variable_components=['channel']`` for compositing
+   - Use ``FocusStep`` instead of manually implementing focus detection
+
+.. seealso::
+   - :doc:`pipeline` for more information about creating custom pipelines
+   - :doc:`pipeline_factory` for information about when to use factory vs. custom pipelines
 
 For comprehensive best practices for specialized steps, see :ref:`best-practices-specialized-steps` in the :doc:`../user_guide/best_practices` guide.
 
@@ -645,35 +715,7 @@ Alternatively, you can build custom pipelines using specialized steps:
 Using Original Images for Stitching
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes you want to process images for position generation but use the original images for stitching. With the ``AutoPipelineFactory``, you can customize the pipelines after creation:
-
-.. code-block:: python
-
-    from ezstitcher.core import AutoPipelineFactory
-    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-
-    # Create orchestrator
-    orchestrator = PipelineOrchestrator(plate_path=plate_path)
-
-    # Create a factory with default settings
-    factory = AutoPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        normalize=True
-    )
-
-    # Create the pipelines
-    pipelines = factory.create_pipelines()
-
-    # Access the image assembly pipeline
-    assembly_pipeline = pipelines[1]
-
-    # Modify the image stitching step to use original images
-    assembly_pipeline.steps[-1].input_dir = orchestrator.workspace_path
-
-    # Run the pipelines
-    orchestrator.run(pipelines=pipelines)
-
-Alternatively, you can build custom pipelines:
+Sometimes you want to process images for position generation but use the original images for stitching. The recommended approach is to build custom pipelines that explicitly specify this behavior:
 
 .. code-block:: python
 

@@ -159,38 +159,98 @@ Pipeline with Custom Normalization
     )
     pipelines = factory.create_pipelines()
 
-.. _pipeline-factory-customization:
+.. _pipeline-factory-vs-custom:
 
-Customizing Pipelines
--------------------
+Factory Pipelines vs. Custom Pipelines
+-----------------------------------
 
-You can customize the pipelines created by the ``AutoPipelineFactory`` after creation:
+EZStitcher offers two main approaches for creating stitching pipelines:
+
+1. **Using AutoPipelineFactory**: For standard workflows with configurable parameters
+2. **Building custom pipelines**: For maximum flexibility and control
+
+While both approaches are valid, they serve different purposes and should be used in different scenarios:
+
+**When to Use AutoPipelineFactory:**
+- For standard stitching workflows without custom processing steps
+- When the built-in parameters (normalize, flatten_z, z_method, etc.) are sufficient
+- For quick prototyping and getting started quickly
+- When you want to leverage pre-configured, optimized pipelines
+
+**When to Create Custom Pipelines:**
+- When you need custom processing steps beyond what AutoPipelineFactory provides
+- When you need precise control over pipeline structure
+- When you need to implement specialized workflows
+- When you want maximum readability and maintainability for complex pipelines
+
+.. important::
+   While it is technically possible to modify pipelines created by AutoPipelineFactory after creation,
+   this approach is generally not recommended. Creating custom pipelines from scratch is usually more
+   readable, maintainable, and less error-prone for any workflow that requires customization beyond
+   what AutoPipelineFactory parameters provide.
+
+For custom workflows, create pipelines from scratch instead of modifying factory pipelines:
 
 .. code-block:: python
 
-    # Create basic pipelines
-    factory = AutoPipelineFactory(input_dir=orchestrator.workspace_path)
-    pipelines = factory.create_pipelines()
-
-    # Access individual pipelines
-    position_pipeline = pipelines[0]
-    assembly_pipeline = pipelines[1]
-
-    # Add custom step to position generation pipeline
+    from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
-    position_pipeline.add_step(
-        Step(
-            func=IP.sharpen,
-            name="Sharpen Images"
-        )
+    # Create a custom pipeline with specialized steps
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Custom processing (example)
+            Step(
+                name="Custom Enhancement",
+                func=custom_enhance
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(weights=[0.7, 0.3, 0]),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Custom Position Generation Pipeline"
     )
 
-    # Run the modified pipelines
-    orchestrator.run(pipelines=pipelines)
+    # Create assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
 
-This approach allows you to leverage the convenience of the factory while still maintaining the flexibility to customize the pipelines for specific needs.
+            # Step 2: Flatten Z-stacks (if needed)
+            ZFlatStep(method="max"),
+
+            # Step 3: Stitch images
+            ImageStitchingStep()
+        ],
+        name="Custom Assembly Pipeline"
+    )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
+
+This approach provides several benefits:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Robustness**: No risk of unexpected behavior from modifying factory pipelines
 
 .. seealso::
    - :doc:`pipeline` for more information about pipelines

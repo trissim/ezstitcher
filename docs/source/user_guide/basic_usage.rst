@@ -2,6 +2,8 @@
 Basic Usage
 ==========
 
+This guide provides detailed examples of using ezstitcher for common stitching tasks. For a minimal working example, see the :doc:`../getting_started/quick_start` guide.
+
 EZStitcher offers two main approaches for creating stitching pipelines:
 
 1. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
@@ -107,6 +109,15 @@ For more information about the pipeline factory, see :ref:`pipeline-factory-conc
 Building Custom Pipelines
 ^^^^^^^^^^^^^^^^^^^^^
 
+.. note::
+   For common operations like Z-stack flattening and channel compositing, use specialized step subclasses
+   like ``ZFlatStep`` and ``CompositeStep`` instead of manually configuring ``variable_components``.
+
+   For channel-specific processing, using a dictionary of functions with ``group_by='channel'`` is the
+   appropriate approach, as shown in the Channel-Specific Processing section below.
+
+   For more information about specialized steps, see :doc:`../concepts/specialized_steps`.
+
 For maximum flexibility, you can build custom pipelines by directly specifying each step:
 
 .. code-block:: python
@@ -138,7 +149,7 @@ For maximum flexibility, you can build custom pipelines by directly specifying e
         input_dir=orchestrator.workspace_path,
         steps=[
             # Step 1: Flatten Z-stacks (always included for position generation)
-            ZFlatStep(method="max"),
+            ZFlatStep(),
 
             # Step 2: Normalize image intensities
             Step(
@@ -191,21 +202,38 @@ Finally, run the pipeline:
 Choosing Between Approaches
 ------------------------
 
-Both approaches have their strengths:
+Both approaches have their strengths, but they serve different purposes and should be used in different scenarios:
 
-**AutoPipelineFactory:**
-- Convenient for common workflows
-- Requires less code
-- Handles many details automatically
-- Good for getting started quickly
+**When to Use AutoPipelineFactory:**
+- For standard stitching workflows without custom processing steps
+- When the built-in parameters (normalize, flatten_z, z_method, etc.) are sufficient
+- For quick prototyping and getting started quickly
+- When you want to leverage pre-configured, optimized pipelines
 
-**Custom Pipelines:**
-- Maximum flexibility and control
-- Terse and elegant for specific use cases
-- Direct access to all pipeline features
-- Ability to create highly customized workflows
+**When to Create Custom Pipelines:**
+- When you need custom processing steps beyond what AutoPipelineFactory provides
+- When you need precise control over pipeline structure
+- When you need to implement specialized workflows
+- When you want maximum readability and maintainability for complex pipelines
 
-The choice between them depends on your specific requirements and preferences. Many users start with ``AutoPipelineFactory`` for simple tasks and move to custom pipelines as their needs become more specialized.
+.. important::
+   While it is technically possible to modify pipelines created by AutoPipelineFactory after creation,
+   this approach is generally not recommended. Creating custom pipelines from scratch is usually more
+   readable, maintainable, and less error-prone for any workflow that requires customization beyond
+   what AutoPipelineFactory parameters provide.
+
+For custom workflows, create pipelines from scratch instead of modifying factory pipelines. This approach provides several benefits:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Robustness**: No risk of unexpected behavior from modifying factory pipelines
+
+Many users start with ``AutoPipelineFactory`` for simple tasks and move to custom pipelines as their needs become more specialized.
+
+.. seealso::
+   - :doc:`../concepts/pipeline_factory` for more information about the pipeline factory
+   - :doc:`../concepts/pipeline` for more information about creating custom pipelines
 
 Understanding Pipeline Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -458,10 +486,10 @@ Next Steps
 
 Now that you understand the basics of using EZStitcher, you can:
 
-1. **Learn about specialized steps**: For information about specialized steps like ZFlatStep, FocusStep, and CompositeStep, see :doc:`../concepts/specialized_steps`.
+1. **Explore intermediate usage**: For more advanced techniques like channel-specific processing and Z-stack handling, see :doc:`intermediate_usage`.
 
 2. **Study pipeline concepts**: For a deeper understanding of pipelines, see :doc:`../concepts/pipeline`.
 
-3. **Dive into intermediate usage**: For more advanced techniques like channel-specific processing and Z-stack handling, see :doc:`intermediate_usage`.
+3. **Learn about specialized steps**: For information about specialized steps like ZFlatStep, FocusStep, and CompositeStep, see :doc:`../concepts/specialized_steps`.
 
 4. **Follow the learning path**: For a comprehensive learning path that will guide you through intermediate and advanced topics, see :ref:`learning-path` in the introduction.

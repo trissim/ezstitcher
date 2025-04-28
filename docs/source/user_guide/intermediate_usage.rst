@@ -29,6 +29,13 @@ Both approaches are valid and powerful, with different strengths depending on yo
 Z-Stack Processing
 ----------------
 
+.. note::
+   For Z-stack flattening, use the specialized ``ZFlatStep`` class instead of manually configuring
+   a raw ``Step`` with ``variable_components=['z_index']``. This makes your code more readable and
+   ensures proper configuration.
+
+   For more information about ``ZFlatStep``, see :doc:`../concepts/specialized_steps`.
+
 Z-stacks can be processed in various ways, including maximum projection, mean projection, and focus detection.
 
 Using AutoPipelineFactory
@@ -570,6 +577,24 @@ Example with different focus metrics:
 Channel-Specific Processing
 -------------------------
 
+.. note::
+   For channel compositing, use the specialized ``CompositeStep`` class instead of manually configuring
+   a raw ``Step`` with ``variable_components=['channel']``.
+
+   For channel-specific processing with different functions per channel, using a dictionary of functions
+   with ``group_by='channel'`` is the appropriate approach, as shown in the examples below.
+
+   There are two distinct use cases for channel processing:
+
+   1. **Individual channel processing before compositing**: Use ``Step`` with ``variable_components=['channel']``
+      to process each channel separately before they are combined. This is shown in examples where we normalize
+      each channel individually before creating a composite.
+
+   2. **Channel compositing**: Use ``CompositeStep`` to combine multiple channels into a single composite image.
+      This specialized step automatically sets ``variable_components=['channel']`` internally.
+
+   For more information about specialized steps, see :doc:`../concepts/specialized_steps`.
+
 Different fluorescence channels often require different processing approaches. EZStitcher provides several ways to apply channel-specific processing.
 
 For detailed explanations of function handling patterns, including dictionaries of functions, see :doc:`../concepts/function_handling`. For a comprehensive guide to all multi-channel operations, see :ref:`operation-composite` in the :doc:`../api/image_processing_operations` documentation.
@@ -1018,46 +1043,87 @@ Here's an example of a terse custom pipeline that performs channel-specific proc
     # Run the pipelines
     orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
-Customizing Pre-Built Pipelines
----------------------------
+Creating Custom Pipelines for Specific Needs
+------------------------------------------
 
-You can customize pipelines regardless of how they were created:
-
-Customizing AutoPipelineFactory Pipelines
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can customize pipelines created by ``AutoPipelineFactory`` to add additional processing steps or modify existing steps:
+For workflows that require custom processing steps or specialized configurations, creating custom pipelines from scratch is the recommended approach:
 
 .. code-block:: python
 
-    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
-    # Create pipelines with AutoPipelineFactory
-    factory = AutoPipelineFactory(
+    # Define a custom enhancement function
+    def custom_enhance(images, sigma=1.5, contrast_factor=2.0):
+        """Custom enhancement function that combines sharpening and contrast adjustment."""
+        enhanced = []
+        for img in images:
+            # Apply sharpening
+            sharpened = IP.sharpen(img, sigma=sigma)
+            # Apply contrast adjustment
+            enhanced_img = IP.adjust_contrast(sharpened, factor=contrast_factor)
+            enhanced.append(enhanced_img)
+        return enhanced
+
+    # Create a custom position generation pipeline
+    position_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
-        normalize=True
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Apply custom enhancement
+            Step(
+                name="Custom Enhancement",
+                func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(weights=[0.7, 0.3, 0]),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Custom Position Generation Pipeline"
     )
-    pipelines = factory.create_pipelines()
 
-    # Access individual pipelines
-    position_pipeline = pipelines[0]
-    assembly_pipeline = pipelines[1]
+    # Create a custom assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched",
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
 
-    # Add a custom processing step to the position generation pipeline
-    position_pipeline.add_step(
-        Step(
-            name="Custom Enhancement",
-            func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
-        ),
-        index=1  # Insert after normalization but before composite step
+            # Step 2: Stitch images
+            ImageStitchingStep()
+        ],
+        name="Custom Assembly Pipeline"
     )
 
-    # Run the customized pipelines
-    orchestrator.run(pipelines=pipelines)
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
-This approach combines the simplicity of ``AutoPipelineFactory`` with the flexibility of custom processing.
+This approach provides several benefits:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Robustness**: No risk of unexpected behavior from modifying factory pipelines
+
+.. important::
+   While it is technically possible to modify pipelines created by AutoPipelineFactory after creation,
+   this approach is generally not recommended. Creating custom pipelines from scratch is usually more
+   readable, maintainable, and less error-prone for any workflow that requires customization beyond
+   what AutoPipelineFactory parameters provide.
 
 Customizing Custom Pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1265,57 +1331,88 @@ A complete workflow that combines Z-stack processing, channel-specific processin
     # Run the pipelines
     orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
-    # Alternatively, use AutoPipelineFactory and customize the pipelines
-    from ezstitcher.core import AutoPipelineFactory
+    # Alternatively, create another set of custom pipelines with different configuration
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.image_processor import ImageProcessor as IP
+    from ezstitcher.core.utils import stack
 
-    # Create a factory for a complete workflow
-    factory = AutoPipelineFactory(
+    # Create a custom position generation pipeline
+    position_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
-        normalize=True,
-        flatten_z=True,
-        z_method="max",
-        channel_weights=[0.6, 0.4]  # Custom weighting: 60% channel 1, 40% channel 2
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Flatten Z-stacks
+            ZFlatStep(method="max"),
+
+            # Step 3: Channel-specific enhancement
+            Step(
+                name="Channel Enhancement",
+                func={
+                    "1": (stack(IP.tophat), {'size': 15}),
+                    "2": (stack(IP.sharpen), {'sigma': 1.0, 'amount': 1.5})
+                },
+                group_by='channel',
+            ),
+
+            # Step 4: Create composite for position generation
+            CompositeStep(weights=[0.6, 0.4]),  # Custom weighting: 60% channel 1, 40% channel 2
+
+            # Step 5: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Custom Position Generation Pipeline"
     )
-    pipelines = factory.create_pipelines()
 
-    # Access individual pipelines for customization
-    position_pipeline = pipelines[0]
-    assembly_pipeline = pipelines[1]
+    # Create a custom assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
 
-    # Add channel-specific enhancement to position generation pipeline
-    position_pipeline.add_step(
-        Step(
-            name="Channel Enhancement",
-            func={
-                "1": (stack(IP.tophat), {'size': 15}),
-                "2": (stack(IP.sharpen), {'sigma': 1.0, 'amount': 1.5})
-            },
-            group_by='channel',
-        ),
-        index=1  # Insert after normalization but before composite step
+            # Step 2: Flatten Z-stacks
+            ZFlatStep(method="max"),
+
+            # Step 3: Stitch images
+            ImageStitchingStep()
+        ],
+        name="Custom Assembly Pipeline"
     )
 
-    # Run the customized pipelines
-    orchestrator.run(pipelines=pipelines)
+    # Run the custom pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 Choosing the Right Approach for Intermediate Tasks
 ---------------------------------------------
 
 When working on intermediate-level tasks, consider these factors when choosing between approaches:
 
-**Choose Custom Pipelines When:**
-- You need precise control over each step
-- You're implementing specialized workflows
-- You want the most concise code for your specific case
-- You need to use features not directly exposed by AutoPipelineFactory
-
 **Choose AutoPipelineFactory When:**
 - You're working with standard stitching workflows
+- The built-in parameters (normalize, flatten_z, z_method, etc.) are sufficient
 - You want to minimize boilerplate code
 - You prefer a higher-level interface
-- You're building on common patterns
 
-Many experienced users mix both approaches, using AutoPipelineFactory as a starting point for standard workflows and custom pipelines for specialized tasks.
+**Choose Custom Pipelines When:**
+- You need custom processing steps beyond what AutoPipelineFactory provides
+- You need precise control over pipeline structure
+- You need to implement specialized workflows
+- You want maximum readability and maintainability for complex pipelines
+
+.. important::
+   Creating custom pipelines from scratch is the recommended approach for any workflow that requires
+   customization beyond what AutoPipelineFactory parameters provide. This approach is more readable,
+   maintainable, and less error-prone than modifying factory-created pipelines.
 
 Next Steps
 ---------

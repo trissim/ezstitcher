@@ -66,38 +66,10 @@ For details about specific components, see:
 * :doc:`../concepts/pipeline` - Details about Pipelines
 * :doc:`../concepts/step` - Details about Steps
 
-Installation and Setup
+Installation
 --------------------
 
-EZStitcher requires Python 3.11 or higher. The simplest way to install EZStitcher is directly from the Git repository using pyenv and pip.
-
-### Quick Installation
-
-1. **Set up a Python environment with pyenv**:
-
-```bash
-# Install Python 3.11 with pyenv
-pyenv install 3.11.0
-
-# Create a virtual environment
-pyenv virtualenv 3.11.0 ezstitcher-env
-
-# Activate the environment
-pyenv local ezstitcher-env
-```
-
-2. **Install EZStitcher from the Git repository**:
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/ezstitcher.git
-cd ezstitcher
-
-# Install the package and dependencies
-pip install -e .
-```
-
-All dependencies will be automatically installed from the requirements.txt file included in the repository.
+EZStitcher requires Python 3.11 or higher. For installation instructions, see the :doc:`../getting_started/installation` guide.
 
 Getting Started
 ---------------------
@@ -109,122 +81,9 @@ EZStitcher offers two main approaches for creating stitching pipelines:
 
 Both approaches are valid and powerful, with different strengths depending on your needs.
 
-Using AutoPipelineFactory:
-^^^^^^^^^^^^^^^^^^^^^^^
+For a quick introduction with a minimal working example, see the :doc:`../getting_started/quick_start` guide.
 
-The ``AutoPipelineFactory`` creates pre-configured pipelines for common workflows:
-
-.. code-block:: python
-
-    from ezstitcher.core import AutoPipelineFactory
-    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-    from pathlib import Path
-
-    # Path to your plate folder
-    plate_path = Path("/path/to/your/plate")
-
-    # Create orchestrator
-    orchestrator = PipelineOrchestrator(plate_path=plate_path)
-
-    # Create a factory with default settings
-    factory = AutoPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
-        normalize=True  # Apply normalization (default)
-    )
-
-    # Create the pipelines
-    pipelines = factory.create_pipelines()
-
-    # Run the pipelines
-    orchestrator.run(pipelines=pipelines)
-
-Building Custom Pipelines:
-^^^^^^^^^^^^^^^^^^^^^
-
-For maximum flexibility, you can build custom pipelines by directly specifying each step:
-
-.. code-block:: python
-
-    from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
-    from ezstitcher.core.image_processor import ImageProcessor as IP
-
-    # Create position generation pipeline
-    position_pipeline = Pipeline(
-        input_dir=orchestrator.workspace_path,
-        steps=[
-            # Step 1: Flatten Z-stacks (always included for position generation)
-            ZFlatStep(method="max"),
-
-            # Step 2: Normalize image intensities
-            Step(
-                name="Normalize Images",
-                func=IP.stack_percentile_normalize
-            ),
-
-            # Step 3: Create composite for position generation
-            CompositeStep(),
-
-            # Step 4: Generate positions
-            PositionGenerationStep()
-        ],
-        name="Position Generation Pipeline"
-    )
-
-    # Get the position files directory
-    positions_dir = position_pipeline.steps[-1].output_dir
-
-    # Create image assembly pipeline
-    assembly_pipeline = Pipeline(
-        input_dir=orchestrator.workspace_path,
-        steps=[
-            # Step 1: Normalize image intensities
-            Step(
-                name="Normalize Images",
-                func=IP.stack_percentile_normalize
-            ),
-
-            # Step 2: Stitch images using position files
-            ImageStitchingStep(positions_dir=positions_dir)
-        ],
-        name="Image Assembly Pipeline"
-    )
-
-    # Run the pipelines
-    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
-
-The ``AutoPipelineFactory`` automatically creates two pipelines:
-
-1. A pipeline for generating position files
-2. A pipeline for stitching images using those position files
-
-This approach handles all common stitching scenarios, including:
-
-* Single-channel and multi-channel data
-* Single Z-plane and Z-stack data
-* Various projection methods for Z-stacks (max, mean, focus detection, etc.)
-* Normalization and preprocessing
-* Automatic directory management
-
-For detailed examples, see :doc:`basic_usage`.
-
-Custom pipelines offer maximum flexibility and control:
-
-* Complete control over each step in the pipeline
-* Ability to create highly customized workflows
-* Terse and elegant code for specific use cases
-* Direct access to all pipeline features
-* Flexibility to combine any processing functions
-
-Both approaches are valid and powerful, with different strengths depending on your needs. The choice between them depends on your specific requirements and preferences. For detailed examples of custom pipelines, see :doc:`intermediate_usage` and :doc:`advanced_usage`.
-
-**Expected Output:**
-
-* Processed images will be saved in the workspace directory with the suffix `_out` (e.g., `plate_workspace_out`)
-* Position files will be saved in the workspace directory with the suffix `_positions` (e.g., `plate_workspace_positions`)
-* Stitched images will be saved in the output directory specified (e.g., `plate_stitched`)
+For detailed examples of both approaches, including common use cases and customization options, see the :doc:`basic_usage` guide.
 
 Key Concepts
 -----------

@@ -7,8 +7,8 @@ EZStitcher is a Python package for stitching microscopy images with support for 
    :width: 400
    :alt: EZStitcher Logo
 
-Getting Started with AutoPipelineFactory
---------------------------------------
+Getting Started Quickly
+--------------------
 
 The fastest way to get started with EZStitcher is to use the ``AutoPipelineFactory``:
 
@@ -17,22 +17,15 @@ The fastest way to get started with EZStitcher is to use the ``AutoPipelineFacto
     from ezstitcher.core import AutoPipelineFactory
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 
-    # Create orchestrator
+    # Create orchestrator and factory
     orchestrator = PipelineOrchestrator(plate_path="path/to/microscopy/data")
+    factory = AutoPipelineFactory(input_dir=orchestrator.workspace_path)
 
-    # Create factory with default settings
-    factory = AutoPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        normalize=True
-    )
-
-    # Create pipelines
+    # Create and run pipelines
     pipelines = factory.create_pipelines()
-
-    # Run pipelines
     orchestrator.run(pipelines=pipelines)
 
-This approach handles all common stitching scenarios with minimal configuration. For more details, see :doc:`user_guide/basic_usage`.
+For a complete quick start guide, see :doc:`getting_started/quick_start`.
 
 Key Features
 ------------
@@ -49,22 +42,24 @@ Key Features
 Key Resources
 -----------
 
-* :doc:`user_guide/basic_usage` - Start here for quick examples using AutoPipelineFactory
+* :doc:`getting_started/quick_start` - Get started in minutes with a minimal example
+* :doc:`user_guide/introduction` - Learn about ezstitcher's architecture and concepts
+* :doc:`user_guide/basic_usage` - Explore detailed examples and common use cases
 * :doc:`concepts/pipeline_factory` - Learn about the AutoPipelineFactory concept
-* :doc:`api/pipeline_factory` - API reference for AutoPipelineFactory
 
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started
 
+   getting_started/quick_start
    getting_started/installation
-   user_guide/basic_usage
 
 .. toctree::
    :maxdepth: 2
    :caption: User Guide
 
    user_guide/introduction
+   user_guide/basic_usage
    user_guide/intermediate_usage
    user_guide/advanced_usage
    user_guide/best_practices

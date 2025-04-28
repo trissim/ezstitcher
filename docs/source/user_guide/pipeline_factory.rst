@@ -114,36 +114,74 @@ Important behaviors to note:
 - Channel compositing is always performed for position generation
 - If ``channel_weights`` is None, weights are distributed evenly across all channels
 
-Customizing Pipelines
+Creating Custom Pipelines
 -------------------
 
-You can customize the pipelines created by the ``AutoPipelineFactory`` after creation:
+For workflows that require customization beyond what AutoPipelineFactory parameters provide, creating custom pipelines from scratch is the recommended approach:
 
 .. code-block:: python
 
-    # Create basic pipelines
-    factory = AutoPipelineFactory(input_dir=orchestrator.workspace_path)
-    pipelines = factory.create_pipelines()
-
-    # Access individual pipelines
-    position_pipeline = pipelines[0]
-    assembly_pipeline = pipelines[1]
-
-    # Add custom step to position generation pipeline
+    from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
-    position_pipeline.add_step(
-        Step(
-            func=IP.sharpen,
-            name="Sharpen Images"
-        )
+    # Create a custom position generation pipeline
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Apply custom enhancement
+            Step(
+                name="Sharpen Images",
+                func=IP.sharpen
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(weights=[0.7, 0.3, 0]),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Custom Position Generation Pipeline"
     )
 
-    # Run the modified pipelines
-    orchestrator.run(pipelines=pipelines)
+    # Create a custom assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
 
-This approach allows you to leverage the convenience of the factory while still maintaining the flexibility to customize the pipelines for specific needs.
+            # Step 2: Stitch images
+            ImageStitchingStep()
+        ],
+        name="Custom Assembly Pipeline"
+    )
+
+    # Run the custom pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
+
+This approach provides several benefits:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Robustness**: No risk of unexpected behavior from modifying factory pipelines
+
+.. important::
+   While it is technically possible to modify pipelines created by AutoPipelineFactory after creation,
+   this approach is generally not recommended. Creating custom pipelines from scratch is usually more
+   readable, maintainable, and less error-prone for any workflow that requires customization beyond
+   what AutoPipelineFactory parameters provide.
 
 .. seealso::
    - :ref:`pipeline-factory-concept` for more information about pipeline factories

@@ -13,45 +13,66 @@ AutoPipelineFactory Best Practices
 
 For comprehensive information on AutoPipelineFactory in EZStitcher, see :doc:`../concepts/pipeline_factory`. Here are the key best practices:
 
-1. **Use AutoPipelineFactory as your first approach**:
+1. **Choose the right pipeline creation approach**:
 
-   - Start with AutoPipelineFactory for all common stitching workflows
-   - Only fall back to manual pipeline creation for highly specialized needs
-
-   .. code-block:: python
-
-       # Good: Use AutoPipelineFactory for common workflows
-       factory = AutoPipelineFactory(
-           input_dir=orchestrator.workspace_path,
-           normalize=True
-       )
-       pipelines = factory.create_pipelines()
-
-2. **Customize pipelines after creation**:
-
-   - Access and modify pipelines created by AutoPipelineFactory
-   - Add custom steps or modify existing steps as needed
+   - Use AutoPipelineFactory for standard workflows without custom processing steps
+   - Create custom pipelines from scratch for workflows that require customization
+   - Avoid modifying pipelines created by AutoPipelineFactory
 
    .. code-block:: python
 
-       # Create pipelines with AutoPipelineFactory
+       # Good: Use AutoPipelineFactory for standard workflows
        factory = AutoPipelineFactory(
            input_dir=orchestrator.workspace_path,
-           normalize=True
+           normalize=True,
+           flatten_z=True,
+           z_method="max"
        )
        pipelines = factory.create_pipelines()
 
-       # Access individual pipelines
-       position_pipeline = pipelines[0]
-       assembly_pipeline = pipelines[1]
+       # Good: Create custom pipelines for specialized workflows
+       position_pipeline = Pipeline(
+           input_dir=orchestrator.workspace_path,
+           steps=[
+               # Custom steps here
+               ZFlatStep(method="max"),
+               Step(name="Custom Processing", func=custom_process),
+               CompositeStep(),
+               PositionGenerationStep()
+           ]
+       )
 
-       # Add custom step to position generation pipeline
-       position_pipeline.add_step(
-           Step(
-               name="Custom Enhancement",
-               func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
-           ),
-           index=1  # Insert after normalization but before composite step
+2. **Create custom pipelines for specialized workflows**:
+
+   - Build custom pipelines from scratch for specialized workflows
+   - Use specialized steps for common operations
+   - Explicitly define the pipeline structure for maximum readability
+
+   .. code-block:: python
+
+       # Create custom pipelines for specialized workflows
+       position_pipeline = Pipeline(
+           input_dir=orchestrator.workspace_path,
+           steps=[
+               # Step 1: Normalize images
+               Step(
+                   name="Normalize Images",
+                   func=IP.stack_percentile_normalize
+               ),
+
+               # Step 2: Apply custom enhancement
+               Step(
+                   name="Custom Enhancement",
+                   func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+               ),
+
+               # Step 3: Create composite for position generation
+               CompositeStep(weights=[0.7, 0.3, 0]),
+
+               # Step 4: Generate positions
+               PositionGenerationStep()
+           ],
+           name="Custom Position Generation Pipeline"
        )
 
 3. **Configure parameters appropriately**:

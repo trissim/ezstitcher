@@ -4,6 +4,15 @@ Advanced Usage
 
 This section explores advanced features of EZStitcher for users who need to extend its functionality or optimize performance.
 
+.. note::
+   For common operations like Z-stack flattening and channel compositing, use specialized step subclasses
+   like ``ZFlatStep`` and ``CompositeStep`` instead of manually configuring ``variable_components``.
+
+   For channel-specific processing, using a dictionary of functions with ``group_by='channel'`` is the
+   appropriate approach, as shown in various examples in this guide.
+
+   For more information about specialized steps, see :doc:`../concepts/specialized_steps`.
+
 Introduction
 -----------
 
@@ -75,42 +84,110 @@ Here's a simple example of a custom processing function:
 
         return result
 
-Using Custom Functions with AutoPipelineFactory
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Creating Advanced Custom Pipelines
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can use custom processing functions with ``AutoPipelineFactory`` by customizing the pipelines it creates:
+For advanced workflows that require custom processing functions, creating custom pipelines from scratch is the recommended approach:
 
 .. code-block:: python
 
-    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
 
-    # Create orchestrator
-    orchestrator = PipelineOrchestrator(plate_path=Path("/path/to/plate"))
+    # Define custom processing functions
+    def custom_denoise(images, strength=0.5):
+        """Custom denoising function."""
+        denoised = []
+        for img in images:
+            # Apply denoising (example implementation)
+            from skimage.restoration import denoise_nl_means
+            denoised_img = denoise_nl_means(img, h=strength)
+            denoised.append(denoised_img)
+        return denoised
 
-    # Create pipelines with AutoPipelineFactory
-    factory = AutoPipelineFactory(
+    def custom_enhance(images, sigma=1.5, contrast_factor=2.0):
+        """Custom enhancement function."""
+        enhanced = []
+        for img in images:
+            # Apply sharpening
+            sharpened = IP.sharpen(img, sigma=sigma)
+            # Apply contrast adjustment
+            enhanced_img = IP.adjust_contrast(sharpened, factor=contrast_factor)
+            enhanced.append(enhanced_img)
+        return enhanced
+
+    # Create a custom position generation pipeline with advanced processing
+    position_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
-        normalize=True
+        steps=[
+            # Step 1: Apply custom denoising
+            Step(
+                name="Custom Denoising",
+                func=(custom_denoise, {'strength': 0.5})
+            ),
+
+            # Step 2: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 3: Apply custom enhancement
+            Step(
+                name="Custom Enhancement",
+                func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+            ),
+
+            # Step 4: Create composite for position generation
+            CompositeStep(weights=[0.7, 0.3, 0]),
+
+            # Step 5: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Advanced Position Generation Pipeline"
     )
-    pipelines = factory.create_pipelines()
 
-    # Access the position generation pipeline
-    position_pipeline = pipelines[0]
+    # Create a custom assembly pipeline with advanced processing
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=Path("path/to/output"),
+        steps=[
+            # Step 1: Apply custom denoising
+            Step(
+                name="Custom Denoising",
+                func=(custom_denoise, {'strength': 0.5})
+            ),
 
-    # Add a custom processing step
-    position_pipeline.add_step(
-        Step(
-            name="Custom Enhancement",
-            func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
-        ),
-        index=1  # Insert after normalization but before composite step
+            # Step 2: Normalize images
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 3: Stitch images
+            ImageStitchingStep()
+        ],
+        name="Advanced Assembly Pipeline"
     )
 
-    # Run the customized pipelines
-    orchestrator.run(pipelines=pipelines)
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
+
+This approach provides several benefits for advanced workflows:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Robustness**: No risk of unexpected behavior from modifying factory pipelines
+
+.. important::
+   While it is technically possible to modify pipelines created by AutoPipelineFactory after creation,
+   this approach is generally not recommended for advanced workflows. Creating custom pipelines from scratch
+   is usually more readable, maintainable, and less error-prone for any workflow that requires customization
+   beyond what AutoPipelineFactory parameters provide.
 
 Using Custom Functions in Custom Pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -709,13 +786,17 @@ When working on advanced-level tasks, consider these factors when choosing betwe
 - You're working with custom processing functions
 - You need precise control over pipeline structure
 - You're implementing conditional processing logic
+- You want maximum readability and maintainability for complex pipelines
 
 **Choose AutoPipelineFactory When:**
-- You want to extend standard workflows with custom functionality
-- You prefer to start with a working pipeline and customize it
-- You're building on common patterns with advanced parameters
+- You're working with standard stitching workflows
+- The built-in parameters (normalize, flatten_z, z_method, etc.) are sufficient
+- You want to minimize boilerplate code
+- You prefer a higher-level interface
 
-Both approaches are powerful for advanced tasks, and many experienced users combine them based on specific requirements.
+.. important::
+   For advanced workflows that require custom processing steps, creating custom pipelines from scratch
+   is the recommended approach. This provides maximum flexibility, readability, and maintainability.
 
 Next Steps
 ----------
