@@ -51,7 +51,6 @@ Fluorescence microscopy captures images at different wavelengths to visualize di
 Key concepts:
 
 - **Channel**: A specific wavelength or color used for imaging
-- **Channel ID**: An identifier for a channel (e.g., "1", "2", "DAPI", "GFP")
 - **Composite**: A combined image created from multiple channels
 
 EZStitcher can:

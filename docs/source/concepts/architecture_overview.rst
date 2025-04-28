@@ -36,17 +36,31 @@ When you run a pipeline, data flows through the steps in sequence. Each step pro
 Core Components
 --------------
 
+Pipeline Management:
 - **PipelineOrchestrator**: Coordinates the entire workflow and manages plate-specific operations
 - **Pipeline**: A sequence of processing steps that are executed in order
-- **Step**: A single processing operation that can be applied to images
+- **PipelineFactory**: Creates pre-configured pipelines for common workflows
 - **ProcessingContext**: Maintains state during pipeline execution
-- **MicroscopeHandler**: Handles microscope-specific functionality
-- **Stitcher**: Performs image stitching
-- **ImageProcessor**: Provides static image processing functions
-- **FileSystemManager**: Handles file system operations and image loading
-- **FocusAnalyzer**: Provides static focus detection methods for Z-stacks
 
-These components work together to process microscopy images in a flexible and extensible way.
+Step Components:
+- **Step**: A single processing operation that can be applied to images
+- **SpecializedSteps**: Provides optimized implementations for common operations
+
+Image Processing:
+- **ImageProcessor**: Provides static image processing functions
+- **FocusAnalyzer**: Provides static focus detection methods for Z-stacks
+- **Stitcher**: Performs image stitching
+
+Infrastructure:
+- **MicroscopeHandler**: Handles microscope-specific functionality
+- **FileSystemManager**: Handles file system operations and image loading
+- **Config**: Manages configuration settings for various components
+
+These components work together to process microscopy images in a flexible and extensible way. The organization follows the typical workflow:
+1. Pipeline setup and management
+2. Step definition and execution
+3. Image processing operations
+4. Supporting infrastructure
 
 PipelineOrchestrator
 ------------------
@@ -84,8 +98,11 @@ EZStitcher's architecture is designed around a modular, composable API that allo
 - **Specialized Steps**: EZStitcher provides specialized steps for common tasks:
   - **PositionGenerationStep**: Analyzes images to generate position files describing how tiles fit together
   - **ImageStitchingStep**: Assembles processed images into a single stitched image using position files
+  - **ZFlatStep**: Handles Z-stack flattening with pre-configured projection methods
+  - **FocusStep**: Performs focus-based Z-stack processing using focus detection algorithms
+  - **CompositeStep**: Creates composite images from multiple channels with configurable weights
 
-  These specialized steps can be seamlessly mixed with regular processing steps in the same pipeline, allowing you to combine image processing, position generation, and image assembly in a single workflow.
+  These specialized steps can be seamlessly mixed with regular processing steps in the same pipeline, allowing you to combine image processing, Z-stack handling, channel compositing, position generation, and image assembly in a single workflow.
 
 **Workflow Composition**
 
