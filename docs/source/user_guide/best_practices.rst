@@ -6,12 +6,140 @@ Best Practices
 
 This guide provides comprehensive best practices for using EZStitcher effectively.
 
+.. _best-practices-autopipelinefactory:
+
+AutoPipelineFactory Best Practices
+--------------------------------
+
+For comprehensive information on AutoPipelineFactory in EZStitcher, see :doc:`../concepts/pipeline_factory`. Here are the key best practices:
+
+1. **Use AutoPipelineFactory as your first approach**:
+
+   - Start with AutoPipelineFactory for all common stitching workflows
+   - Only fall back to manual pipeline creation for highly specialized needs
+
+   .. code-block:: python
+
+       # Good: Use AutoPipelineFactory for common workflows
+       factory = AutoPipelineFactory(
+           input_dir=orchestrator.workspace_path,
+           normalize=True
+       )
+       pipelines = factory.create_pipelines()
+
+2. **Customize pipelines after creation**:
+
+   - Access and modify pipelines created by AutoPipelineFactory
+   - Add custom steps or modify existing steps as needed
+
+   .. code-block:: python
+
+       # Create pipelines with AutoPipelineFactory
+       factory = AutoPipelineFactory(
+           input_dir=orchestrator.workspace_path,
+           normalize=True
+       )
+       pipelines = factory.create_pipelines()
+
+       # Access individual pipelines
+       position_pipeline = pipelines[0]
+       assembly_pipeline = pipelines[1]
+
+       # Add custom step to position generation pipeline
+       position_pipeline.add_step(
+           Step(
+               name="Custom Enhancement",
+               func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+           ),
+           index=1  # Insert after normalization but before composite step
+       )
+
+3. **Configure parameters appropriately**:
+
+   - Set `flatten_z=True` when working with Z-stacks
+   - Use `z_method` to control Z-stack processing method
+   - Set `channel_weights` to control which channels contribute to the reference image
+
+   .. code-block:: python
+
+       # Configure AutoPipelineFactory for Z-stacks
+       factory = AutoPipelineFactory(
+           input_dir=orchestrator.workspace_path,
+           flatten_z=True,
+           z_method="max"  # Use maximum intensity projection
+       )
+
+       # Configure AutoPipelineFactory for multi-channel data
+       factory = AutoPipelineFactory(
+           input_dir=orchestrator.workspace_path,
+           channel_weights=[0.7, 0.3, 0]  # Use only first two channels for reference image
+       )
+
+4. **Encapsulate factory creation in functions**:
+
+   - Create reusable functions for common factory configurations
+   - This makes your code more maintainable and easier to understand
+
+   .. code-block:: python
+
+       def create_stitching_pipelines(plate_path, normalize=True, flatten_z=False, z_method="max"):
+           """Create pipelines for stitching with configurable parameters."""
+           # Create orchestrator
+           orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+           # Create factory with specified parameters
+           factory = AutoPipelineFactory(
+               input_dir=orchestrator.workspace_path,
+               normalize=normalize,
+               flatten_z=flatten_z,
+               z_method=z_method
+           )
+
+           # Create and return pipelines
+           return orchestrator, factory.create_pipelines()
+
+       # Usage
+       orchestrator, pipelines = create_stitching_pipelines(
+           plate_path=plate_path,
+           normalize=True,
+           flatten_z=True,
+           z_method="max"
+       )
+       orchestrator.run(pipelines=pipelines)
+
 .. _best-practices-pipeline:
 
 Pipeline Best Practices
 --------------------
 
+.. note::
+   While manual pipeline creation provides maximum flexibility, AutoPipelineFactory is the recommended approach
+   for most use cases. See :ref:`best-practices-autopipelinefactory` for best practices when using AutoPipelineFactory.
+   The following best practices apply when you need to create pipelines manually.
+
 1. **Parameterize your pipelines**: Make key parameters configurable
+
+   Using AutoPipelineFactory:
+
+   .. code-block:: python
+
+       def create_stitching_pipelines(plate_path, normalize=True, flatten_z=False, z_method="max"):
+           """Create pipelines for stitching with configurable parameters."""
+           # Create orchestrator
+           orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+           # Create factory with specified parameters
+           factory = AutoPipelineFactory(
+               input_dir=orchestrator.workspace_path,
+               normalize=normalize,
+               flatten_z=flatten_z,
+               z_method=z_method
+           )
+
+           # Create and return pipelines
+           return orchestrator, factory.create_pipelines()
+
+   Using manual pipeline creation:
 
    .. code-block:: python
 
@@ -210,7 +338,13 @@ For comprehensive information on directory structure and management in EZStitche
 .. _best-practices-specialized-steps:
 
 Specialized Steps Best Practices
------------------------------
+----------------------------
+
+.. note::
+   AutoPipelineFactory uses specialized steps internally to create pre-configured pipelines.
+   This is the recommended approach for most use cases. See :ref:`best-practices-autopipelinefactory`
+   for best practices when using AutoPipelineFactory. The following best practices apply when
+   you need to use specialized steps directly.
 
 For comprehensive information on specialized steps in EZStitcher, see :doc:`../concepts/specialized_steps`. Here are the key best practices:
 
@@ -240,6 +374,19 @@ For comprehensive information on specialized steps in EZStitcher, see :doc:`../c
 
    - When working with multiple channels, create a composite image before position generation
    - This ensures that position files are generated based on all available information
+
+   Using AutoPipelineFactory:
+
+   .. code-block:: python
+
+       # AutoPipelineFactory automatically creates a composite image for position generation
+       factory = AutoPipelineFactory(
+           input_dir=orchestrator.workspace_path,
+           channel_weights=[0.7, 0.3, 0]  # 70% channel 1, 30% channel 2, 0% channel 3
+       )
+       pipelines = factory.create_pipelines()
+
+   Using manual pipeline creation:
 
    .. code-block:: python
 
@@ -363,6 +510,33 @@ Performance Best Practices
 
    - Set ``num_workers`` in PipelineConfig to process multiple wells in parallel
    - This can significantly improve performance
+
+   Using AutoPipelineFactory:
+
+   .. code-block:: python
+
+       # Create configuration with multithreaded processing
+       config = PipelineConfig(
+           num_workers=4  # Use 4 worker threads
+       )
+
+       # Create orchestrator with multithreading
+       orchestrator = PipelineOrchestrator(
+           config=config,
+           plate_path=plate_path
+       )
+
+       # Create pipelines with AutoPipelineFactory
+       factory = AutoPipelineFactory(
+           input_dir=orchestrator.workspace_path,
+           normalize=True
+       )
+       pipelines = factory.create_pipelines()
+
+       # Run the pipelines with multithreading
+       orchestrator.run(pipelines=pipelines)
+
+   Using manual pipeline creation:
 
    .. code-block:: python
 

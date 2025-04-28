@@ -67,7 +67,9 @@ def test_3d_plate_per_plane_stitch(zstack_plate_dir, base_pipeline_config, threa
 
 def test_3d_plate_max_projection_stitch(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test 3D plate stitching with max projection."""
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=zstack_plate_dir)
+
+    plate_path = zstack_plate_dir
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config, plate_path=plate_path)
 
     # Create output directory path for the factory
     output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
