@@ -2,29 +2,29 @@
 Integrating EZStitcher with Other Tools
 =========================
 
-This page demonstrates **two realistic integration patterns** that crop up in fluorescence‑microscopy workflows:
+This page demonstrates **two realistic integration patterns** that crop up in fluorescence-microscopy workflows:
 
-1. **Illumination correction with *BaSiCPy*** ➜ **self‑supervised denoising with *N2V2* (Careamics)**
-2. **Template‑matching cropper** – automatically grab a region of interest from the stitched mosaic.
+1. **Illumination correction with *BaSiCPy*** ➜ **self-supervised denoising with *N2V2* (Careamics)**
+2. **Template-matching cropper** - automatically grab a region of interest from the stitched mosaic.
 
-If you have not read :doc:`advanced_usage`, start there first – it explains custom functions and multithreading, which we reuse below.
+If you have not read :doc:`advanced_usage`, start there first - it explains custom functions and multithreading, which we reuse below.
 
 .. note::
-   All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length.  Saving to disk should be handled by the pipeline or a separate post‑hoc script.
+   All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length.  Saving to disk should be handled by the pipeline or a separate post-hoc script.
 
 --------------------------------------------------------------------
-1. BaSiCPy + N2V2 denoising
+1. BaSiCPy + N2V2 denoising
 --------------------------------------------------------------------
 
 `BaSiCPy <https://github.com/peng-lab/BaSiCPy>`_ removes slowly varying illumination fields.  
-`Careamics‑N2V2 <https://careamics.github.io>`_ performs noise‑to‑void denoising without clean targets.
+`Careamics-N2V2 <https://careamics.github.io>`_ performs noise-to-void denoising without clean targets.
 
 .. code-block:: python
 
    from pathlib import Path
    import numpy as np
 
-   import basicpy                         # pip install basicpy (Peng‑Lab fork)
+   import basicpy                         # pip install basicpy (Peng-Lab fork)
    from careamics.models import N2V2      # pip install careamics==0.1
 
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
@@ -44,8 +44,8 @@ If you have not read :doc:`advanced_usage`, start there first – it explains cu
 
    # -------------- helper functions -------------------------------
    def flatfield_basicpy(images):
-       """Return BaSiCPy‑corrected stack."""
-       stack = np.dstack(images)  # z‑axis last for BaSiCPy
+       """Return BaSiCPy-corrected stack."""
+       stack = np.dstack(images)  # z-axis last for BaSiCPy
        shading, background = basicpy.BaSiC(threshold=0.01).fit(stack)
        corrected = (stack - background) / shading
        return [corrected[..., i] for i in range(corrected.shape[-1])]
@@ -59,7 +59,7 @@ If you have not read :doc:`advanced_usage`, start there first – it explains cu
        input_dir=pipelines[1].output_dir,          # stitched TIFFs
        output_dir=Path("out/illcorr_n2v2"),
        steps=[
-           Step(name="BaSiC flat‑field", func=flatfield_basicpy),
+           Step(name="BaSiC flat-field", func=flatfield_basicpy),
            Step(name="N2V2 denoise",    func=denoise_n2v2),
        ],
        name="BaSiC + N2V2",
@@ -69,11 +69,11 @@ If you have not read :doc:`advanced_usage`, start there first – it explains cu
    orchestrator.run(pipelines=pipelines)
 
 --------------------------------------------------------------------
-2. ROI extraction via template matching (Multi‑Template‑Matching)
+2. ROI extraction via template matching (Multi-Template-Matching)
 --------------------------------------------------------------------
 
 For a lighter dependency we use the
-`Multi‑Template‑Matching <https://github.com/multi-template-matching/MultiTemplateMatching-Python>`_ wrapper around OpenCV.
+`Multi-Template-Matching <https://github.com/multi-template-matching/MultiTemplateMatching-Python>`_ wrapper around OpenCV.
 It can handle multiple templates and returns bounding boxes directly.
 
 Install once with ::
@@ -95,7 +95,7 @@ Install once with ::
                                        scoreThreshold=0.6)
 
    def crop_by_template(images, pad=20):
-       """Crop around first high‑score template match for each image."""
+       """Crop around first high-score template match for each image."""
        outs = []
        for im in images:
            bboxes, _ = matcher.matchTemplates(templates, im, N_object=1)
