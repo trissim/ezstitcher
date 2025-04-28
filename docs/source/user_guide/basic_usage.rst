@@ -6,6 +6,9 @@ This page shows the **minimal, repeatable recipe** for stitching a
 multi‑well plate with EZStitcher.  If you only need a 10‑line working
 example, see :doc:`../getting_started/quick_start`.
 
+.. note::
+   For a simplified interface with minimal code, see the :doc:`ez_module` guide.
+
 Two workflows are presented:
 
 1. **AutoPipelineFactory** – quickest path; no code beyond parameters.

@@ -3,7 +3,19 @@ EZ Module
 ==========
 
 The EZ module provides a simplified interface for common stitching workflows,
-making it easier for non-coders to use EZStitcher.
+making it easier for non-coders to use EZStitcher. It wraps the functionality of
+the pipeline architecture into an intuitive API with sensible defaults and
+auto-detection features.
+
+**Key Benefits:**
+
+* **Simplicity**: Process and stitch images with minimal code
+* **Auto-detection**: Automatically detect Z-stacks and channels
+* **Sensible defaults**: Get good results without extensive configuration
+
+.. note::
+   Under the hood, the EZ module uses :doc:`../concepts/pipeline_orchestrator` and
+   :doc:`../concepts/pipeline_factory`. For advanced usage, see :doc:`basic_usage`.
 
 Quick Start
 ----------
@@ -13,7 +25,7 @@ The simplest way to stitch a plate of microscopy images is to use the ``stitch_p
 .. code-block:: python
 
    from ezstitcher import stitch_plate
-   
+
    # Stitch a plate with default settings
    stitch_plate("path/to/plate")
 
@@ -33,7 +45,7 @@ You can customize the stitching process with various options:
 .. code-block:: python
 
    from ezstitcher import stitch_plate
-   
+
    # Stitch with custom options
    stitch_plate(
        "path/to/plate",
@@ -44,6 +56,25 @@ You can customize the stitching process with various options:
        channel_weights=[0.7, 0.3, 0]
    )
 
+Auto-Detection
+-----------
+
+The EZ module automatically detects Z-stacks and channels:
+
+.. code-block:: python
+
+   from ezstitcher import stitch_plate
+
+   # Auto-detection handles Z-stacks and channels automatically
+   stitch_plate("path/to/plate")
+
+   # You can override auto-detection when needed
+   stitch_plate(
+       "path/to/plate",
+       flatten_z=True,  # Force Z-flattening
+       z_method="focus"  # Use focus detection
+   )
+
 More Control with EZStitcher Class
 --------------------------------
 
@@ -52,17 +83,17 @@ For more control, you can use the ``EZStitcher`` class:
 .. code-block:: python
 
    from ezstitcher import EZStitcher
-   
+
    # Create stitcher
    stitcher = EZStitcher("path/to/plate")
-   
+
    # Customize options
    stitcher.set_options(
        normalize=True,
        z_method="focus",
        channel_weights=[0.7, 0.3, 0]
    )
-   
+
    # Run stitching
    stitcher.stitch()
 
@@ -75,7 +106,7 @@ Single-Channel Stitching
 .. code-block:: python
 
    from ezstitcher import stitch_plate
-   
+
    # Stitch a single-channel plate
    stitch_plate("path/to/single_channel_plate")
 
@@ -85,7 +116,7 @@ Multi-Channel Stitching
 .. code-block:: python
 
    from ezstitcher import stitch_plate
-   
+
    # Stitch a multi-channel plate
    # Channel weights determine how channels are combined for position generation
    stitch_plate(
@@ -99,14 +130,14 @@ Z-Stack Stitching
 .. code-block:: python
 
    from ezstitcher import stitch_plate
-   
+
    # Stitch a Z-stack plate with maximum intensity projection
    stitch_plate(
        "path/to/z_stack_plate",
        flatten_z=True,
        z_method="max"
    )
-   
+
    # Stitch a Z-stack plate with focus-based projection
    stitch_plate(
        "path/to/z_stack_plate",
@@ -120,7 +151,7 @@ Processing Specific Wells
 .. code-block:: python
 
    from ezstitcher import stitch_plate
-   
+
    # Process only specific wells
    stitch_plate(
        "path/to/plate",
@@ -159,10 +190,10 @@ EZStitcher Class
 .. py:class:: EZStitcher(input_path, output_path=None, normalize=True, flatten_z=None, z_method="max", channel_weights=None, well_filter=None)
 
    Simplified interface for microscopy image stitching.
-   
+
    This class provides an easy-to-use interface for common stitching workflows,
    hiding the complexity of pipelines and orchestrators.
-   
+
    :param input_path: Path to the plate folder
    :type input_path: str or Path
    :param output_path: Path for output (default: input_path + "_stitched")
@@ -177,18 +208,18 @@ EZStitcher Class
    :type channel_weights: list of float or None, optional
    :param well_filter: List of wells to process (processes all if None)
    :type well_filter: list of str or None, optional
-   
+
    .. py:method:: set_options(**kwargs)
-   
+
       Update configuration options.
-      
+
       :param kwargs: Configuration options to update
       :return: self for method chaining
-      
+
    .. py:method:: stitch()
-   
+
       Run the complete stitching process with current settings.
-      
+
       :return: Path to the output directory
       :rtype: Path
 
@@ -198,7 +229,7 @@ stitch_plate Function
 .. py:function:: stitch_plate(input_path, output_path=None, **kwargs)
 
    One-liner function to stitch a plate of microscopy images.
-   
+
    :param input_path: Path to the plate folder
    :type input_path: str or Path
    :param output_path: Path for output (default: input_path + "_stitched")

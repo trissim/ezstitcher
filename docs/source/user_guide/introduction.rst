@@ -9,6 +9,7 @@ EZStitcher is a Python library designed to simplify the processing and stitching
 
 **Key Features:**
 
+* **Simplified Interface for Non-Coders**: Process and stitch images with minimal code using the EZ module
 * **Pipeline Factory**: Create complete stitching workflows with minimal code
 * **Pipeline Architecture**: Organize processing steps in a logical sequence
 * **Automatic Directory Management**: Protect original data while maintaining organized outputs
@@ -74,16 +75,17 @@ EZStitcher requires Python 3.11 or higher. For installation instructions, see th
 Getting Started
 ---------------------
 
-EZStitcher offers two main approaches for creating stitching pipelines:
+EZStitcher offers three main approaches for creating stitching pipelines:
 
-1. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
-2. Building custom pipelines for maximum flexibility and control
+1. Using the ``EZ module`` for a simplified, one-liner interface (recommended for beginners)
+2. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
+3. Building custom pipelines for maximum flexibility and control
 
-Both approaches are valid and powerful, with different strengths depending on your needs.
+All three approaches are valid and powerful, with different strengths depending on your needs.
 
 For a quick introduction with a minimal working example, see the :doc:`../getting_started/quick_start` guide.
 
-For detailed examples of both approaches, including common use cases and customization options, see the :doc:`basic_usage` guide.
+For detailed examples of all three approaches, including common use cases and customization options, see the :doc:`basic_usage` and :doc:`ez_module` guides.
 
 Key Concepts
 -----------
@@ -138,7 +140,7 @@ EZStitcher provides a flexible framework for processing and stitching microscopy
 
 **Getting Started:**
 
-* Start with the :doc:`basic_usage` guide to learn both approaches
+* Start with the :doc:`ez_module` guide for the simplest approach
 * Try the examples above to get hands-on experience
 * Review the :doc:`../concepts/pipeline` to understand the pipeline architecture
 

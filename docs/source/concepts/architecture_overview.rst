@@ -7,6 +7,10 @@ Pipeline Architecture
 
 EZStitcher is built around a flexible pipeline architecture that allows you to create custom image processing workflows. The architecture consists of three main components:
 
+.. note::
+   The EZ module provides a simplified interface that wraps this architecture.
+   See :doc:`../user_guide/ez_module` for details.
+
 1. **PipelineOrchestrator**: Coordinates the execution of pipelines across wells
 2. **Pipeline**: A sequence of processing steps
 3. **Step**: A single processing operation

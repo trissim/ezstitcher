@@ -11,6 +11,10 @@ Overview
 
 The ``AutoPipelineFactory`` is a unified factory class that creates pre-configured pipelines for all common stitching workflows. It simplifies pipeline creation by automatically configuring the appropriate steps based on input parameters, with no need to differentiate between different types of pipelines.
 
+.. note::
+   The EZ module provides a simplified interface that wraps the AutoPipelineFactory.
+   See :doc:`../user_guide/ez_module` for details.
+
 .. code-block:: python
 
     from ezstitcher.core import AutoPipelineFactory
