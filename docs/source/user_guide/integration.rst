@@ -1,139 +1,133 @@
 =========================
-Integration with Other Tools
+Integrating EZStitcher with Other Tools
 =========================
 
-EZStitcher can be integrated with other image processing and analysis tools to create comprehensive workflows.
+This page demonstrates **two realistic integration patterns** that crop up in fluorescence‑microscopy workflows:
 
-Integration Examples
-------------------
+1. **Illumination correction with *BaSiCPy*** ➜ **self‑supervised denoising with *N2V2* (Careamics)**
+2. **Template‑matching cropper** – automatically grab a region of interest from the stitched mosaic.
 
-Integration with Deep Learning Frameworks
---------------------------------------
+If you have not read :doc:`advanced_usage`, start there first – it explains custom functions and multithreading, which we reuse below.
 
-You can integrate EZStitcher with deep learning frameworks like TensorFlow or PyTorch:
+.. note::
+   All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length.  Saving to disk should be handled by the pipeline or a separate post‑hoc script.
 
-.. code-block:: python
+--------------------------------------------------------------------
+1. BaSiCPy + N2V2 denoising
+--------------------------------------------------------------------
 
-    import tensorflow as tf
-
-    # Load a pre-trained model
-    model = tf.keras.models.load_model('/path/to/model')
-
-    def apply_deep_learning(images):
-        """Apply deep learning model to images."""
-        result = []
-        for img in images:
-            # Preprocess image for the model
-            input_tensor = tf.convert_to_tensor(img[np.newaxis, ..., np.newaxis], dtype=tf.float32)
-
-            # Run inference
-            predictions = model.predict(input_tensor)
-
-            # Post-process predictions
-            segmentation_map = predictions[0, ..., 0]
-
-            # Return the segmentation map
-            result.append(segmentation_map)
-
-        return result
-
-    # Use in a pipeline
-    from ezstitcher.core import AutoPipelineFactory
-    from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step
-
-    # First create standard pipelines with AutoPipelineFactory
-    factory = AutoPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        normalize=True
-    )
-    pipelines = factory.create_pipelines()
-
-    # Then add a custom pipeline for deep learning
-    deep_learning_pipeline = Pipeline(
-        steps=[
-            # Apply deep learning model to stitched images
-            Step(
-                name="Deep Learning Segmentation",
-                func=apply_deep_learning,
-                input_dir=orchestrator.output_dir,  # Use stitched images from previous pipeline
-                output_dir=Path(orchestrator.output_dir).parent / "segmented"
-            )
-        ],
-        name="Deep Learning Pipeline"
-    )
-
-    # Add the deep learning pipeline to the list
-    pipelines.append(deep_learning_pipeline)
-
-Integration with Image Analysis Tools
-----------------------------------
-
-EZStitcher can be used as part of a larger workflow with other image analysis tools:
+`BaSiCPy <https://github.com/peng-lab/BaSiCPy>`_ removes slowly varying illumination fields.  
+`Careamics‑N2V2 <https://careamics.github.io>`_ performs noise‑to‑void denoising without clean targets.
 
 .. code-block:: python
 
-    # Example integration with CellProfiler
-    import subprocess
-    import os
+   from pathlib import Path
+   import numpy as np
 
-    def run_cellprofiler_analysis(input_dir, output_dir, pipeline_path):
-        """Run CellProfiler analysis on processed images."""
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
+   import basicpy                         # pip install basicpy (Peng‑Lab fork)
+   from careamics.models import N2V2      # pip install careamics==0.1
 
-        # Run CellProfiler headless
-        subprocess.run([
-            "cellprofiler",
-            "-c", "-r",
-            "-p", pipeline_path,
-            "-i", input_dir,
-            "-o", output_dir
-        ], check=True)
+   from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+   from ezstitcher.factories import AutoPipelineFactory
+   from ezstitcher.core.pipeline import Pipeline
+   from ezstitcher.core.steps    import Step
 
-        return True
+   # -------------- orchestrator + stitching -----------------------
+   plate_path   = Path("~/data/PlateA").expanduser()
+   orchestrator = PipelineOrchestrator(plate_path)
 
-    # Use in a pipeline after stitching
-    from ezstitcher.core import AutoPipelineFactory
-    from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step
+   base_factory = AutoPipelineFactory(
+       input_dir=orchestrator.workspace_path,
+       normalize=True,
+   )
+   pipelines = base_factory.create_pipelines()  # [0] = position, [1] = assembly
 
-    # First create standard pipelines with AutoPipelineFactory
-    factory = AutoPipelineFactory(
-        input_dir=orchestrator.workspace_path,
-        normalize=True
-    )
-    pipelines = factory.create_pipelines()
+   # -------------- helper functions -------------------------------
+   def flatfield_basicpy(images):
+       """Return BaSiCPy‑corrected stack."""
+       stack = np.dstack(images)  # z‑axis last for BaSiCPy
+       shading, background = basicpy.BaSiC(threshold=0.01).fit(stack)
+       corrected = (stack - background) / shading
+       return [corrected[..., i] for i in range(corrected.shape[-1])]
 
-    # Then add a custom pipeline for CellProfiler analysis
-    analysis_pipeline = Pipeline(
-        steps=[
-            # Run CellProfiler on stitched images
-            Step(
-                name="CellProfiler Analysis",
-                func=lambda images: run_cellprofiler_analysis(
-                    input_dir=orchestrator.output_dir,  # Use stitched images from previous pipeline
-                    output_dir=Path(orchestrator.output_dir).parent / "analysis",
-                    pipeline_path="/path/to/cellprofiler_pipeline.cppipe"
-                ) and images,  # Return images unchanged
-                input_dir=orchestrator.output_dir,
-                output_dir=orchestrator.output_dir  # No need to change images
-            )
-        ],
-        name="Analysis Pipeline"
-    )
+   n2v2 = N2V2.from_pretrained("n2v2_fluo")
 
-    # Add the analysis pipeline to the list
-    pipelines.append(analysis_pipeline)
+   def denoise_n2v2(images):
+       return [n2v2.predict(im, axes="YX") for im in images]
 
-Next Steps
----------
+   post_pipe = Pipeline(
+       input_dir=pipelines[1].output_dir,          # stitched TIFFs
+       output_dir=Path("out/illcorr_n2v2"),
+       steps=[
+           Step(name="BaSiC flat‑field", func=flatfield_basicpy),
+           Step(name="N2V2 denoise",    func=denoise_n2v2),
+       ],
+       name="BaSiC + N2V2",
+   )
 
-Now that you understand how to integrate EZStitcher with other tools, you can:
+   pipelines.append(post_pipe)
+   orchestrator.run(pipelines=pipelines)
 
-* Create custom export functions for your specific analysis needs
-* Integrate with your preferred deep learning framework
-* Build comprehensive image analysis pipelines
-* Automate end-to-end workflows from acquisition to analysis
+--------------------------------------------------------------------
+2. ROI extraction via template matching (Multi‑Template‑Matching)
+--------------------------------------------------------------------
 
-For more advanced usage patterns, see the :doc:`advanced_usage` section.
+For a lighter dependency we use the
+`Multi‑Template‑Matching <https://github.com/multi-template-matching/MultiTemplateMatching-Python>`_ wrapper around OpenCV.
+It can handle multiple templates and returns bounding boxes directly.
+
+Install once with ::
+
+   pip install multitpletematch  # actual PyPI name: multitpletematch
+
+.. code-block:: python
+
+   from pathlib import Path
+   import numpy as np
+   import cv2
+   import multitpletematch as mtm  # MultiTemplateMatching
+
+   templates = [cv2.imread(str(p), cv2.IMREAD_ANYDEPTH)
+                for p in Path("templates").glob("*.tif")]
+
+   matcher = mtm.MultiTemplateMatching(method=cv2.TM_CCOEFF_NORMED,
+                                       maxOverlap=0.1,
+                                       scoreThreshold=0.6)
+
+   def crop_by_template(images, pad=20):
+       """Crop around first high‑score template match for each image."""
+       outs = []
+       for im in images:
+           bboxes, _ = matcher.matchTemplates(templates, im, N_object=1)
+           if not bboxes:
+               outs.append(im)  # fallback: no crop
+               continue
+           x, y, w, h = bboxes[0]['bbox']  # mtm gives (x, y, w, h)
+           y1 = max(y - pad, 0)
+           x1 = max(x - pad, 0)
+           y2 = min(y + h + pad, im.shape[0])
+           x2 = min(x + w + pad, im.shape[1])
+           outs.append(im[y1:y2, x1:x2])
+       return outs
+
+   crop_pipe = Pipeline(
+       input_dir=pipelines[1].output_dir,
+       output_dir=Path("out/roi_crop"),
+       steps=[Step(name="Template crop", func=crop_by_template)],
+       name="ROI Cropper",
+   )
+
+   orchestrator.run(pipelines=[crop_pipe])
+
+--------------------------------------------------------------------
+Navigation
+--------------------------------------------------------------------
+
+* Back to :doc:`advanced_usage` for custom factories and multithreading.
+* Forward to :doc:`../development/extending` to add new microscope handlers.
+
+--------------------------------------------------------------------
+
+* Back to :doc:`advanced_usage` for custom factories and multithreading.
+* Forward to :doc:`../development/extending` to add new microscope handlers.
+
