@@ -38,16 +38,19 @@ The EZ module provides a simplified interface that requires minimal code:
 
     # That's it! Output will be in a directory named after your input with "_stitched" appended
 
-Option 2: AutoPipelineFactory (More Control)
+Option 2: Custom Pipelines (For Advanced Flexibility)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For more control over the stitching process:
+For advanced users who need more control and flexibility:
 
 .. code-block:: python
 
-    from ezstitcher.core import AutoPipelineFactory
-    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from pathlib import Path
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+    from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Path to your microscopy data
     plate_path = Path("path/to/your/microscopy/data")
@@ -55,20 +58,32 @@ For more control over the stitching process:
     # Create an orchestrator to manage the stitching process
     orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
-    # Create a pipeline factory with default settings
-    factory = AutoPipelineFactory(
+    # Create position generation pipeline
+    pos_pipe = Pipeline(
         input_dir=orchestrator.workspace_path,
-        normalize=True  # Apply normalization to improve image quality
+        steps=[
+            ZFlatStep(method="max"),
+            Step(func=IP.stack_percentile_normalize),
+            CompositeStep(),
+            PositionGenerationStep(),
+        ],
+        name="Position Generation",
+    )
+    positions_dir = pos_pipe.steps[-1].output_dir
+
+    # Create assembly pipeline
+    asm_pipe = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
+        steps=[
+            Step(func=IP.stack_percentile_normalize),
+            ImageStitchingStep(positions_dir=positions_dir),
+        ],
+        name="Assembly",
     )
 
-    # Create the stitching pipelines
-    pipelines = factory.create_pipelines()
-
     # Run the pipelines
-    orchestrator.run(pipelines=pipelines)
-
-    # Output will be in a directory named after your input with "_stitched" appended
-    print(f"Stitched images saved to: {plate_path.parent / f'{plate_path.name}_stitched'}")
+    orchestrator.run(pipelines=[pos_pipe, asm_pipe])
 
 Expected Output
 -------------
@@ -84,7 +99,7 @@ What's Next
 
 Now that you've run your first stitching pipeline, you can:
 
+- Learn more about the EZ module in the :doc:`../user_guide/ez_module` guide
+- Explore custom pipelines in the :doc:`../user_guide/basic_usage` guide
 - Learn about ezstitcher's architecture in the :doc:`../user_guide/introduction`
-- Explore more detailed examples in the :doc:`../user_guide/basic_usage` guide
-- Learn about the simplified interface in the :doc:`../user_guide/ez_module` guide
-- Try different parameters for the :doc:`../concepts/pipeline_factory`
+- Discover advanced features in the :doc:`../user_guide/advanced_usage` guide

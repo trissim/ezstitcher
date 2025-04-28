@@ -7,8 +7,8 @@ This user guide provides a comprehensive overview of EZStitcher, from basic conc
 The guide is organized to follow a logical learning path:
 
 1. **Introduction**: Learn about ezstitcher's architecture and key concepts
-2. **Basic Usage**: Explore detailed examples and common use cases
-3. **EZ Module**: Use the simplified interface for non-coders
+2. **EZ Module**: Use the simplified interface for non-coders (recommended for most users)
+3. **Basic Usage**: Explore custom pipelines for more flexibility
 4. **Intermediate Usage**: Discover more complex workflows and customization options
 5. **Advanced Usage**: Master advanced features and techniques
 6. **Best Practices**: Learn recommended practices for effective use
@@ -34,8 +34,8 @@ If you're new to ezstitcher, we recommend starting with the :doc:`../getting_sta
    :caption: Contents:
 
    introduction
-   basic_usage
    ez_module
+   basic_usage
    intermediate_usage
    advanced_usage
    best_practices

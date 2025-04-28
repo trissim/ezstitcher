@@ -10,27 +10,21 @@ EZStitcher is a Python package for stitching microscopy images with support for 
 Getting Started Quickly
 --------------------
 
-The fastest way to get started with EZStitcher is to use the ``AutoPipelineFactory``:
+The fastest way to get started with EZStitcher is to use the ``EZ module``:
 
 .. code-block:: python
 
-    from ezstitcher.core import AutoPipelineFactory
-    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    from ezstitcher import stitch_plate
 
-    # Create orchestrator and factory
-    orchestrator = PipelineOrchestrator(plate_path="path/to/microscopy/data")
-    factory = AutoPipelineFactory(input_dir=orchestrator.workspace_path)
-
-    # Create and run pipelines
-    pipelines = factory.create_pipelines()
-    orchestrator.run(pipelines=pipelines)
+    # Stitch a plate with a single function call
+    stitch_plate("path/to/microscopy/data")
 
 For a complete quick start guide, see :doc:`getting_started/quick_start`.
 
 Key Features
 ------------
 
-- **Pipeline Factory**: Create complete stitching workflows with minimal code
+- **Simplified Interface for Non-Coders**: Process and stitch images with minimal code using the EZ module
 - **Multi-channel fluorescence support**: Process and stitch multiple fluorescence channels
 - **Z-stack handling**: Process 3D image stacks with various projection methods
 - **Advanced focus detection**: Find the best focused plane in Z-stacks
@@ -43,9 +37,9 @@ Key Resources
 -----------
 
 * :doc:`getting_started/quick_start` - Get started in minutes with a minimal example
+* :doc:`user_guide/ez_module` - Learn about the simplified interface for non-coders
 * :doc:`user_guide/introduction` - Learn about ezstitcher's architecture and concepts
-* :doc:`user_guide/basic_usage` - Explore detailed examples and common use cases
-* :doc:`concepts/pipeline_factory` - Learn about the AutoPipelineFactory concept
+* :doc:`user_guide/basic_usage` - Explore detailed examples and custom pipelines
 
 .. toctree::
    :maxdepth: 2

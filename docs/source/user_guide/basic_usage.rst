@@ -8,53 +8,19 @@ example, see :doc:`../getting_started/quick_start`.
 
 .. note::
    For a simplified interface with minimal code, see the :doc:`ez_module` guide.
+   The EZ module is recommended for most users, especially beginners.
 
-Two workflows are presented:
+This guide focuses on creating custom pipelines for maximum flexibility and control.
 
-1. **AutoPipelineFactory** – quickest path; no code beyond parameters.
-2. **Custom pipelines** – explicit steps for full control.
+.. note::
+   While AutoPipelineFactory is used internally by the EZ module, it is generally
+   not recommended for direct use by end users. For most use cases, either the
+   EZ module (for simplicity) or custom pipelines (for flexibility) are preferred.
 
---------------------------------------------------------------------
-1. One‑liner stitching with ``AutoPipelineFactory``
---------------------------------------------------------------------
 
-.. code-block:: python
-
-   from pathlib import Path
-   from ezstitcher.factories import AutoPipelineFactory
-   from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-
-   plate_path = Path("~/data/PlateA").expanduser()
-   orchestrator = PipelineOrchestrator(plate_path)
-
-   factory = AutoPipelineFactory(
-       input_dir=orchestrator.workspace_path,
-       output_dir=plate_path.parent / f"{plate_path.name}_stitched",
-       normalize=True,          # percentile normalisation 1–99
-       flatten_z=True,          # Z‑stack → 2‑D max‑projection
-       z_method="max",         # max, mean, laplacian, combined …
-   )
-
-   orchestrator.run(pipelines=factory.create_pipelines())
-
-That single call produces two pipelines:
-
-* **position** – generates stage‑coordinate CSVs per well.
-* **assembly** – stitches tiles using Ashlar; writes an OME‑TIFF per
-  channel (or per well for plates).
 
 --------------------------------------------------------------------
-Frequently‑tweaked factory knobs
---------------------------------------------------------------------
-
-* ``channel_weights=[0.7, 0.3, 0]`` – choose which channels build the
-  reference composite.
-* ``z_method="combined"`` – use a focus metric instead of projection.
-* ``normalization_params={'low_percentile':0.5, 'high_percentile':99.5}``
-  to fine‑tune contrast stretch.
-
---------------------------------------------------------------------
-2. Explicit pipelines (full control)
+Creating Custom Pipelines
 --------------------------------------------------------------------
 
 .. code-block:: python
@@ -99,11 +65,12 @@ Frequently‑tweaked factory knobs
 Which approach should I pick?
 --------------------------------------------------------------------
 
-| Use **AutoPipelineFactory** when… | Use **custom pipelines** when… |
-|----------------------------------|--------------------------------|
-| • default steps are enough        | • need bespoke processing      |
-| • quick turnaround / notebook     | • want per‑channel logic       |
-| • prototyping / demo              | • desire full transparency     |
+| Use **EZ Module** when… | Use **custom pipelines** when… |
+|------------------------|--------------------------------|
+| • You want minimal code | • You need bespoke processing  |
+| • You're new to EZStitcher | • You want per‑channel logic |
+| • Default settings are sufficient | • You need maximum flexibility |
+| • You want auto-detection | • You want full transparency |
 
 --------------------------------------------------------------------
 Next steps
