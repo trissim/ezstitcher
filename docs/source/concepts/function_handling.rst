@@ -4,6 +4,9 @@
 Function Handling
 =================
 
+Function handling is a key aspect of step configuration.
+For detailed information about step configuration, see :doc:`step`.
+
 The Step class supports several patterns for processing functions, providing flexibility in how images are processed. This page explains the different patterns available.
 
 .. _function-single:
@@ -214,6 +217,8 @@ You can mix plain functions and function tuples in the same list or dictionary. 
 When to Use Each Pattern
 ----------------------
 
+For detailed API documentation, see :doc:`../api/steps`.
+
 * **Single Function**: When you need to apply the same processing to all images with default parameters
 * **Function with Arguments**: When you need to apply a single function with specific parameters
 * **List of Functions**: When you need to apply multiple processing steps in sequence with default parameters
@@ -230,7 +235,7 @@ For comprehensive best practices for function handling, see :ref:`best-practices
    For common operations like Z-stack flattening and channel compositing, prefer specialized step
    subclasses like ``ZFlatStep`` and ``CompositeStep`` over manually configuring ``variable_components``.
 
-   For more information about specialized steps, see :doc:`specialized_steps`.
+   For information about specialized step implementations, see :doc:`specialized_steps`.
 
 .. _function-stack-utility:
 

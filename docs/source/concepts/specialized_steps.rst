@@ -4,6 +4,9 @@
 Specialized Steps
 =================
 
+Specialized steps extend the base Step class with specific functionality.
+For detailed information about step configuration, see :doc:`step`.
+
 EZStitcher provides two types of specialized steps:
 
 1. **Orchestrator-specific steps** that leverage the orchestrator's plate-specific services for operations like position generation and image stitching.
@@ -132,6 +135,8 @@ This abstraction allows the steps to focus on their specific tasks without needi
 
 Specialized Step Parameters
 ----------------------
+
+For detailed API documentation, see :doc:`../api/specialized_steps`.
 
 PositionGenerationStep Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -328,8 +333,8 @@ of functions and ``group_by='channel'`` is the appropriate approach:
         group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
     )
 
-For more information about function dictionaries and the ``group_by`` parameter, see :doc:`function_handling`
-and :ref:`group-by` in :doc:`step`.
+For detailed information about function handling in steps, see :doc:`function_handling`.
+For more information about the ``group_by`` parameter, see :ref:`group-by` in :doc:`step`.
 
 **Use orchestrator-specific steps when:**
 

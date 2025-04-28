@@ -15,6 +15,12 @@ EZStitcher is built around a flexible pipeline architecture that allows you to c
 2. **Pipeline**: A sequence of processing steps
 3. **Step**: A single processing operation
 
+For detailed information about each component:
+
+* :doc:`pipeline_orchestrator` - Details about the Orchestrator
+* :doc:`pipeline` - Details about Pipelines
+* :doc:`step` - Details about Steps
+
 This hierarchical design allows complex workflows to be built from simple, reusable components:
 
 .. code-block:: text
@@ -43,12 +49,16 @@ Core Components
 Pipeline Management:
 - **PipelineOrchestrator**: Coordinates the entire workflow and manages plate-specific operations
 - **Pipeline**: A sequence of processing steps that are executed in order
-- **PipelineFactory**: Creates pre-configured pipelines for common workflows
 - **ProcessingContext**: Maintains state during pipeline execution
+
+Pipeline Factories:
+- Pipeline factories provide a convenient way to create common pipeline configurations
+- For detailed information about pipeline factories, see :doc:`pipeline_factory`
 
 Step Components:
 - **Step**: A single processing operation that can be applied to images
 - **SpecializedSteps**: Provides optimized implementations for common operations
+- For detailed information about specialized steps, see :doc:`specialized_steps`
 
 Image Processing:
 - **ImageProcessor**: Provides static image processing functions
@@ -121,6 +131,12 @@ This modular design allows you to:
 
 Typical Processing Flow
 --------------------
+
+For detailed API documentation, see:
+
+* :doc:`../api/pipeline_orchestrator`
+* :doc:`../api/pipeline`
+* :doc:`../api/steps`
 
 A typical image processing and stitching workflow includes:
 

@@ -9,6 +9,9 @@ Pipeline Factory
 Overview
 --------
 
+Pipeline factories are used internally by the EZ module to create pipelines with sensible defaults.
+They are not typically used directly by end users, who should prefer the EZ module or custom pipelines.
+
 The ``AutoPipelineFactory`` is a unified factory class that creates pre-configured pipelines for all common stitching workflows. It simplifies pipeline creation by automatically configuring the appropriate steps based on input parameters, with no need to differentiate between different types of pipelines.
 
 .. note::
@@ -65,6 +68,8 @@ This structure is consistent regardless of data type (single/multi-channel, sing
 
 Parameters
 ---------
+
+For detailed API documentation, see :doc:`../api/pipeline_factories`.
 
 The ``AutoPipelineFactory`` accepts the following parameters:
 
@@ -261,3 +266,4 @@ This approach provides several benefits:
    - :doc:`specialized_steps` for more information about specialized steps
    - :doc:`../user_guide/basic_usage` for beginner examples
    - :doc:`../user_guide/intermediate_usage` for intermediate examples
+   - :doc:`../development/extending` for information about extending pipeline factories

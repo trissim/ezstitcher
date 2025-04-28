@@ -11,6 +11,9 @@ Overview
 
 EZStitcher uses a structured approach to directory management that balances automation with flexibility. This document explains how directories are managed, resolved, and customized in EZStitcher.
 
+For information about how pipelines handle directories, see :doc:`pipeline`.
+For information about how steps handle directories, see :doc:`step`.
+
 .. _directory-basic-concepts:
 
 Basic Directory Concepts
@@ -51,6 +54,12 @@ This structure ensures that:
 
 Directory Resolution
 ------------------
+
+For detailed API documentation, see:
+
+* :doc:`../api/pipeline_orchestrator`
+* :doc:`../api/pipeline`
+* :doc:`../api/steps`
 
 EZStitcher automatically resolves directories for steps in a pipeline, minimizing the need for manual directory management. Here's how it works:
 

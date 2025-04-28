@@ -5,7 +5,10 @@ Step
 Overview
 -------
 
-A ``Step`` is a single processing operation that can be applied to images. The base ``Step`` class provides:
+A ``Step`` is a single processing operation that can be applied to images. It is a key component of the EZStitcher architecture.
+For an overview of the complete architecture, see :doc:`architecture_overview`.
+
+The base ``Step`` class provides:
 
 * Image loading and saving
 * Processing function application
@@ -34,6 +37,8 @@ Creating a Basic Step
 
 Step Parameters
 -------------
+
+For detailed API documentation, see :doc:`../api/steps`.
 
 * ``name``: Human-readable name for the step
 * ``func``: The processing function(s) to apply (see :doc:`function_handling`)
@@ -80,7 +85,8 @@ Step Initialization Best Practices
 
 When initializing steps, it's important to follow best practices for directory specification.
 
-For detailed information on step initialization best practices, directory resolution, and directory flow, see :doc:`directory_structure`.
+Steps can specify input and output directories.
+For detailed information about directory structure, see :doc:`directory_structure`.
 
 .. _variable-components:
 
@@ -251,4 +257,5 @@ These specialized steps provide cleaner, more readable code and ensure proper co
 For channel-specific processing with different functions per channel, using a raw ``Step`` with a dictionary
 of functions and ``group_by='channel'`` is the appropriate approach.
 
-For more information about specialized steps, see :doc:`specialized_steps`.
+Specialized steps extend the base Step class with specific functionality.
+For detailed information about specialized steps, see :doc:`specialized_steps`.
