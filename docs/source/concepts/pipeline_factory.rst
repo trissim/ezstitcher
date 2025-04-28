@@ -195,7 +195,7 @@ For custom workflows, create pipelines from scratch instead of modifying factory
 
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create a custom pipeline with specialized steps

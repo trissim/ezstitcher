@@ -97,7 +97,7 @@ For maximum flexibility, you can build custom pipelines:
 
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 
     # Create position generation pipeline with maximum projection
     position_pipeline = Pipeline(
@@ -219,7 +219,7 @@ Example with different projection methods:
     # Create separate pipelines for different projection methods
     # Note: You would typically choose ONE method, not run multiple in sequence
 
-    from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 
     # Maximum intensity projection
 
@@ -386,7 +386,7 @@ Instead of using a projection method, you can select the best-focused plane from
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 
     # Create position generation pipeline with max projection (always use max for position generation)
     position_pipeline = Pipeline(
@@ -458,7 +458,7 @@ Example with different focus metrics:
     # Create separate pipelines for different focus metrics
     # Note: You would typically choose ONE metric, not run multiple in sequence
 
-    from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 
     # Variance of Laplacian metric
 
@@ -765,7 +765,7 @@ You can combine multiple channels into a composite image. For detailed explanati
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create position generation pipeline with equal channel weights
     position_pipeline = Pipeline(
@@ -898,7 +898,7 @@ Process Z-stacks and then stitch the resulting images:
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create position generation pipeline for Z-stack processing
     position_pipeline = Pipeline(
@@ -986,7 +986,7 @@ Here's an example of a terse custom pipeline that performs channel-specific proc
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create position generation pipeline with channel-specific processing
     position_pipeline = Pipeline(
@@ -1052,7 +1052,8 @@ For workflows that require custom processing steps or specialized configurations
 
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+    from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Define a custom enhancement function
@@ -1132,7 +1133,7 @@ Similarly, you can customize pipelines you've created manually:
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create a basic position generation pipeline
     position_pipeline = Pipeline(
@@ -1172,7 +1173,7 @@ Apply different processing to different channels and then stitch the results:
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create position generation pipeline for channel-specific processing
     position_pipeline = Pipeline(
@@ -1252,7 +1253,7 @@ A complete workflow that combines Z-stack processing, channel-specific processin
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
     from ezstitcher.core.focus_analyzer import FocusAnalyzer
 
     # Create position generation pipeline for complete workflow
@@ -1334,7 +1335,8 @@ A complete workflow that combines Z-stack processing, channel-specific processin
     # Alternatively, create another set of custom pipelines with different configuration
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+    from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
     from ezstitcher.core.utils import stack
 

@@ -152,12 +152,10 @@ The ``ImageStitchingStep`` doesn't use the ``func``, ``variable_components``, or
 
 .. _step-factories:
 
-Step Factories
-------------
+Specialized Steps
+---------------
 
-In addition to the specialized steps that work with the orchestrator, EZStitcher provides step factory classes that inherit from the regular ``Step`` class and pre-configure parameters for common operations.
-
-Step factories follow the "factory pattern" design principle, creating pre-configured :class:`Step` instances with appropriate parameters for specific tasks. This approach offers several benefits:
+EZStitcher provides specialized step classes that inherit from the regular ``Step`` class and pre-configure parameters for common operations. These specialized steps are implemented as subclasses of Step rather than factory classes. This approach offers several benefits:
 
 - **Simplified Interface**: Fewer parameters to configure manually
 - **Pre-configured Parameters**: Appropriate defaults for common operations
@@ -165,7 +163,7 @@ Step factories follow the "factory pattern" design principle, creating pre-confi
 - **Reduced Boilerplate**: Less code to write for common operations
 - **Consistent Patterns**: Standardized approach to common tasks
 
-These specialized steps are also used by the :doc:`pipeline_factory` to create pre-configured pipelines for common workflows. The ``AutoPipelineFactory`` uses these specialized steps internally to create position generation and image assembly pipelines with appropriate configurations.
+These specialized steps are used by the :doc:`pipeline_factory` to create pre-configured pipelines for common workflows. The ``AutoPipelineFactory`` uses these specialized steps internally to create position generation and image assembly pipelines with appropriate configurations.
 
 Here's a comparison of raw Steps vs. specialized steps for common operations:
 
@@ -234,7 +232,7 @@ The ``ZFlatStep`` is a specialized step for Z-stack flattening:
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep
+    from ezstitcher.core.specialized_steps import ZFlatStep
 
     # Create a maximum intensity projection step
     step = ZFlatStep(
@@ -258,7 +256,7 @@ The ``FocusStep`` is a specialized step for focus-based Z-stack processing:
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import FocusStep
+    from ezstitcher.core.specialized_steps import FocusStep
 
     # Create a best focus step
     step = FocusStep(
@@ -284,7 +282,7 @@ The ``CompositeStep`` is a specialized step for creating composite images from m
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import CompositeStep
+    from ezstitcher.core.specialized_steps import CompositeStep
 
     # Create a composite step with custom weights
     step = CompositeStep(
@@ -467,7 +465,8 @@ Specialized steps are designed to work seamlessly in custom pipelines. When buil
 
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+    from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create a custom pipeline with specialized steps
@@ -577,7 +576,7 @@ Alternatively, you can build custom pipelines using specialized steps:
 .. code-block:: python
 
     from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep, Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create position generation pipeline
@@ -659,7 +658,7 @@ Alternatively, you can build custom pipelines using specialized steps:
 .. code-block:: python
 
     from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep, Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create position generation pipeline for multi-channel data
@@ -720,7 +719,7 @@ Sometimes you want to process images for position generation but use the origina
 .. code-block:: python
 
     from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep, Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Create position generation pipeline with processed images

@@ -93,7 +93,7 @@ For advanced workflows that require custom processing functions, creating custom
 
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
 
@@ -200,7 +200,7 @@ For complete control, you can create custom pipelines with your functions:
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
     from pathlib import Path
 
     # Create configuration and orchestrator
@@ -493,7 +493,7 @@ You can implement conditional processing based on well, site, or other context i
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create position generation pipeline with conditional processing
     position_pipeline = Pipeline(
@@ -591,7 +591,7 @@ You can create pipelines that build on each other's outputs:
 
 .. code-block:: python
 
-    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 
     # Create a preprocessing pipeline
     preprocess_pipeline = Pipeline(

@@ -102,7 +102,7 @@ For practical examples of how to use variable_components in different scenarios,
 
     # IMPORTANT: For Z-stack flattening, use ZFlatStep instead of raw Step with variable_components
     # This is the recommended approach for Z-stack flattening
-    from ezstitcher.core.step_factories import ZFlatStep
+    from ezstitcher.core.specialized_steps import ZFlatStep
 
     # Maximum intensity projection (default)
     step = ZFlatStep()  # Uses max_projection by default
@@ -112,7 +112,7 @@ For practical examples of how to use variable_components in different scenarios,
 
     # IMPORTANT: For channel compositing, use CompositeStep instead of raw Step with variable_components
     # This is the recommended approach for channel compositing
-    from ezstitcher.core.step_factories import CompositeStep
+    from ezstitcher.core.specialized_steps import CompositeStep
 
     # Without weights (equal weighting for all channels)
     step = CompositeStep()  # Equal weights for all channels
