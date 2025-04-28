@@ -1,7 +1,13 @@
-Pipeline Factory
-==============
+.. warning::
+   This documentation is deprecated. Please refer to :doc:`basic_usage` for information about using pipeline factories.
 
-EZStitcher provides a unified ``AutoPipelineFactory`` class that creates pre-configured pipelines for common workflows. This factory simplifies pipeline creation by automatically configuring the appropriate steps based on input parameters.
+Pipeline Factory (Deprecated)
+==========================
+
+This documentation has been moved to :doc:`basic_usage`.
+
+The AutoPipelineFactory is now the recommended way to create pipelines for common workflows.
+See :doc:`basic_usage` for examples and :doc:`../concepts/pipeline_factory` for detailed information.
 
 Basic Usage
 ----------
@@ -19,10 +25,10 @@ Basic Usage
         input_dir=orchestrator.workspace_path,
         normalize=True  # Apply normalization (default)
     )
-    
+
     # Create the pipelines
     pipelines = factory.create_pipelines()
-    
+
     # Run the pipelines
     orchestrator.run(pipelines=pipelines)
 
@@ -51,15 +57,23 @@ For multi-channel data, you can specify weights for channel compositing:
 Z-Stack Data
 ^^^^^^^^^^
 
-For Z-stack data, you can control Z-stack flattening:
+For Z-stack data, you can control Z-stack processing using either projection methods or focus detection:
 
 .. code-block:: python
 
-    # Create a factory for Z-stack data
+    # Create a factory for Z-stack data with projection
     factory = AutoPipelineFactory(
         input_dir=orchestrator.workspace_path,
         flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
         z_method="max"   # Use maximum intensity projection
+    )
+    pipelines = factory.create_pipelines()
+
+    # Create a factory for Z-stack data with focus detection
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
+        z_method="combined"   # Use combined focus metric
     )
     pipelines = factory.create_pipelines()
 
@@ -89,7 +103,9 @@ The ``AutoPipelineFactory`` supports several configuration options:
 - ``normalization_params``: Parameters for normalization (optional)
 - ``well_filter``: Wells to process (optional)
 - ``flatten_z``: Whether to flatten Z-stacks in the assembly pipeline (default: False)
-- ``z_method``: Z-stack flattening method (default: "max")
+- ``z_method``: Z-stack processing method (default: "max")
+  - Projection methods: "max", "mean", "median", etc.
+  - Focus detection methods: "combined", "laplacian", "tenengrad", "normalized_variance", "fft"
 - ``channel_weights``: Weights for channel compositing in the reference image (optional)
 
 Important behaviors to note:

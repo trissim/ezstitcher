@@ -51,14 +51,12 @@ FocusStep
 
    Specialized step for focus-based Z-stack processing.
 
-   This step finds the best focus plane in a Z-stack using a FocusAnalyzer.
+   This step finds the best focus plane in a Z-stack using FocusAnalyzer.
    It pre-configures variable_components=['z_index'] and group_by=None.
 
    :param focus_options: Dictionary of focus analyzer options:
                         - metric: Focus metric. Options: "combined", "normalized_variance",
-                                 "laplacian", "tenengrad", "fft" (default: "combined")
-                        - roi: Region of interest as (x, y, width, height)
-                        - weights: Weights for combined focus measure
+                                 "laplacian", "tenengrad", "fft" or a dictionary of weights (default: "combined")
    :type focus_options: dict, optional
    :param input_dir: Input directory
    :type input_dir: str or Path, optional
@@ -81,6 +79,12 @@ FocusStep
       # Create a best focus step with specific metric
       step = FocusStep(
           focus_options={'metric': 'laplacian'},
+          input_dir=orchestrator.workspace_path
+      )
+
+      # Create a best focus step with custom weights
+      step = FocusStep(
+          focus_options={'metric': {'nvar': 0.4, 'lap': 0.4, 'ten': 0.1, 'fft': 0.1}},
           input_dir=orchestrator.workspace_path
       )
 

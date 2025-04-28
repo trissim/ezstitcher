@@ -70,7 +70,9 @@ The ``AutoPipelineFactory`` accepts the following parameters:
 - ``normalization_params``: Parameters for normalization (optional)
 - ``well_filter``: Wells to process (optional)
 - ``flatten_z``: Whether to flatten Z-stacks in the assembly pipeline (default: False)
-- ``z_method``: Z-stack flattening method (default: "max")
+- ``z_method``: Z-stack processing method (default: "max")
+  - Projection methods: "max", "mean", "median", etc.
+  - Focus detection methods: "combined", "laplacian", "tenengrad", "normalized_variance", "fft"
 - ``channel_weights``: Weights for channel compositing in the reference image (optional)
 
 Important behaviors to note:
@@ -86,7 +88,8 @@ Specialized Steps
 
 The ``AutoPipelineFactory`` uses specialized steps from the :doc:`specialized_steps` module:
 
-- ``ZFlatStep``: For Z-stack flattening (used in both pipelines when appropriate)
+- ``ZFlatStep``: For Z-stack flattening using projection methods (used in both pipelines when appropriate)
+- ``FocusStep``: For Z-stack processing using focus detection methods (used when z_method is a focus method)
 - ``CompositeStep``: For channel compositing (always used in position generation)
 - ``PositionGenerationStep``: For generating position files
 - ``ImageStitchingStep``: For stitching images
@@ -129,6 +132,18 @@ Z-Stack Pipeline with Projection
         input_dir=orchestrator.workspace_path,
         flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
         z_method="max"   # Use maximum intensity projection
+    )
+    pipelines = factory.create_pipelines()
+
+Z-Stack Pipeline with Focus Detection
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
+        z_method="combined"   # Use combined focus metric
     )
     pipelines = factory.create_pipelines()
 

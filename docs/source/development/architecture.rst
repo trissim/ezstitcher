@@ -45,12 +45,12 @@ Performs image stitching with subpixel precision. It:
 FocusAnalyzer
 ^^^^^^^^^^^^^
 
-Provides multiple focus detection algorithms for Z-stacks. It:
+Provides multiple focus detection algorithms for Z-stacks as static utility methods. It:
 
 - Implements various focus quality metrics
 - Selects the best focused plane in a Z-stack
-- Supports region of interest (ROI) based focus detection
 - Combines multiple metrics for robust focus detection
+- Supports both string-based metrics and custom weight dictionaries
 
 ImageProcessor
 ^^^^^^^^^^^^^^

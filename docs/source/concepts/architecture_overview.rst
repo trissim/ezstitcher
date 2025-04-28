@@ -42,8 +42,9 @@ Core Components
 - **ProcessingContext**: Maintains state during pipeline execution
 - **MicroscopeHandler**: Handles microscope-specific functionality
 - **Stitcher**: Performs image stitching
-- **ImagePreprocessor**: Applies processing functions to images
-- **ImageLocator**: Locates image files in various directory structures
+- **ImageProcessor**: Provides static image processing functions
+- **FileSystemManager**: Handles file system operations and image loading
+- **FocusAnalyzer**: Provides static focus detection methods for Z-stacks
 
 These components work together to process microscopy images in a flexible and extensible way.
 
@@ -103,44 +104,45 @@ Typical Processing Flow
 A typical image processing and stitching workflow includes:
 
 1. **Load and organize images**:
-   
+
    .. code-block:: python
-   
-       from ezstitcher.core import create_basic_pipeline
+
+       from ezstitcher.core import AutoPipelineFactory
        from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-       
+
        orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
 2. **Process reference images**:
-   
+
    .. code-block:: python
-   
-       pipeline = create_basic_pipeline(
+
+       factory = AutoPipelineFactory(
            input_dir=orchestrator.workspace_path,
            output_dir="path/to/output",
            normalize=True
        )
+       pipelines = factory.create_pipelines()
 
 3. **Generate stitching positions**:
-   
+
    This is handled automatically by the pipeline factories.
 
 4. **Process final images**:
-   
+
    Channel-specific processing is available through:
-   
+
    .. code-block:: python
-   
-       from ezstitcher.core import create_multichannel_pipeline
-       
-       pipeline = create_multichannel_pipeline(
+
+       # Create a factory for multi-channel data
+       factory = AutoPipelineFactory(
            input_dir=orchestrator.workspace_path,
            output_dir="path/to/output",
-           weights=[0.7, 0.3]
+           channel_weights=[0.7, 0.3, 0]  # Use only first two channels for reference image
        )
+       pipelines = factory.create_pipelines()
 
 5. **Stitch images**:
-   
+
    The final stitching step is handled automatically by all pipeline factories.
 
 A key advantage of EZStitcher's design is that these steps aren't hardcoded—they're composed through the API, allowing you to create custom workflows tailored to your specific microscopy needs. By combining regular processing Steps with specialized PositionGenerationStep and ImageStitchingStep, you can create seamless end-to-end workflows that handle everything from initial image processing to final stitched image assembly.

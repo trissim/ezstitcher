@@ -1,7 +1,12 @@
-Pipeline Factories
-================
+.. warning::
+   This documentation is deprecated. The individual factory functions shown here have been replaced by the unified ``AutoPipelineFactory``. Please refer to :doc:`basic_usage` for information about using pipeline factories.
 
-EZStitcher provides several factory functions to create common pipeline configurations.
+Pipeline Factories (Deprecated)
+===========================
+
+This documentation has been deprecated. The individual factory functions shown here have been replaced by the unified ``AutoPipelineFactory``.
+
+See :doc:`basic_usage` for examples of using the ``AutoPipelineFactory`` and :doc:`../concepts/pipeline_factory` for detailed information.
 
 Basic Stitching Pipeline
 ----------------------

@@ -118,7 +118,7 @@ The specialized steps leverage the orchestrator's services to handle plate-speci
 
 3. **Position Generation**: The orchestrator handles the details of generating positions based on the plate format.
 
-4. **Image Loading**: The orchestrator uses FileSystemManager to find the actual image directory within the plate path.
+4. **Image Loading**: The orchestrator uses FileSystemManager to find and load images from the plate path.
 
 This abstraction allows the steps to focus on their specific tasks without needing to know the details of different plate formats.
 
@@ -188,13 +188,10 @@ Here's a comparison of raw Steps vs. specialized steps for common operations:
    * - Focus selection
      - .. code-block:: python
 
-          focus_analyzer = FocusAnalyzer(
-              metric='laplacian'
-          )
           Step(
               func=(IP.create_projection,
                     {'method': 'best_focus',
-                     'focus_analyzer': focus_analyzer}),
+                     'metric': 'laplacian'}),
               variable_components=['z_index'],
               group_by=None,
               name="Best Focus (laplacian)"
@@ -263,10 +260,16 @@ The ``FocusStep`` is a specialized step for focus-based Z-stack processing:
         input_dir=orchestrator.workspace_path
     )
 
+    # Create a best focus step with custom weights
+    step = FocusStep(
+        focus_options={'metric': {'nvar': 0.4, 'lap': 0.4, 'ten': 0.1, 'fft': 0.1}},
+        input_dir=orchestrator.workspace_path
+    )
+
 This step pre-configures:
 - ``variable_components=['z_index']``
 - ``group_by=None``
-- ``func=(IP.create_projection, {'method': 'best_focus', 'focus_analyzer': focus_analyzer})``
+- Uses static FocusAnalyzer methods to find the best focus plane
 
 CompositeStep
 ^^^^^^^^^^
@@ -334,12 +337,14 @@ The specialized steps described in this document are used by the :doc:`pipeline_
 
 2. **Image Assembly Pipeline**: Stitches images using the position files
    - Steps: [normalize (optional), flatten Z (optional), stitch_images (always)]
-   - Uses: ``ZFlatStep`` (optional) and ``ImageStitchingStep``
+   - Uses: ``ZFlatStep`` or ``FocusStep`` (optional, depending on z_method) and ``ImageStitchingStep``
 
 The factory parameters control which specialized steps are included and how they are configured:
 
 - ``flatten_z``: Controls whether Z-stacks are flattened in the assembly pipeline (Z-stacks are always flattened for position generation)
-- ``z_method``: Specifies the projection method when flattening Z-stacks (default: "max")
+- ``z_method``: Specifies the Z-stack processing method (default: "max")
+  - Projection methods: "max", "mean", "median", etc.
+  - Focus detection methods: "combined", "laplacian", "tenengrad", "normalized_variance", "fft"
 - ``channel_weights``: Controls which channels contribute to the reference image for position generation
 
 For more information about the ``AutoPipelineFactory``, see :doc:`pipeline_factory`.

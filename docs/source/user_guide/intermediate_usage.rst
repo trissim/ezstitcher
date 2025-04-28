@@ -195,13 +195,12 @@ Example with different focus metrics:
     # orchestrator.run(pipelines=[laplacian_pipeline])
     # orchestrator.run(pipelines=[tenengrad_pipeline])
 
-    # You can also use the FocusAnalyzer directly for more control
-    focus_analyzer = FocusAnalyzer()
-    focus_scores = focus_analyzer.calculate_focus_scores(
+    # You can also use the FocusAnalyzer static methods directly for more control
+    focus_scores = FocusAnalyzer.compute_focus_metrics(
         images,  # List of images in a Z-stack
-        metric='variance_of_laplacian'
+        metric='laplacian'
     )
-    best_focus_index = focus_analyzer.find_best_focus_index(focus_scores)
+    best_focus_index, _ = FocusAnalyzer.find_best_focus(images, metric='laplacian')
     best_focused_image = images[best_focus_index]
 
 Channel-Specific Processing
@@ -480,7 +479,7 @@ A complete workflow that combines Z-stack processing, channel-specific processin
                 name="Z-Stack Processing",
                 func={
                     "1": (IP.create_projection, {'method': 'max_projection'}),  # Use max projection for channel 1
-                    "2": (IP.create_projection, {'method': 'best_focus', 'focus_analyzer': FocusAnalyzer(metric='variance_of_laplacian')})  # Use best focus for channel 2
+                    "2": (IP.create_projection, {'method': 'best_focus', 'metric': 'laplacian'})  # Use best focus for channel 2
                 },
                 group_by='channel',
                 variable_components=['z_index'],

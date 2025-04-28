@@ -45,12 +45,13 @@ FileSystemManager
 
    .. py:staticmethod:: load_image(file_path)
 
-      Load an image and ensure it's 2D grayscale.
+      Load an image. Only 2D images are supported.
 
       :param file_path: Path to the image file
       :type file_path: str or Path
-      :return: 2D grayscale image or None if loading fails
+      :return: 2D image or None if loading fails
       :rtype: numpy.ndarray or None
+      :raises: ValueError: If the image is 3D (not supported)
 
    .. py:staticmethod:: save_image(file_path, image, compression=None)
 

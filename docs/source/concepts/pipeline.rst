@@ -86,7 +86,8 @@ Each parameter plays an important role:
 
 * **name** helps identify the pipeline in logs and debugging output
 * **steps** defines the sequence of operations to perform
-* **input_dir** and **output_dir** establish the data flow boundaries
+* **input_dir** establishes the initial input directory for the pipeline
+* **output_dir** establishes the final output directory, typically used by the last step in the pipeline
 * **well_filter** allows for selective processing of specific wells
 
 .. _pipeline-running:
@@ -250,3 +251,37 @@ Best Practices
 ------------
 
 For comprehensive best practices on using pipelines effectively, see :ref:`best-practices-pipeline` in the :doc:`../user_guide/best_practices` guide.
+
+.. _pipeline-factory-integration:
+
+Pipeline Factory Integration
+-------------------------
+
+While you can create pipelines manually as shown in this document, EZStitcher also provides the :doc:`pipeline_factory` for creating pre-configured pipelines for common workflows:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True  # Apply normalization (default)
+    )
+
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
+The ``AutoPipelineFactory`` creates two pipelines:
+
+1. **Position Generation Pipeline**: Creates position files for stitching
+2. **Image Assembly Pipeline**: Stitches images using the position files
+
+For more information on pipeline factories, see :doc:`pipeline_factory`.

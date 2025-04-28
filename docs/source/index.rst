@@ -3,6 +3,21 @@ Welcome to EZStitcher's Documentation
 
 EZStitcher is a Python package for stitching microscopy images with support for Z-stacks, multi-channel fluorescence, and advanced focus detection.
 
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path="path/to/plate")
+
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(input_dir=orchestrator.workspace_path)
+
+    # Create and run pipelines
+    pipelines = factory.create_pipelines()
+    orchestrator.run(pipelines=pipelines)
+
 .. image:: _static/ezstitcher_logo.png
    :width: 400
    :alt: EZStitcher Logo
@@ -10,6 +25,7 @@ EZStitcher is a Python package for stitching microscopy images with support for 
 Key Features
 ------------
 
+- **Pipeline Factory**: Create complete stitching workflows with minimal code
 - **Multi-channel fluorescence support**: Process and stitch multiple fluorescence channels
 - **Z-stack handling**: Process 3D image stacks with various projection methods
 - **Advanced focus detection**: Find the best focused plane in Z-stacks

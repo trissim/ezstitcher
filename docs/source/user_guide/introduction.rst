@@ -98,62 +98,50 @@ pip install -e .
 
 All dependencies will be automatically installed from the requirements.txt file included in the repository.
 
-Quick Start Example
------------------
+Getting Started Quickly
+---------------------
 
-Here's a simple example that demonstrates how to create and run a pipeline for processing and stitching microscopy images:
+The fastest way to get started with EZStitcher is to use the ``AutoPipelineFactory``, which creates pre-configured pipelines for common workflows:
 
 .. code-block:: python
 
-    from ezstitcher.core.config import PipelineConfig
-    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
-    from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.image_processor import ImageProcessor as IP
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    from pathlib import Path
 
-    # Create configuration with 2 worker threads
-    config = PipelineConfig(num_workers=2)
+    # Path to your plate folder
+    plate_path = Path("/path/to/your/plate")
 
-    # Create orchestrator with path to microscopy data
-    orchestrator = PipelineOrchestrator(config=config, plate_path="path/to/plate")
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
 
-    # Create pipeline with processing, position generation, and stitching steps
-    pipeline = Pipeline(
-        steps=[
-            # Step 1: Basic processing - normalize image intensities
-            Step(
-                name="Basic Processing",
-                func=IP.stack_percentile_normalize,
-                input_dir=orchestrator.workspace_path
-            ),
-            PositionGenerationStep(),
-
-            # By default, uses previous step's output directory (position files)
-            ImageStitchingStep(
-                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
-            )
-        ],
-        name="Simple Pipeline"
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
+        normalize=True  # Apply normalization (default)
     )
 
-    # Run the pipeline
-    orchestrator.run(pipelines=[pipeline])
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
 
-**Step-by-Step Explanation:**
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
 
-1. We create a configuration with 2 worker threads for parallel processing
-2. We create an orchestrator that points to our microscopy data
-3. We define a pipeline with three steps:
-   - A basic processing step that normalizes image intensities
-   - A position generation step that calculates tile positions
-   - An image stitching step that combines the processed tiles
-4. We run the pipeline using the orchestrator
+The ``AutoPipelineFactory`` automatically creates two pipelines:
+
+1. A pipeline for generating position files
+2. A pipeline for stitching images using those position files
+
+This approach handles all common stitching scenarios, including multi-channel data and Z-stacks, with minimal configuration. For detailed examples, see :doc:`basic_usage`.
+
+For users who need more control, EZStitcher also supports manual pipeline creation, which is covered in :doc:`intermediate_usage`.
 
 **Expected Output:**
 
 * Processed images will be saved in the workspace directory with the suffix `_out` (e.g., `plate_workspace_out`)
 * Position files will be saved in the workspace directory with the suffix `_positions` (e.g., `plate_workspace_positions`)
-* Stitched images will be saved in the workspace directory with the suffix `_stitched` (e.g., `plate_workspace_stitched`)
+* Stitched images will be saved in the output directory specified (e.g., `plate_stitched`)
 
 Key Concepts
 -----------
@@ -168,6 +156,8 @@ EZStitcher is built around several key concepts that work together to provide a 
      - Documentation
    * - **Architecture Overview**
      - :doc:`../concepts/architecture_overview`
+   * - **Pipeline Factory**
+     - :doc:`../concepts/pipeline_factory`
    * - **Pipeline Orchestrator**
      - :doc:`../concepts/pipeline_orchestrator`
    * - **Pipeline**
@@ -190,7 +180,8 @@ How to Use This Guide
 
 This user guide is organized into several sections:
 
-* **Intermediate Usage**: Provides detailed examples of common EZStitcher workflows
+* **Basic Usage**: Introduces pipeline factories for quick and easy stitching
+* **Intermediate Usage**: Provides detailed examples of manual pipeline creation
 * **Advanced Usage**: Explores custom functions, multithreading, and extensions
 * **Integration**: Shows how to integrate EZStitcher with other tools
 
@@ -201,21 +192,19 @@ For a comprehensive understanding of EZStitcher's architecture and concepts, ple
 Learning Path
 ---------
 
-EZStitcher provides a flexible framework for processing and stitching microscopy images. By understanding its core concepts and architecture, you can create powerful pipelines tailored to your specific needs.
-
-Here's a recommended learning path based on your experience level:
+EZStitcher provides a flexible framework for processing and stitching microscopy images. Here's a recommended learning path based on your experience level:
 
 **Getting Started:**
 
-* Read the :doc:`basic_usage` guide to learn the fundamentals
-* Try the Quick Start example above to get hands-on experience
+* Start with the :doc:`basic_usage` guide to learn how to use pipeline factories
+* Try the Getting Started Quickly example above to get hands-on experience
 * Review the :doc:`../concepts/architecture_overview` to understand the big picture
 
-**Building Basic Pipelines:**
+**Building Custom Pipelines:**
 
-* Learn about Z-stack processing in :doc:`intermediate_usage`
-* Explore channel-specific processing in :doc:`intermediate_usage`
-* Understand position generation and stitching in :doc:`intermediate_usage`
+* Move to :doc:`intermediate_usage` to learn about manual pipeline creation
+* Study :doc:`../concepts/pipeline` to understand pipeline configuration in detail
+* Explore :doc:`../concepts/specialized_steps` to learn about higher-level abstractions
 * Review best practices in :doc:`best_practices`
 
 **Advanced Topics:**
@@ -227,10 +216,10 @@ Here's a recommended learning path based on your experience level:
 
 **Mastering EZStitcher:**
 
-* Dive into :doc:`../concepts/pipeline` to create custom pipelines
 * Study :doc:`../concepts/step` to understand step parameters in detail
 * Explore :doc:`../concepts/function_handling` to learn about advanced function patterns
 * Learn about :doc:`../concepts/directory_structure` to understand how directories are managed
+* Dive into the API reference for detailed information about all classes and methods
 
 **Getting Help:**
 
