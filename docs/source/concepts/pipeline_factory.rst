@@ -69,7 +69,7 @@ This structure is consistent regardless of data type (single/multi-channel, sing
 Parameters
 ---------
 
-For detailed API documentation, see :doc:`../api/pipeline_factories`.
+For detailed API documentation, see :doc:`../api/pipeline_factory`.
 
 The ``AutoPipelineFactory`` accepts the following parameters:
 

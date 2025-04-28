@@ -5,15 +5,9 @@ Steps
 
 This module contains the Step class and its specialized subclasses for the EZStitcher pipeline architecture.
 
-For comprehensive information about steps, including:
-
-* Step parameters and their usage
-* Variable components and group_by
-* Function handling patterns
-* Directory resolution
-* Best practices
-
-See :doc:`../concepts/step` documentation.
+For conceptual explanation, see :doc:`../concepts/step`.
+For information about function handling in steps, see :doc:`../concepts/function_handling`.
+For information about directory structure, see :doc:`../concepts/directory_structure`.
 
 For detailed information about specialized steps like PositionGenerationStep and ImageStitchingStep, see :ref:`specialized-steps` in the :doc:`../concepts/specialized_steps` documentation.
 

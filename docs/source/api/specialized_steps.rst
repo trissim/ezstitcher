@@ -7,6 +7,9 @@ This module contains specialized step implementations that inherit from the regu
 and pre-configure parameters for common operations like Z-stack flattening, focus selection,
 and channel compositing.
 
+For conceptual explanation, see :doc:`../concepts/specialized_steps`.
+For information about step configuration, see :doc:`../concepts/step`.
+
 ZFlatStep
 --------
 
