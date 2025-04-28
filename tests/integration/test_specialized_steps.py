@@ -16,7 +16,7 @@ from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
-from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import stack

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .pipeline import Pipeline
 from .steps import Step, PositionGenerationStep, ImageStitchingStep
-from .step_factories import ZFlatStep, FocusStep, CompositeStep
+from .specialized_steps import ZFlatStep, FocusStep, CompositeStep
 from .image_processor import ImageProcessor as IP
 
 

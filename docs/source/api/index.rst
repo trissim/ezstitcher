@@ -13,7 +13,7 @@ Core Components
    pipeline
    pipeline_factory
    steps
-   step_factories
+   specialized_steps
    stitcher
    focus_analyzer
    image_processor

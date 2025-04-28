@@ -1,9 +1,10 @@
 """
-Step factory classes for the EZStitcher pipeline architecture.
+Specialized step implementations for the EZStitcher pipeline architecture.
 
-This module contains specialized step implementations that inherit from the regular Step class
+This module contains specialized steps that inherit from the regular Step class
 and pre-configure parameters for common operations like Z-stack flattening, focus selection,
-and channel compositing.
+and channel compositing. These specialized steps follow the factory pattern design principle,
+creating pre-configured Step instances with appropriate parameters for specific tasks.
 """
 
 from typing import List, Optional, Union, Dict, Any

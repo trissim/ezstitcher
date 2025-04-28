@@ -11,7 +11,7 @@ from pathlib import Path
 from ezstitcher.core import AutoPipelineFactory
 from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 
 

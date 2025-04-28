@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 
-from ezstitcher.core.step_factories import ZFlatStep, FocusStep, CompositeStep
+from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 
@@ -69,7 +69,7 @@ class TestFocusStep(unittest.TestCase):
         """Test the process method."""
         # Create a mock image stack
         images = [np.zeros((10, 10)) for _ in range(3)]
-        
+
         # Create a distinct "best" image
         best_image = np.ones((10, 10))  # Different from zeros
         mock_select_best_focus.return_value = (best_image, 0, [(0, 0.5)])

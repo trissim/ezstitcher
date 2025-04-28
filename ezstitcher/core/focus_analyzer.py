@@ -12,14 +12,53 @@ class FocusAnalyzer:
     This class implements various focus measure algorithms and methods to find
     the best focused image in a Z-stack. All methods are static and do not require
     an instance.
+
+    Usage:
+        The class provides several focus metrics and methods to select the best focused
+        image from a Z-stack. The main methods are:
+
+        - find_best_focus: Returns the index of the best focused image in a stack
+        - select_best_focus: Returns the best focused image from a stack
+        - compute_focus_metrics: Computes focus metrics for all images in a stack
+
+        For most use cases, it's recommended to use the select_best_focus method
+        with an explicit metric parameter:
+
+        ```python
+        best_image, best_idx, scores = FocusAnalyzer.select_best_focus(
+            image_stack,
+            metric="laplacian"  # Explicitly specify the metric
+        )
+        ```
+
+        Available metrics:
+        - "combined": Uses a weighted combination of all metrics (default)
+        - "normalized_variance" or "nvar": Uses normalized variance
+        - "laplacian" or "lap": Uses Laplacian energy
+        - "tenengrad" or "ten": Uses Tenengrad variance
+        - "fft": Uses adaptive FFT focus measure
+
+        You can also provide a custom weights dictionary for the combined metric:
+
+        ```python
+        custom_weights = {'nvar': 0.4, 'lap': 0.4, 'ten': 0.1, 'fft': 0.1}
+        best_image, best_idx, scores = FocusAnalyzer.select_best_focus(
+            image_stack,
+            metric=custom_weights
+        )
+        ```
     """
 
-    # Default weights for combined focus measure
+    # Default weights for the combined focus measure.
+    # These weights are used when no custom weights are provided to the
+    # combined_focus_measure method or when using the "combined" metric
+    # with find_best_focus, select_best_focus, or compute_focus_metrics.
+    # The weights determine the contribution of each focus metric to the final score:
     DEFAULT_WEIGHTS = {
-        'nvar': 0.3,  # Normalized variance
-        'lap': 0.3,   # Laplacian energy
-        'ten': 0.2,   # Tenengrad variance
-        'fft': 0.2    # FFT-based focus
+        'nvar': 0.3,  # Normalized variance (robust to illumination changes)
+        'lap': 0.3,   # Laplacian energy (sensitive to edges)
+        'ten': 0.2,   # Tenengrad variance (based on gradient magnitude)
+        'fft': 0.2    # FFT-based focus (frequency domain analysis)
     }
 
     @staticmethod
@@ -119,12 +158,32 @@ class FocusAnalyzer:
         Combined focus measure using multiple metrics.
         Optimized for microscopy images, especially low-contrast specimens.
 
+        This method combines multiple focus metrics (normalized variance, Laplacian energy,
+        Tenengrad variance, and FFT-based focus) using weighted averaging. The weights
+        determine the contribution of each metric to the final score.
+
         Args:
             img: Input grayscale image
-            weights: Weights for each metric. If None, uses default weights.
+            weights: Weights for each metric as a dictionary with keys 'nvar', 'lap', 'ten', 'fft'.
+                     If None, uses DEFAULT_WEIGHTS (nvar=0.3, lap=0.3, ten=0.2, fft=0.2).
+                     Provide custom weights when you want to emphasize specific focus characteristics:
+                     - Increase 'nvar' weight for better performance with illumination variations
+                     - Increase 'lap' weight for better edge detection
+                     - Increase 'ten' weight for better gradient-based focus
+                     - Increase 'fft' weight for better frequency domain analysis
 
         Returns:
-            Combined focus quality score
+            Combined focus quality score (higher values indicate better focus)
+
+        Example:
+            ```python
+            # Use default weights
+            score = FocusAnalyzer.combined_focus_measure(image)
+
+            # Use custom weights to emphasize edges
+            custom_weights = {'nvar': 0.2, 'lap': 0.5, 'ten': 0.2, 'fft': 0.1}
+            score = FocusAnalyzer.combined_focus_measure(image, weights=custom_weights)
+            ```
         """
         # Use provided weights or defaults
         if weights is None:
