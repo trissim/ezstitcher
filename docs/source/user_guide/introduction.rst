@@ -9,6 +9,7 @@ EZStitcher is a Python library designed to simplify the processing and stitching
 
 **Key Features:**
 
+* **Pipeline Factory**: Create complete stitching workflows with minimal code
 * **Pipeline Architecture**: Organize processing steps in a logical sequence
 * **Automatic Directory Management**: Protect original data while maintaining organized outputs
 * **Flexible Function Handling**: Apply various processing functions in different patterns
@@ -98,10 +99,20 @@ pip install -e .
 
 All dependencies will be automatically installed from the requirements.txt file included in the repository.
 
-Getting Started Quickly
+Getting Started
 ---------------------
 
-The fastest way to get started with EZStitcher is to use the ``AutoPipelineFactory``, which creates pre-configured pipelines for common workflows:
+EZStitcher offers two main approaches for creating stitching pipelines:
+
+1. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
+2. Building custom pipelines for maximum flexibility and control
+
+Both approaches are valid and powerful, with different strengths depending on your needs.
+
+Using AutoPipelineFactory:
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``AutoPipelineFactory`` creates pre-configured pipelines for common workflows:
 
 .. code-block:: python
 
@@ -128,14 +139,86 @@ The fastest way to get started with EZStitcher is to use the ``AutoPipelineFacto
     # Run the pipelines
     orchestrator.run(pipelines=pipelines)
 
+Building Custom Pipelines:
+^^^^^^^^^^^^^^^^^^^^^
+
+For maximum flexibility, you can build custom pipelines by directly specifying each step:
+
+.. code-block:: python
+
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+    from ezstitcher.core.image_processor import ImageProcessor as IP
+
+    # Create position generation pipeline
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Normalize image intensities
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Normalize image intensities
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
+        ],
+        name="Image Assembly Pipeline"
+    )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
+
 The ``AutoPipelineFactory`` automatically creates two pipelines:
 
 1. A pipeline for generating position files
 2. A pipeline for stitching images using those position files
 
-This approach handles all common stitching scenarios, including multi-channel data and Z-stacks, with minimal configuration. For detailed examples, see :doc:`basic_usage`.
+This approach handles all common stitching scenarios, including:
 
-For users who need more control, EZStitcher also supports manual pipeline creation, which is covered in :doc:`intermediate_usage`.
+* Single-channel and multi-channel data
+* Single Z-plane and Z-stack data
+* Various projection methods for Z-stacks (max, mean, focus detection, etc.)
+* Normalization and preprocessing
+* Automatic directory management
+
+For detailed examples, see :doc:`basic_usage`.
+
+Custom pipelines offer maximum flexibility and control:
+
+* Complete control over each step in the pipeline
+* Ability to create highly customized workflows
+* Terse and elegant code for specific use cases
+* Direct access to all pipeline features
+* Flexibility to combine any processing functions
+
+Both approaches are valid and powerful, with different strengths depending on your needs. The choice between them depends on your specific requirements and preferences. For detailed examples of custom pipelines, see :doc:`intermediate_usage` and :doc:`advanced_usage`.
 
 **Expected Output:**
 
@@ -180,9 +263,9 @@ How to Use This Guide
 
 This user guide is organized into several sections:
 
-* **Basic Usage**: Introduces pipeline factories for quick and easy stitching
-* **Intermediate Usage**: Provides detailed examples of manual pipeline creation
-* **Advanced Usage**: Explores custom functions, multithreading, and extensions
+* **Basic Usage**: Shows how to use AutoPipelineFactory and create simple custom pipelines
+* **Intermediate Usage**: Demonstrates more complex pipelines using both approaches
+* **Advanced Usage**: Explores custom functions, multithreading, and other advanced topics
 * **Integration**: Shows how to integrate EZStitcher with other tools
 
 For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
@@ -196,16 +279,21 @@ EZStitcher provides a flexible framework for processing and stitching microscopy
 
 **Getting Started:**
 
-* Start with the :doc:`basic_usage` guide to learn how to use pipeline factories
-* Try the Getting Started Quickly example above to get hands-on experience
-* Review the :doc:`../concepts/architecture_overview` to understand the big picture
+* Start with the :doc:`basic_usage` guide to learn both approaches
+* Try the examples above to get hands-on experience
+* Review the :doc:`../concepts/pipeline` to understand the pipeline architecture
 
-**Building Custom Pipelines:**
+**Intermediate Usage:**
 
-* Move to :doc:`intermediate_usage` to learn about manual pipeline creation
-* Study :doc:`../concepts/pipeline` to understand pipeline configuration in detail
-* Explore :doc:`../concepts/specialized_steps` to learn about higher-level abstractions
+* Learn more complex workflows in :doc:`intermediate_usage`
+* Study :doc:`../concepts/specialized_steps` to understand specialized steps
 * Review best practices in :doc:`best_practices`
+
+**Advanced Usage:**
+
+* Explore advanced features in :doc:`advanced_usage`
+* Learn about custom functions and multithreading
+* Study :doc:`../concepts/function_handling` to understand function handling patterns
 
 **Advanced Topics:**
 

@@ -4,6 +4,17 @@ Advanced Usage
 
 This section explores advanced features of EZStitcher for users who need to extend its functionality or optimize performance.
 
+Introduction
+-----------
+
+This guide covers advanced usage patterns for EZStitcher, building on the concepts introduced in the basic and intermediate guides. This guide shows how to:
+
+1. Create custom processing functions for specialized needs
+2. Implement multithreaded processing for improved performance
+3. Build highly customized pipelines for advanced workflows
+
+Both the AutoPipelineFactory and custom pipeline approaches can be extended with advanced features. This guide will show you how to use both approaches for advanced-level tasks.
+
 .. note::
    Directory paths are automatically resolved between steps in EZStitcher. The first step should specify
    ``input_dir=orchestrator.workspace_path`` to ensure processing happens on workspace copies,
@@ -64,17 +75,55 @@ Here's a simple example of a custom processing function:
 
         return result
 
-Using Custom Functions in Pipelines
+Using Custom Functions with AutoPipelineFactory
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can use custom processing functions with ``AutoPipelineFactory`` by customizing the pipelines it creates:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.steps import Step
+    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+    from pathlib import Path
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=Path("/path/to/plate"))
+
+    # Create pipelines with AutoPipelineFactory
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True
+    )
+    pipelines = factory.create_pipelines()
+
+    # Access the position generation pipeline
+    position_pipeline = pipelines[0]
+
+    # Add a custom processing step
+    position_pipeline.add_step(
+        Step(
+            name="Custom Enhancement",
+            func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+        ),
+        index=1  # Insert after normalization but before composite step
+    )
+
+    # Run the customized pipelines
+    orchestrator.run(pipelines=pipelines)
+
+Using Custom Functions in Custom Pipelines
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can use custom functions in pipelines just like built-in functions:
+For complete control, you can create custom pipelines with your functions:
 
 .. code-block:: python
 
     from ezstitcher.core.config import PipelineConfig
     from ezstitcher.core.processing_pipeline import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step
+    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
     from pathlib import Path
 
     # Create configuration and orchestrator
@@ -84,21 +133,49 @@ You can use custom functions in pipelines just like built-in functions:
         plate_path=Path("/path/to/plate")
     )
 
-    # Create a pipeline with custom function
-    custom_pipeline = Pipeline(
+    # Create position generation pipeline with custom function
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
         steps=[
-            # Use custom function
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Use custom enhancement function
             Step(
                 name="Custom Enhancement",
-                func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0}),
-                input_dir=orchestrator.workspace_path
-            )
+                func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
         ],
-        name="Custom Processing Pipeline"
+        name="Position Generation Pipeline"
     )
 
-    # Run the pipeline
-    orchestrator.run(pipelines=[custom_pipeline])
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline with custom function
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Use custom enhancement function
+            Step(
+                name="Custom Enhancement",
+                func=(custom_enhance, {'sigma': 1.5, 'contrast_factor': 2.0})
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
+        ],
+        name="Image Assembly Pipeline"
+    )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 Handling Single Images vs. Image Stacks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -114,17 +191,49 @@ If your function is designed to process a single image but you want to apply it 
         """Enhance a single image."""
         return np.clip(img * factor, 0, 1)
 
-    # Create a pipeline that applies the function to each image in a stack
-    pipeline = Pipeline(
+    # Create position generation pipeline that applies the function to each image
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
         steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Apply single-image function to each image in the stack
             Step(
                 name="Enhance Images",
-                func=(stack(enhance_single_image), {'factor': 2.0}),  # Convert to stack function with args
-                input_dir=orchestrator.workspace_path
-            )
+                func=(stack(enhance_single_image), {'factor': 2.0})  # Convert to stack function with args
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
         ],
-        name="Single Image Function Pipeline"
+        name="Position Generation Pipeline"
     )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Apply single-image function to each image in the stack
+            Step(
+                name="Enhance Images",
+                func=(stack(enhance_single_image), {'factor': 2.0})  # Convert to stack function with args
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
+        ],
+        name="Image Assembly Pipeline"
+    )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 Advanced Custom Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -164,18 +273,54 @@ For more complex processing, you can create functions that handle specific compo
 
         return result
 
-    # Use the function in a pipeline
-    pipeline = Pipeline(
+    # Create position generation pipeline with channel-aware processing
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
         steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Channel-aware processing
             Step(
                 name="Channel-Aware Processing",
                 func=process_by_channel,
-                group_by='channel',  # Group by channel to pass channel info
-                input_dir=orchestrator.workspace_path
+                group_by='channel'  # Group by channel to pass channel info
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline with channel-aware processing
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Channel-aware processing
+            Step(
+                name="Channel-Aware Processing",
+                func=process_by_channel,
+                group_by='channel'  # Group by channel to pass channel info
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(
+                positions_dir=positions_dir,
+                variable_components=['channel']  # Stitch each channel separately
             )
         ],
-        name="Advanced Custom Pipeline"
+        name="Image Assembly Pipeline"
     )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 Dictionary of Lists with Matching Processing Args
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -187,9 +332,14 @@ A more elegant approach is to use a dictionary of lists of functions with matchi
     from ezstitcher.core.utils import stack
     from skimage import filters
 
-    # Create a pipeline with dictionary of lists of functions and matching kwargs
-    advanced_pipeline = Pipeline(
+    # Create position generation pipeline with dictionary of functions
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
         steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Advanced channel-specific processing
             Step(
                 name="Advanced Channel Processing",
                 func={
@@ -204,18 +354,119 @@ A more elegant approach is to use a dictionary of lists of functions with matchi
                         (IP.stack_percentile_normalize, {'low_percentile': 1.0, 'high_percentile': 99.0})   # Finally normalize with args
                     ]
                 },
-                group_by='channel',  # Specifies that keys "1" and "2" refer to channel values
-                input_dir=orchestrator.workspace_path
+                group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(weights=[0.7, 0.3]),  # 70% DAPI, 30% GFP
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline with dictionary of functions
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Advanced channel-specific processing
+            Step(
+                name="Advanced Channel Processing",
+                func={
+                    "1": [  # Process channel 1 (DAPI)
+                        (stack(filters.gaussian), {'sigma': 1.0}),        # First apply Gaussian blur with args
+                        (stack(filters.unsharp_mask), {'radius': 1.0, 'amount': 2.0}),    # Then apply unsharp mask with args
+                        (IP.stack_percentile_normalize, {'low_percentile': 1.0, 'high_percentile': 99.0})   # Finally normalize with args
+                    ],
+                    "2": [  # Process channel 2 (GFP)
+                        (stack(filters.median), {'selem': None}),          # First apply median filter with args
+                        (stack(filters.unsharp_mask), {'radius': 0.5, 'amount': 1.5}),    # Then apply unsharp mask with args
+                        (IP.stack_percentile_normalize, {'low_percentile': 1.0, 'high_percentile': 99.0})   # Finally normalize with args
+                    ]
+                },
+                group_by='channel'  # Specifies that keys "1" and "2" refer to channel values
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(
+                positions_dir=positions_dir,
+                variable_components=['channel']  # Stitch each channel separately
             )
         ],
-        name="Advanced Dictionary Pipeline"
+        name="Image Assembly Pipeline"
     )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 This approach provides several advantages:
 - More concise and readable than a custom function with conditionals
 - Easier to modify and extend with additional channels or processing steps
 - Clearer separation between processing logic and parameters
 - More flexible for experimentation with different parameter values
+
+Conditional Processing
+^^^^^^^^^^^^^^^^^^^^^
+
+You can implement conditional processing based on well, site, or other context information:
+
+.. code-block:: python
+
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+
+    # Create position generation pipeline with conditional processing
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Apply different processing based on well
+            Step(
+                name="Conditional Processing",
+                func=lambda images, context: (
+                    process_control(images) if context.well == 'A01' else
+                    process_treatment(images)
+                )
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Apply different processing based on well
+            Step(
+                name="Conditional Processing",
+                func=lambda images, context: (
+                    process_control(images) if context.well == 'A01' else
+                    process_treatment(images)
+                )
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
+        ],
+        name="Image Assembly Pipeline"
+    )
+
+    # Run the pipelines
+    orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 Multithreaded Processing
 ----------------------
@@ -226,6 +477,90 @@ Configuring Multithreading
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Multithreading is configured through the ``PipelineConfig`` class:
+
+Using AutoPipelineFactory:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.config import PipelineConfig
+    from ezstitcher.core.processing_pipeline import PipelineOrchestrator
+
+    # Create configuration with multithreaded processing
+    config = PipelineConfig(
+        num_workers=4  # Use 4 worker threads
+    )
+
+    # Create orchestrator with multithreading
+    orchestrator = PipelineOrchestrator(
+        config=config,
+        plate_path="/path/to/plate"
+    )
+
+    # Create pipelines with AutoPipelineFactory
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True
+    )
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines with multithreading
+    orchestrator.run(pipelines=pipelines)
+
+Pipeline Composition
+^^^^^^^^^^^^^^^^^
+
+You can create pipelines that build on each other's outputs:
+
+.. code-block:: python
+
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
+
+    # Create a preprocessing pipeline
+    preprocess_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            Step(
+                name="Preprocessing",
+                func=preprocess_images
+            )
+        ],
+        name="Preprocessing Pipeline"
+    )
+
+    # Create a position generation pipeline that uses the output of the preprocessing pipeline
+    position_pipeline = Pipeline(
+        input_dir=preprocess_pipeline.output_dir,
+        steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Create composite for position generation
+            CompositeStep(),
+
+            # Step 3: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create an image assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=preprocess_pipeline.output_dir,
+        steps=[
+            # Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
+        ],
+        name="Image Assembly Pipeline"
+    )
+
+    # Run the pipelines in sequence
+    orchestrator.run(pipelines=[preprocess_pipeline, position_pipeline, assembly_pipeline])
+
+Using Manual Pipeline Creation:
 
 .. code-block:: python
 
@@ -270,6 +605,87 @@ For example:
     # For a system with 8 cores processing large images
     config = PipelineConfig(num_workers=4)  # Use fewer threads
 
+Extending AutoPipelineFactory
+--------------------------
+
+For advanced use cases, you can extend ``AutoPipelineFactory`` to create a custom factory that includes your specialized functionality:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.steps import Step
+    from ezstitcher.core.pipeline import Pipeline
+
+    class CustomPipelineFactory(AutoPipelineFactory):
+        """Custom pipeline factory with additional functionality."""
+
+        def __init__(self, input_dir, custom_param=None, **kwargs):
+            """Initialize with custom parameters."""
+            super().__init__(input_dir, **kwargs)
+            self.custom_param = custom_param
+
+        def create_pipelines(self):
+            """Create pipelines with custom functionality."""
+            # Get standard pipelines from parent class
+            pipelines = super().create_pipelines()
+
+            # Access individual pipelines
+            position_pipeline = pipelines[0]
+            assembly_pipeline = pipelines[1]
+
+            # Add custom processing to position generation pipeline
+            if self.custom_param:
+                position_pipeline.add_step(
+                    Step(
+                        name="Custom Processing",
+                        func=(self.custom_process, {'param': self.custom_param})
+                    ),
+                    index=1  # Insert after normalization
+                )
+
+            # Add a third pipeline for additional processing
+            analysis_pipeline = Pipeline(
+                steps=[
+                    # Add steps for analysis
+                    Step(
+                        name="Analysis",
+                        func=self.analyze_results,
+                        input_dir=assembly_pipeline.output_dir
+                    )
+                ],
+                name="Analysis Pipeline"
+            )
+
+            # Add the analysis pipeline to the list
+            pipelines.append(analysis_pipeline)
+
+            return pipelines
+
+        @staticmethod
+        def custom_process(images, param=None):
+            """Custom processing function."""
+            # Implement custom processing
+            return images
+
+        @staticmethod
+        def analyze_results(images):
+            """Analyze stitched images."""
+            # Implement analysis
+            return images
+
+    # Use the custom factory
+    factory = CustomPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        custom_param="value",
+        normalize=True,
+        flatten_z=True,
+        z_method="max"
+    )
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
 Extending with New Microscope Types
 --------------------------------
 
@@ -282,6 +698,24 @@ Microscope handlers are responsible for:
 3. Providing metadata about the microscope setup
 
 For detailed information about creating and registering custom microscope handlers, see :doc:`../development/extending`.
+
+Choosing the Right Approach for Advanced Tasks
+---------------------------------------------
+
+When working on advanced-level tasks, consider these factors when choosing between approaches:
+
+**Choose Custom Pipelines When:**
+- You need to implement complex, specialized workflows
+- You're working with custom processing functions
+- You need precise control over pipeline structure
+- You're implementing conditional processing logic
+
+**Choose AutoPipelineFactory When:**
+- You want to extend standard workflows with custom functionality
+- You prefer to start with a working pipeline and customize it
+- You're building on common patterns with advanced parameters
+
+Both approaches are powerful for advanced tasks, and many experienced users combine them based on specific requirements.
 
 Next Steps
 ----------

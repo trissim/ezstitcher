@@ -2,13 +2,18 @@
 Basic Usage
 ==========
 
-Using Pipeline Factory
---------------------
+EZStitcher offers two main approaches for creating stitching pipelines:
 
-The recommended way to use EZStitcher is through the ``AutoPipelineFactory``, which creates pre-configured pipelines for common workflows. This approach simplifies pipeline creation by automatically configuring the appropriate steps based on input parameters.
+1. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
+2. Building custom pipelines for maximum flexibility and control
 
-Basic Example
-^^^^^^^^^^^
+Both approaches are valid and powerful, with different strengths depending on your needs. This guide will show you how to use both approaches for common stitching tasks.
+
+Using EZStitcher
+-------------------
+
+Using AutoPipelineFactory
+^^^^^^^^^^^^^^^^^^^^^
 
 Here's a basic example of using EZStitcher with the pipeline factory:
 
@@ -100,9 +105,9 @@ You can customize the normalization parameters:
 For more information about the pipeline factory, see :ref:`pipeline-factory-concept` in the concepts documentation.
 
 Building Custom Pipelines
------------------------
+^^^^^^^^^^^^^^^^^^^^^
 
-For more control, you can build custom pipelines by manually specifying each step. This approach is recommended for advanced users who need fine-grained control over the pipeline:
+For maximum flexibility, you can build custom pipelines by directly specifying each step:
 
 .. code-block:: python
 
@@ -110,6 +115,7 @@ For more control, you can build custom pipelines by manually specifying each ste
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
 
@@ -127,39 +133,79 @@ For more control, you can build custom pipelines by manually specifying each ste
         plate_path=plate_path
     )
 
-    # Create a pipeline with three steps
-    pipeline = Pipeline(
-        input_dir=orchestrator.workspace_path,    # Pipeline input directory
-        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched", # Pipeline output directory
+    # Create position generation pipeline
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(method="max"),
+
+            # Step 2: Normalize image intensities
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 3: Create composite for position generation
+            CompositeStep(),
+
+            # Step 4: Generate positions
+            PositionGenerationStep()
+        ],
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
         steps=[
             # Step 1: Normalize image intensities
             Step(
                 name="Normalize Images",
-                func=IP.stack_percentile_normalize,
-                output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"
+                func=IP.stack_percentile_normalize
             ),
 
-            # Step 2: Generate positions for stitching
-            PositionGenerationStep(),
-
-            # Step 3: Stitch images
-            ImageStitchingStep()
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
         ],
-        name="Basic Processing Pipeline"
+        name="Image Assembly Pipeline"
     )
 
 Finally, run the pipeline:
 
 .. code-block:: python
 
-    # Run the pipeline
-    success = orchestrator.run(pipelines=[pipeline])
+    # Run the pipelines
+    success = orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
     if success:
-        print("Pipeline completed successfully!")
-        print(f"Stitched images are in: {orchestrator.plate_path.parent / f'{orchestrator.plate_path.name}_stitched'}")
+        print("Pipelines completed successfully!")
+        print(f"Stitched images are in: {plate_path.parent / f'{plate_path.name}_stitched'}")
     else:
-        print("Pipeline failed. Check logs for details.")
+        print("Pipelines failed. Check logs for details.")
+
+Choosing Between Approaches
+------------------------
+
+Both approaches have their strengths:
+
+**AutoPipelineFactory:**
+- Convenient for common workflows
+- Requires less code
+- Handles many details automatically
+- Good for getting started quickly
+
+**Custom Pipelines:**
+- Maximum flexibility and control
+- Terse and elegant for specific use cases
+- Direct access to all pipeline features
+- Ability to create highly customized workflows
+
+The choice between them depends on your specific requirements and preferences. Many users start with ``AutoPipelineFactory`` for simple tasks and move to custom pipelines as their needs become more specialized.
 
 Understanding Pipeline Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -412,9 +458,9 @@ Next Steps
 
 Now that you understand the basics of using EZStitcher, you can:
 
-1. **Explore the pipeline factory**: For more advanced pipeline factory options, see :ref:`pipeline-factory-concept` in the concepts documentation.
+1. **Learn about specialized steps**: For information about specialized steps like ZFlatStep, FocusStep, and CompositeStep, see :doc:`../concepts/specialized_steps`.
 
-2. **Learn about specialized steps**: For information about specialized steps like ZFlatStep, FocusStep, and CompositeStep, see :doc:`../concepts/specialized_steps`.
+2. **Study pipeline concepts**: For a deeper understanding of pipelines, see :doc:`../concepts/pipeline`.
 
 3. **Dive into intermediate usage**: For more advanced techniques like channel-specific processing and Z-stack handling, see :doc:`intermediate_usage`.
 
