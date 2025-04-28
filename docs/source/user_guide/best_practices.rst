@@ -50,7 +50,7 @@ EZ Module in one minute
 Manual pipeline checklist
 ----------------------------------------
 
-✔ Start with **ZFlatStep → Normalize → Composite → Position → Stitch** and add/remove steps from there.
+✔ Start with **ZFlatStep → Normalize → Composite → Position → Stitch** and add/remove steps from there. See :doc:`../concepts/specialized_steps` for details on specialized steps.
 
 ✔ Wrap repeated code in a *factory function* so notebooks stay clean.
 
@@ -67,6 +67,7 @@ Directory hygiene
 * First step → `input_dir=orchestrator.workspace_path`.
 * Omit `output_dir` unless you truly need it; EZStitcher auto‑chains.
 * Use `pipeline.output_dir` when another script needs the results.
+* For detailed information on directory handling, see :doc:`../concepts/directory_structure`.
 
 .. _bp-steps:
 
@@ -95,6 +96,8 @@ Function-handling patterns
 | Fn + kwargs | `Step(func=(IP.tophat, {'size':15}))`                         |
 | Chain       | `Step(func=[(IP.tophat,{'size':15}), IP.stack_percentile_normalize])` |
 | Per-channel | `Step(func={'1': proc_dapi, '2': proc_gfp}, group_by='channel')` |
+
+* For detailed information on function handling patterns, see :doc:`../concepts/function_handling`.
 
 
 .. _bp-custom-pipelines:

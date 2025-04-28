@@ -10,12 +10,11 @@ example, see :doc:`../getting_started/quick_start`.
    For a simplified interface with minimal code, see the :doc:`ez_module` guide.
    The EZ module is recommended for most users, especially beginners.
 
-This guide focuses on creating custom pipelines for maximum flexibility and control.
+This guide focuses on creating custom pipelines for maximum flexibility and control, as described in the :ref:`three-tier-approach` section of the introduction.
 
 .. note::
-   While AutoPipelineFactory is used internally by the EZ module, it is generally
-   not recommended for direct use by end users. For most use cases, either the
-   EZ module (for simplicity) or custom pipelines (for flexibility) are preferred.
+   For information about the underlying architecture, see :doc:`../concepts/architecture_overview`.
+   Custom pipelines provide maximum flexibility and control, as described in the :ref:`three-tier-approach` section of the introduction.
 
 
 
@@ -62,20 +61,12 @@ Creating Custom Pipelines
    orchestrator.run(pipelines=[pos_pipe, asm_pipe])
 
 --------------------------------------------------------------------
-Which approach should I pick?
---------------------------------------------------------------------
-
-| Use **EZ Module** when… | Use **custom pipelines** when… |
-|------------------------|--------------------------------|
-| • You want minimal code | • You need bespoke processing  |
-| • You're new to EZStitcher | • You want per‑channel logic |
-| • Default settings are sufficient | • You need maximum flexibility |
-| • You want auto-detection | • You want full transparency |
-
---------------------------------------------------------------------
 Next steps
 --------------------------------------------------------------------
 
+* For more information on the three-tier approach and when to use each approach, see the :ref:`three-tier-approach` section in the introduction.
+* For detailed information about directory structure, see :doc:`../concepts/directory_structure`.
+* For detailed information about step configuration, see :doc:`../concepts/step`.
 * Proceed to :doc:`intermediate_usage` for channel‑specific and Z‑stack tricks.
 * Deep‑dive into :doc:`../concepts/pipeline` to learn every
   parameter and how directories resolve automatically.

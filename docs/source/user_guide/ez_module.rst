@@ -7,6 +7,8 @@ making it easier for non-coders to use EZStitcher. It wraps the functionality of
 the pipeline architecture into an intuitive API with sensible defaults and
 auto-detection features.
 
+The EZ module is the recommended approach for beginners and non-coders, as described in the :ref:`three-tier-approach` section of the introduction.
+
 **Key Benefits:**
 
 * **Simplicity**: Process and stitch images with minimal code
@@ -14,8 +16,8 @@ auto-detection features.
 * **Sensible defaults**: Get good results without extensive configuration
 
 .. note::
-   Under the hood, the EZ module uses :doc:`../concepts/pipeline_orchestrator` and
-   :doc:`../concepts/pipeline_factory`. For advanced usage, see :doc:`basic_usage`.
+   Under the hood, the EZ module uses the pipeline architecture described in :doc:`../concepts/architecture_overview`.
+   For more control and flexibility, see :doc:`basic_usage`.
 
 Quick Start
 ----------

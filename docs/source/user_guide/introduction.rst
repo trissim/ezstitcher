@@ -38,7 +38,9 @@ Support for additional microscope types can be added by implementing the appropr
 Core Architecture Overview
 ------------------------
 
-EZStitcher uses a pipeline architecture that organizes processing into a logical sequence of steps. The architecture consists of three main components:
+EZStitcher uses a pipeline architecture that organizes processing into a logical sequence of steps. For detailed information about the architecture, see :doc:`../concepts/architecture_overview`.
+
+The architecture consists of three main components:
 
 * **PipelineOrchestrator**: Coordinates the execution of pipelines across wells
 * **Pipeline**: A sequence of processing steps that are executed in order
@@ -74,6 +76,8 @@ EZStitcher requires Python 3.11 or higher. For installation instructions, see th
 Getting Started
 ---------------------
 
+.. _three-tier-approach:
+
 EZStitcher offers three main approaches for creating stitching pipelines:
 
 1. Using the ``EZ module`` for a simplified, one-liner interface (recommended for beginners)
@@ -87,6 +91,16 @@ This three-tier approach allows users to choose the right level of abstraction f
 * **Library Extension**: For contributors who want to extend the core library
 
 Most users should start with the EZ module and move to custom pipelines as their needs become more specialized.
+
+When to Use Which Approach
+-------------------------
+
+| Use **EZ Module** when… | Use **Custom Pipelines** when… | Use **Library Extension** when… |
+|------------------------|--------------------------------|--------------------------------|
+| • You want minimal code | • You need bespoke processing  | • You're contributing to EZStitcher |
+| • You're new to EZStitcher | • You want per‑channel logic | • You need organization-wide standards |
+| • Default settings are sufficient | • You need maximum flexibility | • You're extending core functionality |
+| • You want auto-detection | • You want full transparency | • You're adding new microscope types |
 
 For a quick introduction with a minimal working example, see the :doc:`../getting_started/quick_start` guide.
 

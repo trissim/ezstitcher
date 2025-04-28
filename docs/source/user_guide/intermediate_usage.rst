@@ -12,16 +12,13 @@ If you are new to EZStitcher, start with :doc:`basic_usage` first.
 
 .. note::
 
-   EZStitcher automatically chains *input_dir* / *output_dir*
-   between steps.  Only the **first** step must receive
-   ``input_dir=orchestrator.workspace_path``; the rest inherit paths.
-   See :doc:`../concepts/directory_structure` for details.
+   EZStitcher automatically chains *input_dir* / *output_dir* between steps.
+   See :doc:`../concepts/directory_structure` for details on how directories are managed.
 
 .. important::
 
-   The interplay between ``variable_components`` and ``group_by``
-   controls how loops over Z-index or channel are executed.
-   Review :doc:`../concepts/step` before writing advanced pipelines.
+   The interplay between ``variable_components`` and ``group_by`` controls how loops over Z-index or channel are executed.
+   See :doc:`../concepts/step` and :doc:`../concepts/function_handling` for detailed explanations.
 
 --------------------------------------------------------------------
 Z-stack processing with the EZ module
@@ -166,6 +163,8 @@ When to choose which approach
 * **Use the EZ module** for standard plates or slides when you want minimal code and default settings are sufficient.
 
 * **Write custom pipelines** when you need bespoke steps, per-channel logic, or multiple outputs (e.g. max-projection + best-focus).
+
+* For more information on the three-tier approach and when to use each approach, see the :ref:`three-tier-approach` section in the introduction.
 
 Next up: :doc:`advanced_usage`.
 

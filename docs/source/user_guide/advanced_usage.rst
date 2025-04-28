@@ -11,10 +11,12 @@ This page shows **three advanced skills**:
 If you are new to the library, first read :doc:`basic_usage` and :doc:`intermediate_usage`.
 
 .. note::
-   Use specialised steps (``ZFlatStep``, ``CompositeStep``, ``FocusStep``) whenever you need to loop over *z-index* or *channel*.  A raw :class:`~ezstitcher.core.steps.Step` is only required when no specialised variant exists.
+   Use specialised steps (``ZFlatStep``, ``CompositeStep``, ``FocusStep``) whenever you need to loop over *z-index* or *channel*.
+   See :doc:`../concepts/specialized_steps` for detailed information about specialized steps.
 
 .. important::
-   The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.  Review :doc:`../concepts/step` before writing advanced pipelines.
+   The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.
+   See :doc:`../concepts/step` and :doc:`../concepts/function_handling` for detailed explanations.
 
 ---------------------------------------------------------------------
 1. Creating custom processing functions
@@ -208,6 +210,8 @@ Choosing the right tool
 * **EZ module** → quick wins with minimal code for standard plates.
 * **Custom pipelines** → full control for research prototypes and advanced workflows.
 * **Custom handlers** → organisation‑wide automation (for contributors).
+
+For more information on the three-tier approach and when to use each approach, see the :ref:`three-tier-approach` section in the introduction.
 
 
 Next steps
