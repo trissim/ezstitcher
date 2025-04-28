@@ -1,12 +1,6 @@
-"""Core module for ezstitcher.
+"""Core module for ezstitcher."""
 
-This module provides the core functionality for the ezstitcher package.
-"""
-
-# Import main functions for backward compatibility
-# Removed obsolete imports of non-existent functions from main.py
-
-# Import classes for instance-based API
+# Import main classes for instance-based API
 from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.stitcher import Stitcher
@@ -16,10 +10,19 @@ from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 # Import configuration classes
 from ezstitcher.core.config import (
     StitcherConfig,
-    FocusAnalyzerConfig,
     PipelineConfig
 )
 
-# Import utility classes
-from ezstitcher.core.microscope_interfaces import FilenameParser
-from ezstitcher.core.image_locator import ImageLocator
+# Import pipeline factory class
+from ezstitcher.core.pipeline_factories import AutoPipelineFactory
+
+__all__ = [
+    'ImageProcessor',
+    'FocusAnalyzer',
+    'Stitcher',
+    'FileSystemManager',
+    'PipelineOrchestrator',
+    'StitcherConfig',
+    'PipelineConfig',
+    'AutoPipelineFactory',
+]

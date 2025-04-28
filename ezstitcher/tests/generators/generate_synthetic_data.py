@@ -2,7 +2,7 @@
 """
 Generate synthetic microscopy images for testing ezstitcher.
 
-This script generates synthetic microscopy images with the following features:
+This module generates synthetic microscopy images with the following features:
 - Multiple wavelengths (channels)
 - Z-stack support with varying focus levels
 - Cell-like structures (circular particles with varying eccentricity)
@@ -12,12 +12,20 @@ This script generates synthetic microscopy images with the following features:
 - Automatic image size calculation based on grid and tile parameters
 
 Usage:
-    python generate_synthetic_data.py output_dir --grid-size 3 3 --wavelengths 2 --z-stack 3 --auto-image-size
+    from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
+
+    generator = SyntheticMicroscopyGenerator(
+        output_dir="path/to/output",
+        grid_size=(3, 3),
+        wavelengths=2,
+        z_stack_levels=3,
+        auto_image_size=True
+    )
+    generator.generate_dataset()
 """
 
 import os
 import sys
-import argparse
 import random
 import numpy as np
 import tifffile
@@ -825,130 +833,3 @@ class SyntheticMicroscopyGenerator:
                             site_index += 1
 
         print("Dataset generation complete!")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Generate synthetic microscopy images for testing")
-
-    parser.add_argument("output_dir", help="Directory to save generated images")
-    parser.add_argument("--grid-size", type=int, nargs=2, default=[3, 3], help="Grid size (rows cols)")
-    parser.add_argument("--image-size", type=int, nargs=2, default=[2048, 2048], help="Full image size")
-    parser.add_argument("--tile-size", type=int, nargs=2, default=[1024, 1024], help="Tile size")
-    parser.add_argument("--overlap", type=float, default=10.0, help="Percentage of overlap between tiles")
-    parser.add_argument("--stage-error", type=int, default=5, help="Random error in stage positioning (pixels)")
-    parser.add_argument("--wavelengths", type=int, default=2, help="Number of wavelength channels")
-    parser.add_argument("--z-stack", type=int, default=1, help="Number of Z-stack levels")
-    parser.add_argument("--z-step-size", type=float, default=1.0, help="Spacing between Z-steps in microns")
-    parser.add_argument("--num-cells", type=int, default=300, help="Number of cells to generate (higher density improves registration)")
-    parser.add_argument("--cell-size", type=float, nargs=2, default=[10, 30], help="Cell size range (min max)")
-    parser.add_argument("--cell-eccentricity", type=float, nargs=2, default=[0.1, 0.5],
-                        help="Cell eccentricity range (min max)")
-    parser.add_argument("--cell-intensity", type=int, nargs=2, default=[8000, 30000],
-                        help="Cell intensity range (min max) - higher values create more contrast for better registration")
-    parser.add_argument("--background", type=int, default=500, help="Background intensity")
-    parser.add_argument("--noise", type=int, default=100, help="Noise level")
-    parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
-    parser.add_argument("--format", type=str, choices=['ImageXpress', 'OperaPhenix'], default='ImageXpress',
-                      help="Format of the filenames (ImageXpress or OperaPhenix)")
-    parser.add_argument("--auto-image-size", action="store_true",
-                      help="Automatically calculate image size based on grid and tile parameters")
-
-    # Add wavelength-specific parameter groups
-    wavelength_group = parser.add_argument_group('wavelength-specific',
-                                                'Wavelength-specific parameters (overrides global parameters)')
-    wavelength_group.add_argument("--w1-cells", type=int,
-                                 help="Number of cells for wavelength 1")
-    wavelength_group.add_argument("--w1-size", type=float, nargs=2,
-                                 help="Cell size range for wavelength 1 (min max)")
-    wavelength_group.add_argument("--w1-eccentricity", type=float, nargs=2,
-                                 help="Cell eccentricity range for wavelength 1 (min max)")
-    wavelength_group.add_argument("--w1-intensity", type=int, nargs=2,
-                                 help="Cell intensity range for wavelength 1 (min max)")
-    wavelength_group.add_argument("--w1-background", type=int,
-                                 help="Background intensity for wavelength 1")
-    wavelength_group.add_argument("--w1-noise", type=int,
-                                 help="Noise level for wavelength 1")
-
-    wavelength_group.add_argument("--w2-cells", type=int,
-                                 help="Number of cells for wavelength 2")
-    wavelength_group.add_argument("--w2-size", type=float, nargs=2,
-                                 help="Cell size range for wavelength 2 (min max)")
-    wavelength_group.add_argument("--w2-eccentricity", type=float, nargs=2,
-                                 help="Cell eccentricity range for wavelength 2 (min max)")
-    wavelength_group.add_argument("--w2-intensity", type=int, nargs=2,
-                                 help="Cell intensity range for wavelength 2 (min max)")
-    wavelength_group.add_argument("--w2-background", type=int,
-                                 help="Background intensity for wavelength 2")
-    wavelength_group.add_argument("--w2-noise", type=int,
-                                 help="Noise level for wavelength 2")
-
-    args = parser.parse_args()
-
-    # Build wavelength-specific parameters
-    wavelength_params = {}
-
-    # Wavelength 1 parameters
-    w1_params = {}
-    if args.w1_cells is not None:
-        w1_params['num_cells'] = args.w1_cells
-    if args.w1_size is not None:
-        w1_params['cell_size_range'] = tuple(args.w1_size)
-    if args.w1_eccentricity is not None:
-        w1_params['cell_eccentricity_range'] = tuple(args.w1_eccentricity)
-    if args.w1_intensity is not None:
-        w1_params['cell_intensity_range'] = tuple(args.w1_intensity)
-    if args.w1_background is not None:
-        w1_params['background_intensity'] = args.w1_background
-    if args.w1_noise is not None:
-        w1_params['noise_level'] = args.w1_noise
-
-    if w1_params:
-        wavelength_params[1] = w1_params
-
-    # Wavelength 2 parameters
-    w2_params = {}
-    if args.w2_cells is not None:
-        w2_params['num_cells'] = args.w2_cells
-    if args.w2_size is not None:
-        w2_params['cell_size_range'] = tuple(args.w2_size)
-    if args.w2_eccentricity is not None:
-        w2_params['cell_eccentricity_range'] = tuple(args.w2_eccentricity)
-    if args.w2_intensity is not None:
-        w2_params['cell_intensity_range'] = tuple(args.w2_intensity)
-    if args.w2_background is not None:
-        w2_params['background_intensity'] = args.w2_background
-    if args.w2_noise is not None:
-        w2_params['noise_level'] = args.w2_noise
-
-    if w2_params:
-        wavelength_params[2] = w2_params
-
-    # Create generator
-    generator = SyntheticMicroscopyGenerator(
-        output_dir=args.output_dir,
-        grid_size=tuple(args.grid_size),
-        image_size=tuple(args.image_size),
-        tile_size=tuple(args.tile_size),
-        overlap_percent=args.overlap,
-        stage_error_px=args.stage_error,
-        wavelengths=args.wavelengths,
-        z_stack_levels=args.z_stack,
-        z_step_size=args.z_step_size,
-        num_cells=args.num_cells,
-        cell_size_range=tuple(args.cell_size),
-        cell_eccentricity_range=tuple(args.cell_eccentricity),
-        cell_intensity_range=tuple(args.cell_intensity),
-        background_intensity=args.background,
-        noise_level=args.noise,
-        wavelength_params=wavelength_params,
-        format=args.format,
-        auto_image_size=args.auto_image_size,
-        random_seed=args.seed
-    )
-
-    # Generate dataset
-    generator.generate_dataset()
-
-
-if __name__ == "__main__":
-    main()

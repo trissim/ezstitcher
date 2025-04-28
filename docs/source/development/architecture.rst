@@ -45,12 +45,12 @@ Performs image stitching with subpixel precision. It:
 FocusAnalyzer
 ^^^^^^^^^^^^^
 
-Provides multiple focus detection algorithms for Z-stacks. It:
+Provides multiple focus detection algorithms for Z-stacks as static utility methods. It:
 
 - Implements various focus quality metrics
 - Selects the best focused plane in a Z-stack
-- Supports region of interest (ROI) based focus detection
 - Combines multiple metrics for robust focus detection
+- Supports both string-based metrics and custom weight dictionaries
 
 ImageProcessor
 ^^^^^^^^^^^^^^
@@ -71,12 +71,7 @@ Manages file operations and directory structure. It:
 - Creates and manages directory structure
 - Renames files with consistent padding
 - Organizes Z-stack folders
-
-ImageLocator
-^^^^^^^^^^^^
-
-Locates and organizes images in various directory structures. It:
-
+- Locates and organizes images in various directory structures
 - Finds images in directories
 - Detects Z-stack folders
 - Finds images matching patterns
@@ -121,7 +116,6 @@ The directory structure of the EZStitcher codebase is as follows:
     │   ├── config.py          # Configuration classes
     │   ├── file_system_manager.py
     │   ├── focus_analyzer.py
-    │   ├── image_locator.py
     │   ├── image_processor.py
     │   ├── main.py            # Main entry point
     │   ├── microscope_interfaces.py

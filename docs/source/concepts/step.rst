@@ -100,30 +100,25 @@ For practical examples of how to use variable_components in different scenarios,
 
 .. code-block:: python
 
-    # When flattening Z-stacks, set variable_components to 'z_index'
-    # This groups images with the same site, channel, etc. but different z_index values
-    # The function will receive a stack of images with varying z_index values
-    step = Step(
-        name="Z-Stack Flattening",
-        func=(IP.create_projection, {'method': 'max_projection'}),
-        variable_components=['z_index']  # Group images by z_index
-    )
+    # IMPORTANT: For Z-stack flattening, use ZFlatStep instead of raw Step with variable_components
+    # This is the recommended approach for Z-stack flattening
+    from ezstitcher.core.step_factories import ZFlatStep
 
-    # When creating composite images, set variable_components to 'channel'
-    # This groups images with the same site, z_index, etc. but different channel values
-    # The function will receive a stack of images with varying channel values
+    # Maximum intensity projection (default)
+    step = ZFlatStep()  # Uses max_projection by default
+
+    # With specific projection method
+    step = ZFlatStep(method="mean")  # Uses mean_projection
+
+    # IMPORTANT: For channel compositing, use CompositeStep instead of raw Step with variable_components
+    # This is the recommended approach for channel compositing
+    from ezstitcher.core.step_factories import CompositeStep
 
     # Without weights (equal weighting for all channels)
-    step = Step(
-        func=IP.create_composite,
-        variable_components=['channel']  # Group images by channel
-    )
+    step = CompositeStep()  # Equal weights for all channels
 
     # With custom weights (70% channel 1, 30% channel 2)
-    step = Step(
-        func=(IP.create_composite, {'weights': [0.7, 0.3]}),  # Pass weights as a list
-        variable_components=['channel']  # Group images by channel
-    )
+    step = CompositeStep(weights=[0.7, 0.3])  # Custom channel weights
 
     # For most other operations, the default 'site' is appropriate
     # This groups images with the same channel, z_index, etc. but different site values
@@ -139,7 +134,7 @@ For practical examples of how to use variable_components in different scenarios,
 Group By
 -------
 
-The ``group_by`` parameter is only used when providing a dictionary of functions. It specifies what component the keys in your function dictionary correspond to.
+The ``group_by`` parameter is specifically designed for use with function dictionaries in ``Step``. It specifies what component the keys in your function dictionary correspond to.
 
 For practical examples of how to use group_by in different scenarios, see:
 
@@ -224,9 +219,10 @@ When configuring step parameters, follow these best practices:
    - Use the ``stack()`` utility for adapting single-image functions
 
 3. **Variable Components**:
-   - Set ``variable_components=['z_index']`` when flattening Z-stacks
-   - Set ``variable_components=['channel']`` when creating composite images
+   - Use ``ZFlatStep`` instead of setting ``variable_components=['z_index']`` for Z-stack flattening
+   - Use ``CompositeStep`` instead of setting ``variable_components=['channel']`` for channel compositing
    - Leave at default ``['site']`` for most other operations
+   - Only set ``variable_components`` directly when you have a specific need not covered by specialized steps
 
 4. **Directory Management**:
    - Always specify ``input_dir`` for the first step, using ``orchestrator.workspace_path``
@@ -237,3 +233,22 @@ When configuring step parameters, follow these best practices:
    - Ensure ``group_by`` is never the same as ``variable_components``
    - Only use ``group_by`` with dictionary functions
    - Verify that all required parameters are specified
+
+.. _when-to-use-specialized-steps:
+
+When to Use Specialized Steps
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For common operations, ezstitcher provides specialized step subclasses that encapsulate the appropriate
+configuration:
+
+1. **ZFlatStep**: Use for Z-stack flattening instead of manually configuring ``variable_components=['z_index']``
+2. **FocusStep**: Use for focus detection in Z-stacks
+3. **CompositeStep**: Use for channel compositing instead of manually configuring ``variable_components=['channel']``
+
+These specialized steps provide cleaner, more readable code and ensure proper configuration. Use them with minimal parameters unless you need to override defaults.
+
+For channel-specific processing with different functions per channel, using a raw ``Step`` with a dictionary
+of functions and ``group_by='channel'`` is the appropriate approach.
+
+For more information about specialized steps, see :doc:`specialized_steps`.

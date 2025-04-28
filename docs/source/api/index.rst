@@ -11,13 +11,14 @@ Core Components
 
    pipeline_orchestrator
    pipeline
+   pipeline_factory
    steps
+   specialized_steps
    stitcher
    focus_analyzer
    image_processor
    image_processing_operations
    file_system_manager
-   image_locator
 
 Interfaces and Configuration
 ---------------------------

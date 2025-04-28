@@ -223,6 +223,15 @@ When to Use Each Pattern
 
 For comprehensive best practices for function handling, see :ref:`best-practices-function-handling` in the :doc:`../user_guide/best_practices` guide.
 
+.. note::
+   Using a dictionary of functions with ``group_by='channel'`` is the appropriate approach for
+   channel-specific processing. This allows you to apply different processing functions to different channels.
+
+   For common operations like Z-stack flattening and channel compositing, prefer specialized step
+   subclasses like ``ZFlatStep`` and ``CompositeStep`` over manually configuring ``variable_components``.
+
+   For more information about specialized steps, see :doc:`specialized_steps`.
+
 .. _function-stack-utility:
 
 The stack() Utility Function

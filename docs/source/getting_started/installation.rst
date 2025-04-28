@@ -76,4 +76,8 @@ This should print "EZStitcher installed successfully".
 Getting Started
 ---------------
 
-After installation, you can start using EZStitcher through its Python API. For a quick introduction, see the :doc:`../user_guide/index` guide.
+After installation, you can start using EZStitcher:
+
+1. Follow the :doc:`quick_start` guide to run your first stitching pipeline
+2. Explore the :doc:`../user_guide/introduction` to learn about ezstitcher's architecture
+3. See :doc:`../user_guide/basic_usage` for more detailed examples and common use cases

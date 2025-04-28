@@ -5,7 +5,7 @@ This module contains dataclasses for configuration of different components.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,12 +20,7 @@ class StitcherConfig:
     pixel_size: float = 1.0
 
 
-@dataclass
-class FocusAnalyzerConfig:
-    """Configuration for the FocusAnalyzer class."""
-    method: str = "combined"
-    roi: Optional[Tuple[int, int, int, int]] = None  # (x, y, width, height)
-    weights: Optional[Dict[str, float]] = None
+# FocusAnalyzerConfig has been removed in favor of direct parameters to FocusAnalyzer
 
 
 @dataclass
@@ -42,4 +37,3 @@ class PipelineConfig:
 
     # Stitching configuration
     stitcher: StitcherConfig = field(default_factory=StitcherConfig)
-    focus_config: FocusAnalyzerConfig = field(default_factory=FocusAnalyzerConfig)

@@ -4,64 +4,8 @@ Integration with Other Tools
 
 EZStitcher can be integrated with other image processing and analysis tools to create comprehensive workflows.
 
-Exporting Data for Analysis
--------------------------
-
-After processing with EZStitcher, you can export data for analysis with other tools:
-
-.. code-block:: python
-
-    import numpy as np
-    from skimage import io
-    import pandas as pd
-
-    def export_for_analysis(stitched_image_path, output_csv):
-        """Export image data for analysis."""
-        # Load the stitched image
-        image = io.imread(stitched_image_path)
-
-        # Extract features (example: mean intensity in regions)
-        regions = []
-        for i in range(0, image.shape[0], 100):
-            for j in range(0, image.shape[1], 100):
-                region = image[i:i+100, j:j+100]
-                regions.append({
-                    'x': j,
-                    'y': i,
-                    'mean_intensity': np.mean(region),
-                    'std_intensity': np.std(region),
-                    'min_intensity': np.min(region),
-                    'max_intensity': np.max(region)
-                })
-
-        # Save as CSV for analysis
-        df = pd.DataFrame(regions)
-        df.to_csv(output_csv, index=False)
-
-        return df
-
-    # Use in a pipeline
-    from ezstitcher.core.steps import Step
-
-    # Create a pipeline with export step
-    export_pipeline = Pipeline(
-        steps=[
-            # Process and stitch images
-            # ...
-
-            # Export data for analysis
-            Step(
-                name="Export Data",
-                func=lambda images: export_for_analysis(
-                    stitched_image_path=dirs['stitched'] / "A01_stitched.tif",
-                    output_csv=dirs['stitched'] / "A01_analysis.csv"
-                ) and images,  # Return images unchanged
-                input_dir=dirs['stitched'],
-                output_dir=dirs['stitched']
-            )
-        ],
-        name="Export Pipeline"
-    )
+Integration Examples
+------------------
 
 Integration with Deep Learning Frameworks
 --------------------------------------
@@ -94,21 +38,33 @@ You can integrate EZStitcher with deep learning frameworks like TensorFlow or Py
         return result
 
     # Use in a pipeline
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step
+
+    # First create standard pipelines with AutoPipelineFactory
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True
+    )
+    pipelines = factory.create_pipelines()
+
+    # Then add a custom pipeline for deep learning
     deep_learning_pipeline = Pipeline(
         steps=[
-            # Process images
-            # ...
-
-            # Apply deep learning model
+            # Apply deep learning model to stitched images
             Step(
                 name="Deep Learning Segmentation",
                 func=apply_deep_learning,
-                input_dir=dirs['processed'],
-                output_dir=dirs['segmented']
+                input_dir=orchestrator.output_dir,  # Use stitched images from previous pipeline
+                output_dir=Path(orchestrator.output_dir).parent / "segmented"
             )
         ],
         name="Deep Learning Pipeline"
     )
+
+    # Add the deep learning pipeline to the list
+    pipelines.append(deep_learning_pipeline)
 
 Integration with Image Analysis Tools
 ----------------------------------
@@ -137,17 +93,38 @@ EZStitcher can be used as part of a larger workflow with other image analysis to
 
         return True
 
-    # Use in a step after processing
-    analysis_step = Step(
-        name="CellProfiler Analysis",
-        func=lambda images: run_cellprofiler_analysis(
-            input_dir=dirs['stitched'],
-            output_dir=dirs['analysis'],
-            pipeline_path="/path/to/cellprofiler_pipeline.cppipe"
-        ) and images,  # Return images unchanged
-        input_dir=dirs['stitched'],
-        output_dir=dirs['stitched']  # No need to change images
+    # Use in a pipeline after stitching
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import Step
+
+    # First create standard pipelines with AutoPipelineFactory
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True
     )
+    pipelines = factory.create_pipelines()
+
+    # Then add a custom pipeline for CellProfiler analysis
+    analysis_pipeline = Pipeline(
+        steps=[
+            # Run CellProfiler on stitched images
+            Step(
+                name="CellProfiler Analysis",
+                func=lambda images: run_cellprofiler_analysis(
+                    input_dir=orchestrator.output_dir,  # Use stitched images from previous pipeline
+                    output_dir=Path(orchestrator.output_dir).parent / "analysis",
+                    pipeline_path="/path/to/cellprofiler_pipeline.cppipe"
+                ) and images,  # Return images unchanged
+                input_dir=orchestrator.output_dir,
+                output_dir=orchestrator.output_dir  # No need to change images
+            )
+        ],
+        name="Analysis Pipeline"
+    )
+
+    # Add the analysis pipeline to the list
+    pipelines.append(analysis_pipeline)
 
 Next Steps
 ---------

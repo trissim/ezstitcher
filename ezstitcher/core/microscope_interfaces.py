@@ -15,7 +15,7 @@ import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
-from ezstitcher.core.image_locator import ImageLocator
+from ezstitcher.core.file_system_manager import FileSystemManager
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,9 @@ class FilenameParser(ABC):
 
         # Find all files in the directory
         matching_files = []
-        all_images= ImageLocator.find_images_in_directory(directory)
+        # Import here to avoid circular imports
+        #from ezstitcher.core.file_system_manager import FileSystemManager
+        all_images= FileSystemManager.list_image_files(directory)
         for file_path in all_images:
             if not file_path.is_file():
                 continue
@@ -243,7 +245,6 @@ class FilenameParser(ABC):
         """
         import time
         from collections import defaultdict
-        from ezstitcher.core.image_locator import ImageLocator
 
         start_time = time.time()
         logger.info("Finding and filtering images in %s", folder_path)
@@ -251,7 +252,9 @@ class FilenameParser(ABC):
         # Find all image files
         folder_path = Path(folder_path)
         extensions = extensions or ['.tif', '.TIF', '.tiff', '.TIFF']
-        image_dir = ImageLocator.find_image_directory(folder_path)
+        # Import here to avoid circular imports
+        from ezstitcher.core.file_system_manager import FileSystemManager
+        image_dir = FileSystemManager.find_image_directory(folder_path)
         logger.info("Using image directory: %s", image_dir)
 
         # Check if this is an Opera Phenix dataset by checking for the remap_field_in_filename method
@@ -276,7 +279,7 @@ class FilenameParser(ABC):
                             image_paths.extend(subdir_images)
         else:
             # For other microscopes, use the standard approach but limit recursion depth
-            image_paths = ImageLocator.find_images_in_directory(image_dir, extensions, recursive=True)
+            image_paths = FileSystemManager.list_image_files(image_dir, extensions, recursive=True)
 
         if not image_paths:
             logger.warning("No image files found in %s", folder_path)
@@ -467,8 +470,8 @@ class MicroscopeHandler:
             return microscope_type if microscope_type.lower() != 'auto' else self.DEFAULT_MICROSCOPE
 
         try:
-            # Get sample files and test each parser
-            sample_files = ImageLocator.find_images_in_directory(self.plate_folder)[:10]
+            # Get sample files and test each parser -> search recursively in dir
+            sample_files = FileSystemManager.list_image_files(self.plate_folder)[:10]
 
             if not sample_files:
                 return self.DEFAULT_MICROSCOPE
@@ -604,12 +607,12 @@ class MicroscopeHandler:
                 sys.stdout.flush()  # Force output to be displayed immediately
 
                 # Find the image directory (handles both root and subdirectory cases)
-                image_dir = ImageLocator.find_image_directory(workspace_path)
+                image_dir = FileSystemManager.find_image_directory(workspace_path)
                 print(f"Found image directory: {image_dir}")
                 sys.stdout.flush()  # Force output to be displayed immediately
 
                 # Find all image files in the directory using default extensions
-                image_files = ImageLocator.find_images_in_directory(
+                image_files = FileSystemManager.list_image_files(
                     image_dir,
                     recursive=True
                 )

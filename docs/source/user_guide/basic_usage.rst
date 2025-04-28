@@ -2,20 +2,123 @@
 Basic Usage
 ==========
 
-This section provides detailed examples of basic EZStitcher usage to help you get started with common tasks.
+This guide provides detailed examples of using ezstitcher for common stitching tasks. For a minimal working example, see the :doc:`../getting_started/quick_start` guide.
 
-Setting Up a Simple Pipeline
----------------------------
+EZStitcher offers two main approaches for creating stitching pipelines:
 
-Let's start by creating a simple pipeline for processing microscopy images. For a detailed explanation of pipeline concepts, see :ref:`pipeline-concept`. For information about supported file formats, see :ref:`file-formats`.
+1. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
+2. Building custom pipelines for maximum flexibility and control
 
-We'll build a basic pipeline that:
+Both approaches are valid and powerful, with different strengths depending on your needs. This guide will show you how to use both approaches for common stitching tasks.
 
-1. Normalizes image intensities
-2. Generates positions for stitching
-3. Stitches the images together
+Using EZStitcher
+-------------------
 
-First, import the necessary modules:
+Using AutoPipelineFactory
+^^^^^^^^^^^^^^^^^^^^^
+
+Here's a basic example of using EZStitcher with the pipeline factory:
+
+.. code-block:: python
+
+    from ezstitcher.core import AutoPipelineFactory
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    from pathlib import Path
+
+    # Path to your plate folder
+    plate_path = Path("/path/to/your/plate")
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(plate_path=plate_path)
+
+    # Create a factory with default settings
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
+        normalize=True  # Apply normalization (default)
+    )
+
+    # Create the pipelines
+    pipelines = factory.create_pipelines()
+
+    # Run the pipelines
+    orchestrator.run(pipelines=pipelines)
+
+The ``AutoPipelineFactory`` creates two pipelines:
+
+1. **Position Generation Pipeline**: Creates position files for stitching
+2. **Image Assembly Pipeline**: Stitches images using the position files
+
+Common Use Cases
+^^^^^^^^^^^^^
+
+Multi-Channel Data
+""""""""""""""
+
+For multi-channel data, you can specify weights for channel compositing:
+
+.. code-block:: python
+
+    # Create a factory for multi-channel data
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        channel_weights=[0.7, 0.3, 0]  # Use only first two channels for reference image
+    )
+    pipelines = factory.create_pipelines()
+
+Z-Stack Data
+""""""""""
+
+For Z-stack data, you can control Z-stack processing using either projection methods or focus detection:
+
+.. code-block:: python
+
+    # Create a factory for Z-stack data with projection
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
+        z_method="max"   # Use maximum intensity projection
+    )
+    pipelines = factory.create_pipelines()
+
+    # Create a factory for Z-stack data with focus detection
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        flatten_z=True,  # Flatten Z-stacks in the assembly pipeline
+        z_method="combined"   # Use combined focus metric
+    )
+    pipelines = factory.create_pipelines()
+
+Custom Normalization
+"""""""""""""""
+
+You can customize the normalization parameters:
+
+.. code-block:: python
+
+    # Create a factory with custom normalization
+    factory = AutoPipelineFactory(
+        input_dir=orchestrator.workspace_path,
+        normalize=True,
+        normalization_params={'low_percentile': 0.5, 'high_percentile': 99.5}
+    )
+    pipelines = factory.create_pipelines()
+
+For more information about the pipeline factory, see :ref:`pipeline-factory-concept` in the concepts documentation.
+
+Building Custom Pipelines
+^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+   For common operations like Z-stack flattening and channel compositing, use specialized step subclasses
+   like ``ZFlatStep`` and ``CompositeStep`` instead of manually configuring ``variable_components``.
+
+   For channel-specific processing, using a dictionary of functions with ``group_by='channel'`` is the
+   appropriate approach, as shown in the Channel-Specific Processing section below.
+
+   For more information about specialized steps, see :doc:`../concepts/specialized_steps`.
+
+For maximum flexibility, you can build custom pipelines by directly specifying each step:
 
 .. code-block:: python
 
@@ -23,12 +126,9 @@ First, import the necessary modules:
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
     from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.step_factories import ZFlatStep, CompositeStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
     from pathlib import Path
-
-Next, create a configuration and orchestrator:
-
-.. code-block:: python
 
     # Create configuration with single-threaded processing
     config = PipelineConfig(
@@ -44,52 +144,96 @@ Next, create a configuration and orchestrator:
         plate_path=plate_path
     )
 
-    # The orchestrator automatically manages directories
-    # Directories are created as needed during pipeline execution
-
-Now, create a pipeline with three steps. EZStitcher's dynamic directory resolution automatically manages the flow of data between steps:
-
-.. code-block:: python
-
-    # Create a pipeline
-    pipeline = Pipeline(
-        input_dir=orchestrator.workspace_path,    # Pipeline input directory (ImageLocator finds actual image directory)
-        output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched", # Pipeline output directory
+    # Create position generation pipeline
+    position_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
         steps=[
-            # Step 1: Normalize image intensities
-            # Only specify directories for the first step if needed
+            # Step 1: Flatten Z-stacks (always included for position generation)
+            ZFlatStep(),
+
+            # Step 2: Normalize image intensities
             Step(
                 name="Normalize Images",
-                func=IP.stack_percentile_normalize,
-                output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"  # Intermediate output directory
+                func=IP.stack_percentile_normalize
             ),
 
-            # Generate positions for stitching
-            # No need to specify directories - automatically uses previous step's output
-            PositionGenerationStep(),
+            # Step 3: Create composite for position generation
+            CompositeStep(),
 
-            # Stitch images
-            # By default, uses previous step's output directory (processed images)
-            # Uncomment the input_dir line to use original images for stitching instead
-            ImageStitchingStep(
-                # input_dir=orchestrator.workspace_path  # Uncomment to use original images for stitching
-            )
+            # Step 4: Generate positions
+            PositionGenerationStep()
         ],
-        name="Basic Processing Pipeline"
+        name="Position Generation Pipeline"
+    )
+
+    # Get the position files directory
+    positions_dir = position_pipeline.steps[-1].output_dir
+
+    # Create image assembly pipeline
+    assembly_pipeline = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
+        steps=[
+            # Step 1: Normalize image intensities
+            Step(
+                name="Normalize Images",
+                func=IP.stack_percentile_normalize
+            ),
+
+            # Step 2: Stitch images using position files
+            ImageStitchingStep(positions_dir=positions_dir)
+        ],
+        name="Image Assembly Pipeline"
     )
 
 Finally, run the pipeline:
 
 .. code-block:: python
 
-    # Run the pipeline
-    success = orchestrator.run(pipelines=[pipeline])
+    # Run the pipelines
+    success = orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
     if success:
-        print("Pipeline completed successfully!")
-        print(f"Stitched images are in: {orchestrator.plate_path.parent / f'{orchestrator.plate_path.name}_stitched'}")
+        print("Pipelines completed successfully!")
+        print(f"Stitched images are in: {plate_path.parent / f'{plate_path.name}_stitched'}")
     else:
-        print("Pipeline failed. Check logs for details.")
+        print("Pipelines failed. Check logs for details.")
+
+Choosing Between Approaches
+------------------------
+
+Both approaches have their strengths, but they serve different purposes and should be used in different scenarios:
+
+**When to Use AutoPipelineFactory:**
+- For standard stitching workflows without custom processing steps
+- When the built-in parameters (normalize, flatten_z, z_method, etc.) are sufficient
+- For quick prototyping and getting started quickly
+- When you want to leverage pre-configured, optimized pipelines
+
+**When to Create Custom Pipelines:**
+- When you need custom processing steps beyond what AutoPipelineFactory provides
+- When you need precise control over pipeline structure
+- When you need to implement specialized workflows
+- When you want maximum readability and maintainability for complex pipelines
+
+.. important::
+   While it is technically possible to modify pipelines created by AutoPipelineFactory after creation,
+   this approach is generally not recommended. Creating custom pipelines from scratch is usually more
+   readable, maintainable, and less error-prone for any workflow that requires customization beyond
+   what AutoPipelineFactory parameters provide.
+
+For custom workflows, create pipelines from scratch instead of modifying factory pipelines. This approach provides several benefits:
+
+1. **Readability**: The pipeline structure is explicit and easy to understand
+2. **Maintainability**: Changes can be made directly to the pipeline definition
+3. **Flexibility**: Complete control over each step and its parameters
+4. **Robustness**: No risk of unexpected behavior from modifying factory pipelines
+
+Many users start with ``AutoPipelineFactory`` for simple tasks and move to custom pipelines as their needs become more specialized.
+
+.. seealso::
+   - :doc:`../concepts/pipeline_factory` for more information about the pipeline factory
+   - :doc:`../concepts/pipeline` for more information about creating custom pipelines
 
 Understanding Pipeline Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -272,60 +416,57 @@ Saving and Loading Pipelines
 
 For information on saving and loading pipelines, see :ref:`pipeline-saving-loading`.
 
-Here's a practical example of how to save a pipeline configuration as a reusable function:
+Here's a practical example of how to create a reusable pipeline configuration using pipeline factories:
 
 .. code-block:: python
 
-    # save_pipeline.py
-    from ezstitcher.core.config import PipelineConfig
+    # pipeline_config.py
+    from ezstitcher.core import AutoPipelineFactory
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-    from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.image_processor import ImageProcessor as IP
+    from ezstitcher.core.config import PipelineConfig
     from pathlib import Path
 
-    def create_basic_pipeline(plate_path, num_workers=1):
-        """Create a basic processing pipeline."""
-        # Create configuration and orchestrator
-        config = PipelineConfig(num_workers=num_workers)
-        orchestrator = PipelineOrchestrator(config=config, plate_path=plate_path)
-
-        # Create pipeline with dynamic directory resolution
-        pipeline = Pipeline(
-            input_dir=orchestrator.workspace_path,
-            output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_stitched",
-            steps=[
-                Step(
-                    func=IP.stack_percentile_normalize,
-                    output_dir=orchestrator.plate_path.parent / f"{orchestrator.plate_path.name}_processed"
-                ),
-                PositionGenerationStep(),
-                ImageStitchingStep()
-            ],
-            name="Basic Processing Pipeline"
+    def run_basic_stitching(plate_path, num_workers=1, normalize=True):
+        """Run a basic stitching pipeline on the specified plate."""
+        # Create orchestrator with specified number of workers
+        orchestrator = PipelineOrchestrator(
+            config=PipelineConfig(num_workers=num_workers),
+            plate_path=plate_path
         )
 
-        return orchestrator, pipeline
+        # Create pipelines using AutoPipelineFactory
+        factory = AutoPipelineFactory(
+            input_dir=plate_path,
+            output_dir=plate_path.parent / f"{plate_path.name}_stitched",
+            normalize=normalize
+        )
+        pipelines = factory.create_pipelines()
 
-And here's how to use this saved pipeline in another script:
+        # Run the pipeline and return success status
+        return orchestrator.run(pipelines=pipelines)
+
+And here's how to use this in another script:
 
 .. code-block:: python
 
-    # use_pipeline.py
+    # run_stitching.py
     from pathlib import Path
-    from save_pipeline import create_basic_pipeline
+    from pipeline_config import run_basic_stitching
 
     # Path to your plate folder
     plate_path = Path("/path/to/your/plate")
 
-    # Create the pipeline
-    orchestrator, pipeline = create_basic_pipeline(
+    # Run the stitching pipeline
+    success = run_basic_stitching(
         plate_path=plate_path,
-        num_workers=4
+        num_workers=4,
+        normalize=True
     )
 
-    # Run the pipeline
-    success = orchestrator.run(pipelines=[pipeline])
+    if success:
+        print(f"Stitching completed successfully! Output in: {plate_path.parent / f'{plate_path.name}_stitched'}")
+    else:
+        print("Stitching failed. Check logs for details.")
 
 Best Practices
 ^^^^^^^^^^^^^
@@ -343,4 +484,12 @@ Or visit the complete :doc:`best_practices` guide.
 Next Steps
 ---------
 
-Now that you understand the basics of creating and running pipelines, you're ready to explore more advanced topics. For a comprehensive learning path that will guide you through intermediate and advanced topics, see :ref:`learning-path` in the introduction.
+Now that you understand the basics of using EZStitcher, you can:
+
+1. **Explore intermediate usage**: For more advanced techniques like channel-specific processing and Z-stack handling, see :doc:`intermediate_usage`.
+
+2. **Study pipeline concepts**: For a deeper understanding of pipelines, see :doc:`../concepts/pipeline`.
+
+3. **Learn about specialized steps**: For information about specialized steps like ZFlatStep, FocusStep, and CompositeStep, see :doc:`../concepts/specialized_steps`.
+
+4. **Follow the learning path**: For a comprehensive learning path that will guide you through intermediate and advanced topics, see :ref:`learning-path` in the introduction.

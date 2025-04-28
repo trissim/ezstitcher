@@ -111,18 +111,6 @@ StitcherConfig
 
       Percentage overlap between tiles.
 
-   .. py:attribute:: tile_overlap_x
-      :type: float or None
-      :value: None
-
-      Percentage overlap between tiles in the x direction. If None, tile_overlap is used.
-
-   .. py:attribute:: tile_overlap_y
-      :type: float or None
-      :value: None
-
-      Percentage overlap between tiles in the y direction. If None, tile_overlap is used.
-
    .. py:attribute:: max_shift
       :type: int
       :value: 50

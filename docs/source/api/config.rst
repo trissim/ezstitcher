@@ -48,11 +48,7 @@ PipelineConfig
 
       Configuration for the Stitcher class.
 
-   .. py:attribute:: focus_config
-      :type: FocusAnalyzerConfig
-      :value: FocusAnalyzerConfig()
 
-      Configuration for the FocusAnalyzer class.
 
 StitcherConfig
 --------------
@@ -85,29 +81,6 @@ StitcherConfig
 
       Pixel size in micrometers.
 
-FocusAnalyzerConfig
--------------------
 
-.. py:class:: FocusAnalyzerConfig
-
-   Configuration for the FocusAnalyzer class.
-
-   .. py:attribute:: method
-      :type: str
-      :value: "combined"
-
-      Focus detection method. Options: "combined", "normalized_variance", "laplacian", "tenengrad", "fft".
-
-   .. py:attribute:: roi
-      :type: tuple or None
-      :value: None
-
-      Optional region of interest as (x, y, width, height).
-
-   .. py:attribute:: weights
-      :type: dict or None
-      :value: None
-
-      Optional dictionary with weights for each metric in combined focus measure.
 
 
