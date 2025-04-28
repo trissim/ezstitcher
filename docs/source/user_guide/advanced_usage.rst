@@ -6,7 +6,7 @@ This page shows **three advanced skills**:
 
 1. Write *custom processing functions* and wire them into pipelines.
 2. Enable **multithreaded** execution for large plates.
-3. Extend EZStitcher via custom factories or microscope handlers.
+3. Implement advanced functional patterns for complex workflows.
 
 If you are new to the library, first read :doc:`basic_usage` and :doc:`intermediate_usage`.
 
@@ -134,35 +134,65 @@ Threads are allocated **per well**; inside a well, steps run sequentially.
 Adjust `num_workers` to avoid memory exhaustion.
 
 ---------------------------------------------------------------------
-6. Extending ``AutoPipelineFactory``
+6. Advanced Functional Patterns
 ---------------------------------------------------------------------
 
-Create your own factory when defaults don’t cover a use‑case.
+Create powerful processing pipelines without extending core classes:
 
 .. code-block:: python
 
-   from ezstitcher.factories import AutoPipelineFactory
-   from ezstitcher.core.steps  import Step
+   from pathlib import Path
+   from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+   from ezstitcher.core.pipeline import Pipeline
+   from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+   from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+   from ezstitcher.core.image_processor import ImageProcessor as IP
 
-   class QCFactory(AutoPipelineFactory):
-       """Adds an analysis pipeline after stitching."""
+   # ---------- orchestrator ----------------------------------------
+   plate_path   = Path("~/data/PlateA").expanduser()
+   orchestrator = PipelineOrchestrator(plate_path)
 
-       def create_pipelines(self):
-           pipelines = super().create_pipelines()
+   # ---------- position pipeline ----------------------------------
+   pos_pipe = Pipeline(
+       input_dir=orchestrator.workspace_path,
+       steps=[
+           ZFlatStep(method="max"),
+           Step(func=IP.stack_percentile_normalize),
+           CompositeStep(),
+           Step(func=custom_enhance),  # Custom processing
+           PositionGenerationStep(),
+       ],
+       name="Position Generation",
+   )
+   positions_dir = pos_pipe.steps[-1].output_dir
 
-           stitched_dir = pipelines[1].output_dir  # from assembly
-           analysis    = Pipeline(
-               input_dir=stitched_dir,
-               steps=[Step(func=self.simple_qc)],
-               name="QC",
-           )
-           pipelines.append(analysis)
-           return pipelines
+   # ---------- assembly pipeline ----------------------------------
+   asm_pipe = Pipeline(
+       input_dir=orchestrator.workspace_path,
+       steps=[
+           Step(func=IP.stack_percentile_normalize),
+           ImageStitchingStep(positions_dir=positions_dir),
+       ],
+       name="Assembly",
+   )
 
-       @staticmethod
-       def simple_qc(images):
-           from skimage.exposure import histogram
-           return [histogram(im)[0] for im in images]
+   # ---------- analysis pipeline ---------------------------------
+   # Add a third pipeline for post-processing analysis
+   analysis_pipe = Pipeline(
+       input_dir=asm_pipe.output_dir,  # Use output from assembly
+       steps=[
+           Step(func=analyze_histograms),  # Custom analysis
+       ],
+       name="Analysis",
+   )
+
+   # ---------- run all pipelines ---------------------------------
+   orchestrator.run(pipelines=[pos_pipe, asm_pipe, analysis_pipe])
+
+   # ---------- analysis function ---------------------------------
+   def analyze_histograms(images):
+       from skimage.exposure import histogram
+       return [histogram(im)[0] for im in images]
 
 ---------------------------------------------------------------------
 7. Adding a new microscope handler
@@ -175,15 +205,15 @@ See :doc:`../development/extending` for the full walkthrough.
 Choosing the right tool
 ---------------------------------------------------------------------
 
-* **AutoPipelineFactory** → quick wins on standard plates.
-* **Custom pipelines** → full control for research prototypes.
-* **Custom factory / handler** → organisation‑wide automation.
+* **EZ module** → quick wins with minimal code for standard plates.
+* **Custom pipelines** → full control for research prototypes and advanced workflows.
+* **Custom handlers** → organisation‑wide automation (for contributors).
 
 
 Next steps
 ~~~~~~~~~~
 
 * Read the :doc:`integration` guide for napari and CellProfiler hooks.
-* Follow the “learning path” outline in :ref:`learning-path` to master EZStitcher.
+* Follow the "learning path" outline in :ref:`learning-path` to master EZStitcher.
 
 

@@ -4,7 +4,7 @@ Intermediate Usage
 
 This section shows **three intermediate-level skills**:
 
-1. Configure ``AutoPipelineFactory`` for Z-stacks and multi-channel plates.
+1. Process Z-stacks and multi-channel plates with the EZ module or custom pipelines.
 2. Build **custom pipelines** when you need precise control.
 3. Combine Z-flattening, focus selection and channel-specific processing.
 
@@ -24,26 +24,63 @@ If you are new to EZStitcher, start with :doc:`basic_usage` first.
    Review :doc:`../concepts/step` before writing advanced pipelines.
 
 --------------------------------------------------------------------
-Z-stack processing with ``AutoPipelineFactory``
+Z-stack processing with the EZ module
 --------------------------------------------------------------------
 
 .. code-block:: python
 
    from pathlib import Path
+   from ezstitcher import stitch_plate
+
+   plate_path = Path("~/data/PlateA")  # <-- edit me
+
+   # Process Z-stacks with maximum intensity projection
+   stitch_plate(
+       plate_path,
+       flatten_z=True,
+       z_method="max"          # "mean", "median", "laplacian", "combined", ...
+   )
+
+For more control, use custom pipelines:
+
+.. code-block:: python
+
+   from pathlib import Path
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-   from ezstitcher.factories import AutoPipelineFactory
+   from ezstitcher.core.pipeline import Pipeline
+   from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+   from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+   from ezstitcher.core.image_processor import ImageProcessor as IP
 
    plate_path = Path("~/data/PlateA")  # <-- edit me
    orchestrator = PipelineOrchestrator(plate_path)
 
-   factory = AutoPipelineFactory(
+   # Position generation pipeline
+   pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
-       normalize=True,
-       flatten_z=True,
-       z_method="max"          # "mean", "median", "laplacian", "combined", ...
+       steps=[
+           ZFlatStep(method="max"),  # Z-stack flattening
+           Step(func=IP.stack_percentile_normalize),
+           CompositeStep(),
+           PositionGenerationStep(),
+       ],
+       name="Position Generation",
    )
-   pipelines = factory.create_pipelines()
-   orchestrator.run(pipelines=pipelines)
+   positions_dir = pos_pipe.steps[-1].output_dir
+
+   # Assembly pipeline
+   asm_pipe = Pipeline(
+       input_dir=orchestrator.workspace_path,
+       output_dir=plate_path.parent / f"{plate_path.name}_stitched",
+       steps=[
+           Step(func=IP.stack_percentile_normalize),
+           ZFlatStep(method="max"),  # Z-stack flattening
+           ImageStitchingStep(positions_dir=positions_dir),
+       ],
+       name="Assembly",
+   )
+
+   orchestrator.run(pipelines=[pos_pipe, asm_pipe])
 
 --------------------------------------------------------------------
 Custom position-generation + assembly pipelines
@@ -126,11 +163,9 @@ Channel-specific processing via ``Step(group_by='channel')``
 When to choose which approach
 --------------------------------------------------------------------
 
-* **Use ``AutoPipelineFactory``** for standard plates or slides when
-  you only need to toggle *normalize*, *flatten_z* or *z_method*.
+* **Use the EZ module** for standard plates or slides when you want minimal code and default settings are sufficient.
 
-* **Write custom pipelines** when you need bespoke steps, per-channel
-  logic, or multiple outputs (e.g. max-projection + best-focus).
+* **Write custom pipelines** when you need bespoke steps, per-channel logic, or multiple outputs (e.g. max-projection + best-focus).
 
 Next up: :doc:`advanced_usage`.
 

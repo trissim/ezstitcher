@@ -10,7 +10,6 @@ EZStitcher is a Python library designed to simplify the processing and stitching
 **Key Features:**
 
 * **Simplified Interface for Non-Coders**: Process and stitch images with minimal code using the EZ module
-* **Pipeline Factory**: Create complete stitching workflows with minimal code
 * **Pipeline Architecture**: Organize processing steps in a logical sequence
 * **Automatic Directory Management**: Protect original data while maintaining organized outputs
 * **Flexible Function Handling**: Apply various processing functions in different patterns
@@ -78,14 +77,20 @@ Getting Started
 EZStitcher offers three main approaches for creating stitching pipelines:
 
 1. Using the ``EZ module`` for a simplified, one-liner interface (recommended for beginners)
-2. Using ``AutoPipelineFactory`` for convenient, pre-configured pipelines
-3. Building custom pipelines for maximum flexibility and control
+2. Creating custom pipelines for maximum flexibility and control (for advanced users)
+3. Extending the library for organization-wide standardization (for contributors)
 
-All three approaches are valid and powerful, with different strengths depending on your needs.
+This three-tier approach allows users to choose the right level of abstraction for their needs:
+
+* **EZ Module**: For beginners and non-coders who want minimal code and default settings
+* **Custom Pipelines**: For advanced users who need more control and flexibility
+* **Library Extension**: For contributors who want to extend the core library
+
+Most users should start with the EZ module and move to custom pipelines as their needs become more specialized.
 
 For a quick introduction with a minimal working example, see the :doc:`../getting_started/quick_start` guide.
 
-For detailed examples of all three approaches, including common use cases and customization options, see the :doc:`basic_usage` and :doc:`ez_module` guides.
+For detailed examples of all approaches, including common use cases and customization options, see the :doc:`ez_module` and :doc:`basic_usage` guides.
 
 Key Concepts
 -----------
@@ -100,8 +105,6 @@ EZStitcher is built around several key concepts that work together to provide a 
      - Documentation
    * - **Architecture Overview**
      - :doc:`../concepts/architecture_overview`
-   * - **Pipeline Factory**
-     - :doc:`../concepts/pipeline_factory`
    * - **Pipeline Orchestrator**
      - :doc:`../concepts/pipeline_orchestrator`
    * - **Pipeline**
@@ -124,10 +127,11 @@ How to Use This Guide
 
 This user guide is organized into several sections:
 
-* **Basic Usage**: Shows how to use AutoPipelineFactory and create simple custom pipelines
-* **Intermediate Usage**: Demonstrates more complex pipelines using both approaches
-* **Advanced Usage**: Explores custom functions, multithreading, and other advanced topics
-* **Integration**: Shows how to integrate EZStitcher with other tools
+* **EZ Module**: Learn about the simplified interface for non-coders (recommended for most users)
+* **Basic Usage**: Explore custom pipelines for more flexibility
+* **Intermediate Usage**: Discover more complex workflows and customization options
+* **Advanced Usage**: Master advanced features and techniques
+* **Integration**: Integrate EZStitcher with other tools
 
 For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
 
