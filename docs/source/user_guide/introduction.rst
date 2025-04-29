@@ -7,66 +7,45 @@ What is EZStitcher?
 
 EZStitcher is a Python library designed to simplify the processing and stitching of microscopy images. It provides a flexible pipeline architecture that allows researchers to easily process large microscopy datasets, create composite images, flatten Z-stacks, and stitch tiled images together.
 
-**Key Features:**
+Why EZStitcher?
+--------------
 
-* **Simplified Interface for Non-Coders**: Process and stitch images with minimal code using the EZ module
-* **Pipeline Architecture**: Organize processing steps in a logical sequence
-* **Automatic Directory Management**: Protect original data while maintaining organized outputs
-* **Flexible Function Handling**: Apply various processing functions in different patterns
-* **Support for Various Microscope Formats**: Work with data from different microscope types
-* **Multithreaded Processing**: Process multiple wells in parallel for faster results
+Modern microscopy generates complex datasets with multiple channels, Z-stacks, and tiled images. While powerful stitching tools exist, they often require significant programming expertise or lack support for advanced workflows. EZStitcher bridges this gap by:
 
-**Use Cases:**
+* Providing an intuitive interface for non-programmers
+* Maintaining the flexibility needed by advanced users
+* Automating common microscopy workflows
+* Reducing processing errors through standardized pipelines
+* Building on the robust Ashlar stitching engine
 
-* Processing large microscopy datasets with consistent operations
-* Stitching tiled microscopy images into complete well or plate views
-* Creating composite images from multiple fluorescence channels
-* Flattening Z-stacks into 2D projections
-* Applying custom image processing algorithms to microscopy data
+Key Features
+-----------
 
-EZStitcher is designed for researchers working with microscopy data who need a flexible, code-based approach to image processing and stitching.
+* :doc:`../user_guide/basic_usage`: Process and stitch images with minimal code using the EZ module
+* :doc:`../concepts/pipeline`: Organize processing steps in a logical sequence
+* :doc:`../concepts/directory_structure`: Protect original data while maintaining organized outputs
+* :doc:`../concepts/function_handling`: Apply various processing functions in different patterns
+* :doc:`../user_guide/microscope_formats`: Work with data from different microscope types
+* :doc:`../concepts/pipeline_orchestrator`: Process multiple wells in parallel for faster results
+
+For a detailed understanding of how these components work together, see :doc:`../concepts/architecture_overview`.
 
 Supported Microscope Types
 ------------------------
 
-EZStitcher currently supports multiple microscope types, including ImageXpress and Opera Phenix.
-
-For detailed information about supported microscope types, including file formats, naming conventions, and directory structures, see :ref:`microscope-formats` and :ref:`microscope-comparison`.
+EZStitcher currently supports multiple microscope types, including ImageXpress and Opera Phenix. For detailed information about supported microscope types, including file formats, naming conventions, and directory structures, see :ref:`microscope-formats` and :ref:`microscope-comparison`.
 
 Support for additional microscope types can be added by implementing the appropriate interfaces. See the :doc:`../development/extending` guide for details.
 
-Core Architecture Overview
-------------------------
+Next Steps
+---------
 
-EZStitcher uses a pipeline architecture that organizes processing into a logical sequence of steps. For detailed information about the architecture, see :doc:`../concepts/architecture_overview`.
+* :doc:`../getting_started/getting_started` - Install EZStitcher and run your first pipeline
+* :doc:`basic_usage` - Learn about the simplified interface for non-coders
+* :doc:`intermediate_usage` - Create custom pipelines with steps
+* :doc:`best_practices` - Learn best practices for using EZStitcher
 
-The architecture consists of three main components:
-
-* **PipelineOrchestrator**: Coordinates the execution of pipelines across wells
-* **Pipeline**: A sequence of processing steps that are executed in order
-* **Step**: A single processing operation that can be applied to images
-
-.. figure:: ../_static/architecture_overview.png
-   :alt: EZStitcher Architecture Overview
-   :width: 80%
-   :align: center
-
-   EZStitcher's pipeline architecture showing the relationship between Orchestrator, Pipeline, and Steps.
-
-For comprehensive information about EZStitcher's architecture, including:
-
-* Detailed component descriptions
-* Processing workflow and modularity
-* Component interactions
-* Typical processing flow
-
-See :doc:`../concepts/architecture_overview`.
-
-For details about specific components, see:
-
-* :doc:`../concepts/pipeline_orchestrator` - Details about the Orchestrator
-* :doc:`../concepts/pipeline` - Details about Pipelines
-* :doc:`../concepts/step` - Details about Steps
+EZStitcher is designed for researchers working with microscopy data who need a flexible, code-based approach to image processing and stitching.
 
 Getting Started
 ---------------------
