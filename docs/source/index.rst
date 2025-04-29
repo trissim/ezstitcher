@@ -37,9 +37,9 @@ Key Resources
 -----------
 
 * :doc:`getting_started/quick_start` - Get started in minutes with a minimal example
-* :doc:`user_guide/ez_module` - Learn about the simplified interface for non-coders
+* :doc:`user_guide/ez_module` - Learn about the simplified interface for non-coders (recommended for beginners)
+* :doc:`user_guide/transitioning_from_ez` - Bridge the gap between the EZ module and custom pipelines
 * :doc:`user_guide/introduction` - Learn about ezstitcher's architecture and concepts
-* :doc:`user_guide/basic_usage` - Explore detailed examples and custom pipelines
 
 .. toctree::
    :maxdepth: 2
@@ -54,7 +54,8 @@ Key Resources
 
    user_guide/index
    user_guide/introduction
-   user_guide/basic_usage
+   user_guide/ez_module
+   user_guide/transitioning_from_ez
    user_guide/intermediate_usage
    user_guide/advanced_usage
    user_guide/best_practices

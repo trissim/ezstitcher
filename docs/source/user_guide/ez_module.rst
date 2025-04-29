@@ -2,186 +2,98 @@
 EZ Module
 ==========
 
-The EZ module provides a simplified interface for common stitching workflows,
-making it easier for non-coders to use EZStitcher. It wraps the functionality of
-the pipeline architecture into an intuitive API with sensible defaults and
-auto-detection features.
-
-The EZ module is the recommended approach for beginners and non-coders, as described in the :ref:`three-tier-approach` section of the introduction.
-
-**Key Benefits:**
-
-* **Simplicity**: Process and stitch images with minimal code
-* **Auto-detection**: Automatically detect Z-stacks and channels
-* **Sensible defaults**: Get good results without extensive configuration
-
 .. note::
-   Under the hood, the EZ module uses the pipeline architecture described in :doc:`../concepts/architecture_overview`.
-   For more control and flexibility, see :doc:`basic_usage`.
+   **Complexity Level: Beginner**
 
-Quick Start
-----------
+   This section is designed for beginners and non-coders who want to process and stitch images with minimal code.
 
-The simplest way to stitch a plate of microscopy images is to use the ``stitch_plate`` function:
+The EZ module provides a simplified interface for stitching microscopy images with a single function call. It handles all the complexity behind the scenes, making it perfect for beginners and users who want quick results.
 
 .. code-block:: python
 
    from ezstitcher import stitch_plate
 
-   # Stitch a plate with default settings
+   # Stitch a plate with a single function call
    stitch_plate("path/to/plate")
 
-This will:
+That's it! This single line will:
 
 1. Automatically detect the plate format
-2. Apply normalization
-3. Handle Z-stacks if present
-4. Generate positions and stitch images
-5. Save the output to a new directory
+2. Process all channels and Z-stacks appropriately
+3. Generate positions and stitch images
+4. Save the output to a new directory
 
-Configuration Options
--------------------
+Key Parameters
+------------
 
-You can customize the stitching process with various options:
-
-.. code-block:: python
-
-   from ezstitcher import stitch_plate
-
-   # Stitch with custom options
-   stitch_plate(
-       "path/to/plate",
-       output_path="path/to/output",
-       normalize=True,
-       flatten_z=True,
-       z_method="focus",
-       channel_weights=[0.7, 0.3, 0]
-   )
-
-Auto-Detection
------------
-
-The EZ module automatically detects Z-stacks and channels:
+While the default settings work well for most cases, you can customize the behavior with a few key parameters:
 
 .. code-block:: python
 
-   from ezstitcher import stitch_plate
-
-   # Auto-detection handles Z-stacks and channels automatically
-   stitch_plate("path/to/plate")
-
-   # You can override auto-detection when needed
    stitch_plate(
-       "path/to/plate",
-       flatten_z=True,  # Force Z-flattening
-       z_method="focus"  # Use focus detection
+       "path/to/plate",                    # Input directory with microscopy images
+       output_path="path/to/output",       # Where to save results (optional)
+       normalize=True,                     # Apply intensity normalization (default: True)
+       flatten_z=True,                     # Flatten Z-stacks to 2D (auto-detected if None)
+       z_method="max",                     # How to flatten Z-stacks: "max", "mean", "focus"
+       channel_weights=[0.7, 0.3, 0],      # Weights for position finding (auto-detected if None)
+       well_filter=["A01", "B02"]          # Process only specific wells (optional)
    )
 
-More Control with EZStitcher Class
---------------------------------
+Z-Stack Processing
+---------------
 
-For more control, you can use the ``EZStitcher`` class:
+For plates with Z-stacks, you can control how they're flattened:
+
+.. code-block:: python
+
+   # Maximum intensity projection (brightest pixel from each Z-stack)
+   stitch_plate("path/to/plate", flatten_z=True, z_method="max")
+
+   # Focus-based projection (selects best-focused plane)
+   stitch_plate("path/to/plate", flatten_z=True, z_method="focus")
+
+   # Mean projection (average across Z-planes)
+   stitch_plate("path/to/plate", flatten_z=True, z_method="mean")
+
+More Control
+---------
+
+For slightly more control while keeping things simple, use the ``EZStitcher`` class:
 
 .. code-block:: python
 
    from ezstitcher import EZStitcher
 
-   # Create stitcher
+   # Create a stitcher
    stitcher = EZStitcher("path/to/plate")
 
-   # Customize options
+   # Set options
    stitcher.set_options(
        normalize=True,
-       z_method="focus",
-       channel_weights=[0.7, 0.3, 0]
+       z_method="focus"
    )
 
    # Run stitching
    stitcher.stitch()
 
-Common Use Cases
-===============
-
-Single-Channel Stitching
------------------------
-
-.. code-block:: python
-
-   from ezstitcher import stitch_plate
-
-   # Stitch a single-channel plate
-   stitch_plate("path/to/single_channel_plate")
-
-Multi-Channel Stitching
----------------------
-
-.. code-block:: python
-
-   from ezstitcher import stitch_plate
-
-   # Stitch a multi-channel plate
-   # Channel weights determine how channels are combined for position generation
-   stitch_plate(
-       "path/to/multi_channel_plate",
-       channel_weights=[0.7, 0.3, 0]  # 70% channel 1, 30% channel 2, 0% channel 3
-   )
-
-Z-Stack Stitching
----------------
-
-.. code-block:: python
-
-   from ezstitcher import stitch_plate
-
-   # Stitch a Z-stack plate with maximum intensity projection
-   stitch_plate(
-       "path/to/z_stack_plate",
-       flatten_z=True,
-       z_method="max"
-   )
-
-   # Stitch a Z-stack plate with focus-based projection
-   stitch_plate(
-       "path/to/z_stack_plate",
-       flatten_z=True,
-       z_method="focus"
-   )
-
-Processing Specific Wells
------------------------
-
-.. code-block:: python
-
-   from ezstitcher import stitch_plate
-
-   # Process only specific wells
-   stitch_plate(
-       "path/to/plate",
-       well_filter=["A01", "B02", "C03"]
-   )
-
 Troubleshooting
-==============
+------------
 
-Common Issues
------------
+**Common issues:**
 
-**No output generated**
+- **No output**: Check that the input path exists and contains microscopy images
+- **Z-stacks not detected**: Explicitly set ``flatten_z=True``
+- **Poor quality**: Try different ``z_method`` values or adjust ``channel_weights``
 
-- Check that the input path exists and contains microscopy images
-- Verify that the microscope format is supported
-- Check for error messages in the console output
+When You Need More Control
+-----------------------
 
-**Z-stacks not detected**
+If you need more flexibility than the EZ module provides:
 
-- Explicitly set ``flatten_z=True`` if auto-detection fails
-- Check that Z-stack images follow the expected naming convention
-
-**Poor stitching quality**
-
-- Try different normalization settings
-- Adjust channel weights to emphasize channels with more features
-- Try different Z-flattening methods
+1. First, explore all the options available in the EZ module (see the Key Parameters section above)
+2. If you still need more control, see :doc:`transitioning_from_ez` to learn how to bridge the gap to custom pipelines
+3. For even more advanced usage, see :doc:`intermediate_usage` for creating custom pipelines with wrapped steps
 
 API Reference
 ============

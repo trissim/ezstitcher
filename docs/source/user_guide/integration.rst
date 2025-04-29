@@ -2,6 +2,11 @@
 Integrating EZStitcher with Other Tools
 =========================
 
+.. note::
+   **Complexity Level: Advanced**
+
+   This section is designed for advanced users who want to integrate EZStitcher with other tools and libraries.
+
 This page demonstrates **two realistic integration patterns** that crop up in fluorescence-microscopy workflows:
 
 1. **Illumination correction with *BaSiCPy*** ➜ **self-supervised denoising with *N2V2* (Careamics)**
@@ -16,7 +21,7 @@ If you have not read :doc:`advanced_usage`, start there first - it explains cust
 1. BaSiCPy + N2V2 denoising
 --------------------------------------------------------------------
 
-`BaSiCPy <https://github.com/peng-lab/BaSiCPy>`_ removes slowly varying illumination fields.  
+`BaSiCPy <https://github.com/peng-lab/BaSiCPy>`_ removes slowly varying illumination fields.
 `Careamics-N2V2 <https://careamics.github.io>`_ performs noise-to-void denoising without clean targets.
 
 .. code-block:: python
@@ -125,9 +130,3 @@ Navigation
 
 * Back to :doc:`advanced_usage` for custom factories and multithreading.
 * Forward to :doc:`../development/extending` to add new microscope handlers.
-
---------------------------------------------------------------------
-
-* Back to :doc:`advanced_usage` for custom factories and multithreading.
-* Forward to :doc:`../development/extending` to add new microscope handlers.
-

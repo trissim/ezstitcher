@@ -78,29 +78,44 @@ Getting Started
 
 .. _three-tier-approach:
 
-EZStitcher offers three main approaches for creating stitching pipelines:
+EZStitcher offers three main approaches for creating stitching pipelines, each designed for a different level of user experience and need for control:
 
-1. Using the ``EZ module`` for a simplified, one-liner interface (recommended for beginners)
-2. Creating custom pipelines for maximum flexibility and control (for advanced users)
-3. Extending the library for organization-wide standardization (for contributors)
+1. **EZ Module (Beginner Level)**: A simplified, one-liner interface for beginners and non-coders
+2. **Custom Pipelines with Wrapped Steps (Intermediate Level)**: More flexibility and control using wrapped steps (NormStep, ZFlatStep, etc.)
+3. **Library Extension with Base Step (Advanced Level)**: For advanced users who need to understand implementation details
 
 This three-tier approach allows users to choose the right level of abstraction for their needs:
 
-* **EZ Module**: For beginners and non-coders who want minimal code and default settings
-* **Custom Pipelines**: For advanced users who need more control and flexibility
-* **Library Extension**: For contributors who want to extend the core library
+* **EZ Module**: "I just want to stitch my images quickly"
+  - For beginners and non-coders who want minimal code
+  - Uses sensible defaults and auto-detection
+  - Handles common use cases with a single function call
+  - Example: ``stitch_plate("path/to/plate")``
 
-Most users should start with the EZ module and move to custom pipelines as their needs become more specialized.
+* **Custom Pipelines with Wrapped Steps**: "I need more control over the processing steps"
+  - For intermediate users who need more flexibility
+  - Uses wrapped steps (NormStep, ZFlatStep, etc.) that provide a clean interface for common operations
+  - Allows customization of processing steps and parameters
+  - Example: Creating pipelines with ``ZFlatStep()``, ``NormStep()``, etc.
+
+* **Library Extension with Base Step**: "I need to understand how the steps work under the hood"
+  - For advanced users who need to understand implementation details
+  - Uses the base Step class to create custom processing functions
+  - Provides maximum flexibility and control
+  - Example: ``Step(func=custom_function, variable_components=['z_index'])``
+
+Most users should start with the EZ module and move to custom pipelines with wrapped steps as their needs become more specialized. Only advanced users who need to understand implementation details should use the base Step class directly.
 
 When to Use Which Approach
 -------------------------
 
-| Use **EZ Module** when… | Use **Custom Pipelines** when… | Use **Library Extension** when… |
+| Use **EZ Module** when… | Use **Custom Pipelines with Wrapped Steps** when… | Use **Library Extension with Base Step** when… |
 |------------------------|--------------------------------|--------------------------------|
-| • You want minimal code | • You need bespoke processing  | • You're contributing to EZStitcher |
-| • You're new to EZStitcher | • You want per‑channel logic | • You need organization-wide standards |
-| • Default settings are sufficient | • You need maximum flexibility | • You're extending core functionality |
-| • You want auto-detection | • You want full transparency | • You're adding new microscope types |
+| • You want minimal code | • You need bespoke processing  | • You need to understand implementation details |
+| • You're new to EZStitcher | • You want per‑channel logic | • You're creating custom processing functions |
+| • Default settings are sufficient | • You need more flexibility | • You're extending core functionality |
+| • You want auto-detection | • You want to customize processing steps | • You're implementing new microscope handlers |
+| • You want a one-liner solution | • You need multiple output types | • You're contributing to EZStitcher |
 
 For a quick introduction with a minimal working example, see the :doc:`../getting_started/quick_start` guide.
 
@@ -137,13 +152,16 @@ Understanding these concepts will help you create effective image processing wor
 How to Use This Guide
 -------------------
 
-This user guide is organized into several sections:
+This user guide is organized by complexity level to provide a clear learning path:
 
-* **EZ Module**: Learn about the simplified interface for non-coders (recommended for most users)
-* **Basic Usage**: Explore custom pipelines for more flexibility
-* **Intermediate Usage**: Discover more complex workflows and customization options
-* **Advanced Usage**: Master advanced features and techniques
-* **Integration**: Integrate EZStitcher with other tools
+* **EZ Module (Beginner Level)**: Learn about the simplified interface for non-coders (recommended for most users)
+* **Transitioning from EZ Module**: Bridge the gap between the EZ module and custom pipelines
+* **Intermediate Usage (Custom Pipelines with Wrapped Steps)**: Create custom pipelines with wrapped steps (NormStep, ZFlatStep, etc.)
+* **Advanced Usage (Library Extension with Base Step)**: Master advanced features and understand how wrapped steps are implemented
+* **Best Practices**: Learn recommended practices for all levels
+* **Integration**: Integrate EZStitcher with other tools (advanced level)
+
+Each section is clearly marked with its complexity level to help you navigate the documentation based on your experience. Start with the sections that match your current level and progress through the guide as you become more familiar with EZStitcher.
 
 For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
 
@@ -154,37 +172,37 @@ Learning Path
 
 EZStitcher provides a flexible framework for processing and stitching microscopy images. Here's a recommended learning path based on your experience level:
 
-**Getting Started:**
+**Beginner Level (EZ Module):**
 
 * Start with the :doc:`ez_module` guide for the simplest approach
-* Try the examples above to get hands-on experience
-* Review the :doc:`../concepts/pipeline` to understand the pipeline architecture
+* Try the examples to get hands-on experience
+* Use the EZ module for quick results with minimal code
 
-**Intermediate Usage:**
+**Transitioning to Intermediate Level:**
 
-* Learn more complex workflows in :doc:`intermediate_usage`
-* Study :doc:`../concepts/step` to understand different step types
+* Read the :doc:`transitioning_from_ez` guide to understand how to bridge the gap between the EZ module and custom pipelines
+* Learn about the pipeline architecture in :doc:`../concepts/pipeline`
+* Understand the basic concepts in :doc:`basic_usage`
+
+**Intermediate Level (Custom Pipelines with Wrapped Steps):**
+
+* Learn how to create custom pipelines with wrapped steps in :doc:`intermediate_usage`
+* Understand how to use wrapped steps (NormStep, ZFlatStep, etc.) for common operations
 * Review best practices in :doc:`best_practices`
 
-**Advanced Usage:**
+**Advanced Level (Library Extension with Base Step):**
 
 * Explore advanced features in :doc:`advanced_usage`
-* Learn about custom functions and multithreading
-* Study :doc:`../concepts/function_handling` to understand function handling patterns
-
-**Advanced Topics:**
-
-* Create custom processing functions as shown in :doc:`advanced_usage`
-* Optimize performance with multithreaded processing in :doc:`advanced_usage`
-* Extend EZStitcher to support new microscope types using :doc:`../development/extending`
-* Integrate with other tools as described in :doc:`integration`
-
-**Mastering EZStitcher:**
-
+* Learn how wrapped steps are implemented using the base Step class
 * Study :doc:`../concepts/step` to understand step parameters in detail
 * Explore :doc:`../concepts/function_handling` to learn about advanced function patterns
-* Learn about :doc:`../concepts/directory_structure` to understand how directories are managed
-* Dive into the API reference for detailed information about all classes and methods
+
+**Expert Level:**
+
+* Create custom processing functions as shown in :doc:`advanced_usage`
+* Optimize performance with multithreaded processing
+* Extend EZStitcher to support new microscope types using :doc:`../development/extending`
+* Integrate with other tools as described in :doc:`integration`
 
 **Getting Help:**
 

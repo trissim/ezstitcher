@@ -4,6 +4,11 @@
 Best Practices
 ===============================================
 
+.. note::
+   **Complexity Level: All Levels**
+
+   This section provides best practices for users at all levels, from beginners to advanced users.
+
 This page consolidates best practices for using EZStitcher effectively. It's organized by topic to help you find the advice you need quickly.
 
 Sections:

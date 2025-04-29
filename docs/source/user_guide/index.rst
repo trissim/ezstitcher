@@ -4,29 +4,25 @@ User Guide
 
 This user guide provides a comprehensive overview of EZStitcher, from basic concepts to advanced usage.
 
-The guide is organized to follow a logical learning path:
+The guide is organized by complexity level to provide a clear learning path:
 
 1. **Introduction**: Learn about ezstitcher's architecture and key concepts
-2. **EZ Module**: Use the simplified interface for non-coders (recommended for most users)
-3. **Basic Usage**: Explore custom pipelines for more flexibility
-4. **Intermediate Usage**: Discover more complex workflows and customization options
-5. **Advanced Usage**: Master advanced features and techniques
+2. **EZ Module (Beginner Level)**: Use the simplified interface for non-coders (recommended for most users)
+3. **Transitioning from EZ Module**: Bridge the gap between the EZ module and custom pipelines
+4. **Intermediate Usage**: Create custom pipelines with wrapped steps (NormStep, ZFlatStep, etc.)
+5. **Advanced Usage**: Master advanced features and understand how wrapped steps are implemented
 6. **Best Practices**: Learn recommended practices for effective use
 7. **Integration**: Integrate ezstitcher with other tools and workflows
 
 If you're new to ezstitcher, we recommend starting with the :doc:`../getting_started/quick_start` guide before diving into the User Guide.
 
 .. important::
-   The user guide contains all the examples you need to get started with EZStitcher. The intermediate and advanced
-   usage sections include numerous code examples that demonstrate best practices for:
+   The user guide follows a three-tier approach to accommodate different user needs:
 
-   * Automatic directory resolution
-   * Proper usage of ``variable_components`` and ``group_by`` parameters
-   * Creating composite images before position generation
-   * Z-stack processing
-   * Channel-specific processing
-   * Position generation and stitching
-   * Multithreaded processing
-   * Custom processing functions
+   * **Beginner Level (EZ Module)**: For non-coders and beginners who want minimal code
+   * **Intermediate Level (Wrapped Steps)**: For users who need more control with wrapped steps (NormStep, ZFlatStep, etc.)
+   * **Advanced Level (Base Step Implementation)**: For users who need to understand implementation details
+
+   Each section is clearly marked with its complexity level to help you navigate the documentation based on your experience.
 
 For a complete list of topics, see the navigation menu on the left.

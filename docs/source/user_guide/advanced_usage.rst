@@ -2,17 +2,29 @@
 Advanced Usage
 ==============
 
-This page shows **three advanced skills**:
+.. note::
+   **Complexity Level: Advanced**
 
-1. Write *custom processing functions* and wire them into pipelines.
-2. Enable **multithreaded** execution for large plates.
-3. Implement advanced functional patterns for complex workflows.
+   This section is designed for advanced users who need to understand how wrapped steps are implemented using the base Step class.
 
-If you are new to the library, first read :doc:`basic_usage` and :doc:`intermediate_usage`.
+This page shows **three advanced skills** for users who need to go beyond wrapped steps:
+
+1. Write *custom processing functions* and wire them into pipelines using the base Step class
+2. Enable **multithreaded** execution for large plates
+3. Implement advanced functional patterns for complex workflows
+
+**Learning Path:**
+
+1. If you are new to EZStitcher, start with the :doc:`ez_module` guide (beginner level)
+2. Then read the :doc:`transitioning_from_ez` guide to understand how to bridge the gap between the EZ module and custom pipelines
+3. Next, learn about custom pipelines with wrapped steps in :doc:`intermediate_usage` (intermediate level)
+4. Now you're ready for this advanced usage guide with the base Step class
+5. For integration with other tools, see :doc:`integration`
 
 .. note::
-   Use specialised steps (``ZFlatStep``, ``CompositeStep``, ``FocusStep``) whenever you need to loop over *z-index* or *channel*.
-   See :doc:`../concepts/step` for detailed information about these steps.
+   Wrapped steps (``NormStep``, ``ZFlatStep``, ``CompositeStep``, ``FocusStep``) are built on top of the base Step class.
+   This section explains how these wrapped steps are implemented and how to create your own custom steps.
+   See :doc:`../concepts/step` for detailed information about the base Step class.
 
 .. important::
    The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.
@@ -50,7 +62,7 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
 
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline           import Pipeline
-   from ezstitcher.core.steps              import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
+   from ezstitcher.core.steps              import Step, NormStep, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
    from ezstitcher.core.image_processor    import ImageProcessor as IP
 
    # ---------- orchestrator ----------------------------------------
@@ -66,11 +78,11 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
    pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           ZFlatStep(method="max"),
-           Step(func=(denoise, {"strength": 0.4})),
-           Step(func=IP.stack_percentile_normalize),
-           CompositeStep(),
-           PositionGenerationStep(),
+           ZFlatStep(method="max"),  # Z-stack flattening
+           Step(func=(denoise, {"strength": 0.4})),  # Custom denoising
+           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
+           CompositeStep(),  # Channel compositing
+           PositionGenerationStep(),  # Position generation
        ],
        name="Position Generation",
    )
@@ -81,9 +93,9 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
        input_dir=orchestrator.workspace_path,
        output_dir=Path("out/stitched"),
        steps=[
-           Step(func=(denoise, {"strength": 0.4})),
-           Step(func=IP.stack_percentile_normalize),
-           ImageStitchingStep(positions_dir=positions_dir),
+           Step(func=(denoise, {"strength": 0.4})),  # Custom denoising
+           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
+           ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
        ],
        name="Assembly",
    )
@@ -145,7 +157,7 @@ Create powerful processing pipelines without extending core classes:
    from pathlib import Path
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline import Pipeline
-   from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
+   from ezstitcher.core.steps import Step, NormStep, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
    from ezstitcher.core.image_processor import ImageProcessor as IP
 
    # ---------- orchestrator ----------------------------------------
@@ -156,11 +168,11 @@ Create powerful processing pipelines without extending core classes:
    pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           ZFlatStep(method="max"),
-           Step(func=IP.stack_percentile_normalize),
-           CompositeStep(),
+           ZFlatStep(method="max"),  # Z-stack flattening
+           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
+           CompositeStep(),  # Channel compositing
            Step(func=custom_enhance),  # Custom processing
-           PositionGenerationStep(),
+           PositionGenerationStep(),  # Position generation
        ],
        name="Position Generation",
    )
@@ -170,8 +182,8 @@ Create powerful processing pipelines without extending core classes:
    asm_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           Step(func=IP.stack_percentile_normalize),
-           ImageStitchingStep(positions_dir=positions_dir),
+           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
+           ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
        ],
        name="Assembly",
    )
