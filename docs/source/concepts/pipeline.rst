@@ -9,6 +9,9 @@ Pipeline
 Overview
 -------
 
+The Pipeline is a key component of the EZStitcher architecture.
+For an overview of the complete architecture, see :doc:`architecture_overview`.
+
 A ``Pipeline`` is a sequence of processing steps that are executed in order. It provides:
 
 * Step management (adding, removing, reordering)
@@ -73,6 +76,8 @@ The first approach (providing all steps at once) is recommended for most use cas
 
 Pipeline Parameters
 ----------------
+
+For detailed API documentation, see :doc:`../api/pipeline`.
 
 A ``Pipeline`` accepts the following parameters:
 
@@ -152,7 +157,7 @@ The context serves as a communication mechanism between:
 2. The pipeline and its steps
 3. Different steps within the pipeline
 
-For example, specialized steps like ``PositionGenerationStep`` use the orchestrator reference in the context to access plate-specific services. For more information on the relationship between the orchestrator and pipeline, see :ref:`orchestrator-pipeline-relationship`.
+For example, steps like ``PositionGenerationStep`` use the orchestrator reference in the context to access plate-specific services. For more information on the relationship between the orchestrator and pipeline, see :ref:`orchestrator-pipeline-relationship`.
 
 .. _pipeline-multithreaded:
 
@@ -203,7 +208,8 @@ Directory Resolution
 
 EZStitcher automatically resolves directories for steps in a pipeline, minimizing the need for manual directory management.
 
-For detailed information on directory resolution, directory flow, and best practices, see :doc:`directory_structure`.
+Pipelines manage input and output directories for steps.
+For detailed information about directory structure, see :doc:`directory_structure`.
 
 .. _pipeline-saving-loading:
 

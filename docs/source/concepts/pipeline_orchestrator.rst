@@ -7,6 +7,9 @@ PipelineOrchestrator
 Role and Responsibilities
 ------------------------
 
+The PipelineOrchestrator is a key component of the EZStitcher architecture.
+For an overview of the complete architecture, see :doc:`architecture_overview`.
+
 The ``PipelineOrchestrator`` is the top-level component that manages all plate-specific operations and coordinates the execution of pipelines. It serves as an abstraction layer between the plate-specific details and the pipeline steps.
 
 .. figure:: ../_static/orchestrator_pipeline_relationship.png
@@ -28,6 +31,8 @@ Key responsibilities:
   - Creates symlinks to the original images in this workspace
   - Ensures that modifications happen on workspace copies, not original data
   - Provides this workspace as the input for pipelines
+
+For detailed information about directory structure, see :doc:`directory_structure`.
 
 * **Pipeline Execution**:
   - Multithreaded execution across wells
@@ -141,6 +146,8 @@ The orchestrator provides several plate-specific services that abstract away the
 
 Running Pipelines
 ----------------
+
+For detailed API documentation, see :doc:`../api/pipeline_orchestrator`.
 
 The orchestrator can run one or more pipelines:
 

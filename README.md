@@ -15,6 +15,10 @@ EZStitcher is a Python library that simplifies complex microscopy image processi
 
 ## 🚀 Key Features
 
+- **Simplified Interface for Non-Coders**
+  - One-liner function for common workflows
+  - Auto-detection of Z-stacks and channels
+
 - **Intelligent Z-Stack Processing**
   - Advanced focus detection with quality metrics
   - Multiple projection methods (max, mean, best-focus)
@@ -52,6 +56,17 @@ pip install ezstitcher
 ```
 
 ## 📊 Basic Usage
+
+### Simplified Interface (Recommended for Beginners)
+
+```python
+from ezstitcher import stitch_plate
+
+# Stitch a plate with a single function call
+stitch_plate("path/to/microscopy/data")
+```
+
+### Using AutoPipelineFactory
 
 ```python
 from ezstitcher.core import AutoPipelineFactory
@@ -98,13 +113,13 @@ assembly_pipeline = Pipeline(
     steps=[
         # N2V denoising
         Step(func=(n2v_process, {'model_path': 'path/to/model.h5'})),
-        
+
         # BaSiC flatfield correction
         Step(func=basic_process),
-        
+
         # Normalize
         Step(func=IP.stack_percentile_normalize),
-        
+
         # Stitch
         ImageStitchingStep()
     ]
@@ -118,6 +133,7 @@ orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 Comprehensive documentation is available at [Read the Docs](https://ezstitcher.readthedocs.io/en/latest/), including:
 
 - [Quick Start Guide](https://ezstitcher.readthedocs.io/en/latest/getting_started/quick_start.html)
+- [EZ Module for Non-Coders](https://ezstitcher.readthedocs.io/en/latest/user_guide/ez_module.html)
 - [Core Concepts](https://ezstitcher.readthedocs.io/en/latest/concepts/index.html)
 - [User Guide](https://ezstitcher.readthedocs.io/en/latest/user_guide/index.html)
 - [API Reference](https://ezstitcher.readthedocs.io/en/latest/api/index.html)

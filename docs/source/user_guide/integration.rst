@@ -9,14 +9,13 @@ This page demonstrates **two realistic integration patterns** that crop up in fl
 
 If you have not read :doc:`advanced_usage`, start there first - it explains custom functions and multithreading, which we reuse below.
 
-.. note::
-   All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length.  Saving to disk should be handled by the pipeline or a separate post-hoc script.
+All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length. Saving to disk should be handled by the pipeline or a separate post-hoc script.
 
 --------------------------------------------------------------------
 1. BaSiCPy + N2V2 denoising
 --------------------------------------------------------------------
 
-`BaSiCPy <https://github.com/peng-lab/BaSiCPy>`_ removes slowly varying illumination fields.  
+`BaSiCPy <https://github.com/peng-lab/BaSiCPy>`_ removes slowly varying illumination fields.
 `Careamics-N2V2 <https://careamics.github.io>`_ performs noise-to-void denoising without clean targets.
 
 .. code-block:: python
@@ -125,9 +124,3 @@ Navigation
 
 * Back to :doc:`advanced_usage` for custom factories and multithreading.
 * Forward to :doc:`../development/extending` to add new microscope handlers.
-
---------------------------------------------------------------------
-
-* Back to :doc:`advanced_usage` for custom factories and multithreading.
-* Forward to :doc:`../development/extending` to add new microscope handlers.
-

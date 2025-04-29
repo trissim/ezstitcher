@@ -1,26 +1,12 @@
-Pipeline Architecture
+PipelineOrchestrator
 ==================
 
 .. module:: ezstitcher.core.pipeline_orchestrator
 
-This module contains the core processing pipeline architecture for EZStitcher, which consists of three main components:
+The PipelineOrchestrator is the central coordinator that manages the execution of multiple pipelines across wells.
 
-1. **PipelineOrchestrator**: Coordinates the execution of multiple pipelines across wells
-2. **Pipeline**: A sequence of processing steps
-3. **Step**: A single processing operation (with specialized subclasses)
-
-For comprehensive information about the pipeline orchestrator, including:
-
-* Role and responsibilities
-* Creating an orchestrator
-* Plate-specific services
-* Running pipelines
-* Orchestrator-pipeline relationship
-
-See :ref:`pipeline-orchestrator` in the :doc:`../concepts/pipeline_orchestrator` documentation.
-
-PipelineOrchestrator
--------------------
+For conceptual explanation, see :doc:`../concepts/pipeline_orchestrator`.
+For information about directory structure, see :doc:`../concepts/directory_structure`.
 
 .. py:class:: PipelineOrchestrator(plate_path=None, workspace_path=None, config=None, fs_manager=None, image_preprocessor=None, focus_analyzer=None)
 
@@ -103,10 +89,10 @@ PipelineOrchestrator
       :param positions_path: Path to positions file
       :type positions_path: str or Path
 
-Pipeline and Step Classes
----------------------
+Related Classes
+--------------
 
-For documentation on the Pipeline and Step classes, see:
+For documentation on related classes, see:
 
 - :doc:`pipeline` - Documentation for the Pipeline class and ProcessingContext
 - :doc:`steps` - Documentation for the Step class and its specialized subclasses
