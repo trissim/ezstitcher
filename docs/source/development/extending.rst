@@ -3,6 +3,82 @@ Extending EZStitcher
 
 This guide explains how to extend EZStitcher with new functionality.
 
+.. _extending-autopipelinefactory:
+
+Extending AutoPipelineFactory
+-------------------------
+
+.. note::
+   Extending AutoPipelineFactory is primarily for contributors to the core library or for organization-wide standardization. 
+   For most advanced use cases, creating custom pipelines with the Pipeline/Step abstraction is recommended instead.
+
+The AutoPipelineFactory class can be extended to create custom factory classes that build on the standard pipeline creation logic. This is useful when:
+
+1. You want to create a standardized pipeline structure for your organization
+2. You need to add additional pipelines to the standard position generation and assembly pipelines
+3. You're contributing new functionality to the core EZStitcher library
+
+Here's an example of extending AutoPipelineFactory to add a quality control pipeline:
+
+.. code-block:: python
+
+   from ezstitcher.factories import AutoPipelineFactory
+   from ezstitcher.core.steps import Step
+   from ezstitcher.core.pipeline import Pipeline
+
+   class QCFactory(AutoPipelineFactory):
+       """Adds an analysis pipeline after stitching."""
+
+       def create_pipelines(self):
+           # Get the standard pipelines from the parent class
+           pipelines = super().create_pipelines()
+
+           # Get the output directory from the assembly pipeline
+           stitched_dir = pipelines[1].output_dir
+
+           # Create a new analysis pipeline
+           analysis = Pipeline(
+               input_dir=stitched_dir,
+               steps=[Step(func=self.simple_qc)],
+               name="QC",
+           )
+
+           # Add the analysis pipeline to the list
+           pipelines.append(analysis)
+           return pipelines
+
+       @staticmethod
+       def simple_qc(images):
+           from skimage.exposure import histogram
+           return [histogram(im)[0] for im in images]
+
+   # Usage
+   factory = QCFactory(
+       input_dir=orchestrator.workspace_path,
+       normalize=True
+   )
+   pipelines = factory.create_pipelines()
+   orchestrator.run(pipelines=pipelines)
+
+When to Extend vs. Create Custom Pipelines
+---------------------------------------
+
+**Use custom pipelines (recommended for most users) when:**
+
+- You need a one-off solution for a specific dataset
+- You want maximum flexibility and control
+- You want transparent, explicit code
+- You're prototyping or experimenting
+
+**Extend AutoPipelineFactory (for contributors) when:**
+
+- You're adding a new feature to the EZStitcher library
+- You need to standardize pipeline creation across an organization
+- You're creating a reusable component that builds on the standard pipelines
+- You need to maintain backward compatibility with existing code
+
+In most cases, creating custom pipelines with the Pipeline/Step abstraction provides more flexibility and transparency than extending AutoPipelineFactory.
+
 .. _extending-microscope-types:
 
 Adding a New Microscope Type
@@ -304,5 +380,3 @@ Then, register the new microscope type in `ezstitcher/microscopes/__init__.py`:
     from ezstitcher.microscopes.imagexpress import ImageXpressFilenameParser, ImageXpressMetadataHandler
     from ezstitcher.microscopes.opera_phenix import OperaPhenixFilenameParser, OperaPhenixMetadataHandler
     from ezstitcher.microscopes.new_microscope import NewMicroscopeFilenameParser, NewMicroscopeMetadataHandler
-
-

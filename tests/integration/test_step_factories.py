@@ -1,7 +1,7 @@
 """
-Integration tests for specialized steps.
+Integration tests for step factories and specialized steps.
 
-This module tests the specialized steps in a pipeline with multichannel flat plate
+This module tests the various step types in a pipeline with multichannel flat plate
 and z-stack data.
 """
 
@@ -14,9 +14,8 @@ from typing import List, Union
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.core.pipeline import Pipeline
-from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, FocusStep, CompositeStep, NormStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
-from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import stack
@@ -32,12 +31,12 @@ from tests.integration.test_pipeline_orchestrator import (
 from ezstitcher.core.utils import track_thread_activity, clear_thread_activity, print_thread_activity_report
 
 
-def test_specialized_steps_flat_plate(flat_plate_dir, base_pipeline_config, thread_tracker):
+def test_step_factories_flat_plate(flat_plate_dir, base_pipeline_config, thread_tracker):
     """
-    Test specialized steps with multichannel flat plate data.
+    Test step factories with multichannel flat plate data.
 
     Pipeline:
-    1. ProjectionStep (max) for z-stack flattening
+    1. ZFlatStep (max) for z-stack flattening
     2. Step for percentile normalization
     3. CompositeStep for channel compositing
     4. PositionGenerationStep
@@ -52,25 +51,18 @@ def test_specialized_steps_flat_plate(flat_plate_dir, base_pipeline_config, thre
         input_dir=orchestrator.workspace_path,  # Set the input directory for the pipeline
         steps=[
             # Step 1: Flatten Z-stacks using ZFlatStep
-            ZFlatStep(
-                method="max"
-            ),
+            ZFlatStep(),
 
             # Step 2: Normalize images
-            Step(
-                name="Percentile Normalization",
-                func=(IP.stack_percentile_normalize, {'low_percentile': 0.1, 'high_percentile': 99.9})
-            ),
+            NormStep(),  
 
             # Step 3: Create composite using CompositeStep
-            CompositeStep(
-                weights=[0.7, 0.3]
-            ),
+            CompositeStep(),
 
             # Step 4: Generate positions
             PositionGenerationStep()
         ],
-        name="Specialized Steps Position Generation Pipeline"
+        name="Position Generation Pipeline"
     )
 
     # Create image assembly pipeline
@@ -99,9 +91,9 @@ def test_specialized_steps_flat_plate(flat_plate_dir, base_pipeline_config, thre
     print_thread_activity_report()
 
 
-def test_specialized_steps_zstack(zstack_plate_dir, base_pipeline_config, thread_tracker):
+def test_step_factories_zstack(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """
-    Test specialized steps with multichannel z-stack data.
+    Test step factories with multichannel z-stack data.
 
     First pipeline:
     1. ZFlatStep (max) for z-stack flattening
@@ -124,25 +116,18 @@ def test_specialized_steps_zstack(zstack_plate_dir, base_pipeline_config, thread
         input_dir=orchestrator.workspace_path,  # Set the input directory for the pipeline
         steps=[
             # Step 1: Flatten Z-stacks using ZFlatStep
-            ZFlatStep(
-                method="max"
-            ),
+            ZFlatStep(),
 
             # Step 2: Normalize images
-            Step(
-                name="Percentile Normalization",
-                func=(IP.stack_percentile_normalize, {'low_percentile': 0.1, 'high_percentile': 99.9})
-            ),
+            NormStep(),
 
             # Step 3: Create composite using CompositeStep
-            CompositeStep(
-                weights=[0.7, 0.3]
-            ),
+            CompositeStep(),
 
             # Step 4: Generate positions
             PositionGenerationStep()
         ],
-        name="Specialized Steps Position Generation Pipeline"
+        name="Position Generation Pipeline"
     )
 
     # Create image assembly pipeline for original images
@@ -168,10 +153,7 @@ def test_specialized_steps_zstack(zstack_plate_dir, base_pipeline_config, thread
             ),
 
             # Step 2: Normalize images
-            Step(
-                name="Focus Percentile Normalization",
-                func=(IP.stack_percentile_normalize, {'low_percentile': 0.1, 'high_percentile': 99.9})
-            ),
+            NormStep(),
 
             # Step 3: Stitch best focus planes
             ImageStitchingStep()
