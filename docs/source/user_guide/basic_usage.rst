@@ -133,11 +133,16 @@ Microscopy images can have multiple channels (e.g., DAPI, GFP, RFP) and Z-stacks
 
 Behind the scenes, EZStitcher processes images through a series of steps:
 
-- Normalization: Adjusting image intensity for consistent visualization
 - Z-flattening: Converting 3D Z-stacks into 2D images
+- Normalization: Adjusting image intensity for consistent visualization
 - Channel compositing: Combining multiple channels into a single image
 - Position generation: Finding the relative positions of tiles
 - Image stitching: Combining tiles into a complete image
+
+These steps are organized into two standard pipelines:
+
+1. **Position Generation Pipeline**: Z-flattening → Normalization → Channel compositing → Position generation
+2. **Assembly Pipeline**: Normalization → Image stitching
 
 The EZ module handles all these steps automatically, so you don't need to worry about them unless you need more control.
 

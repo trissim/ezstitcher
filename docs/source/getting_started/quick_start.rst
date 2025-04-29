@@ -83,6 +83,11 @@ For advanced users who need more control and flexibility:
     # Run the pipelines
     orchestrator.run(pipelines=[pos_pipe, asm_pipe])
 
+    # Note: This follows EZStitcher's standard pipeline pattern:
+    # 1. Position Generation: Z-flattening → Normalization → Channel compositing → Position generation
+    # 2. Assembly: Normalization → Image stitching
+    # This pattern works for all scenarios (single/multi-channel, with/without Z-stacks)
+
 Expected Output
 -------------
 
