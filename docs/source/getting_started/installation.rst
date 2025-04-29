@@ -1,83 +1,52 @@
 Installation
 ============
 
-This guide will help you install EZStitcher using pyenv and pip.
+Installing EZStitcher is simple with pip.
 
 System Requirements
 ------------------
 
-- Python 3.11 required
+- Python 3.11 (only supported version)
 - 8GB RAM minimum (16GB recommended for large images)
-- Multi-core CPU recommended for faster processing with multithreaded support
+- Multi-core CPU recommended for faster processing
 
-Installation Steps
------------------
-
-1. Set up Python environment with pyenv
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Quick Install
+------------
 
 .. code-block:: bash
 
-    # Install pyenv (platform-specific)
-    # macOS
-    brew install pyenv
+    pip install ezstitcher
 
-    # Linux/WSL
-    curl https://pyenv.run | bash
+Using pyenv (recommended)
+------------------------
 
-    # Add pyenv to your shell (bash example)
-    echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-    echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-    echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-    source ~/.bashrc
+If you need to install Python 3.11, we recommend using `pyenv <https://github.com/pyenv/pyenv>`_:
 
-    # Install Python 3.11
+.. code-block:: bash
+
+    # Install Python 3.11 with pyenv
     pyenv install 3.11
-    pyenv global 3.11
+    pyenv local 3.11
 
-2. Create and activate a virtual environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-    # Create project directory
-    mkdir -p ~/projects/ezstitcher
-    cd ~/projects/ezstitcher
-
-    # Create and activate virtual environment
+    # Create virtual environment and install ezstitcher
     python -m venv .venv
-    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-3. Install EZStitcher from GitHub
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-    # Clone the repository
-    git clone https://github.com/trissim/ezstitcher.git
-    cd ezstitcher
-
-    # Install the package and dependencies
-    pip install -e .
-
-All dependencies will be automatically installed from the requirements.txt file.
+    source .venv/bin/activate
+    pip install ezstitcher
 
 Verifying Installation
 --------------------
 
-To verify that EZStitcher installed correctly:
+Verify that EZStitcher installed correctly:
 
 .. code-block:: bash
 
     python -c "import ezstitcher; print('EZStitcher installed successfully')"
 
-This should print "EZStitcher installed successfully".
+Next Steps
+----------
 
-Getting Started
----------------
-
-After installation, you can start using EZStitcher:
+After installation:
 
 1. Follow the :doc:`quick_start` guide to run your first stitching pipeline
-2. Explore the :doc:`../user_guide/introduction` to learn about ezstitcher's architecture
-3. See :doc:`../user_guide/basic_usage` for more detailed examples and common use cases
+2. See :doc:`../user_guide/basic_usage` for basic usage examples
+3. Explore :doc:`../concepts/architecture_overview` to learn about EZStitcher's architecture
