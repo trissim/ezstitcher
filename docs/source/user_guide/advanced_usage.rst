@@ -2,11 +2,6 @@
 Advanced Usage
 ==============
 
-.. note::
-   **Complexity Level: Advanced**
-
-   This section is designed for advanced users who need to understand how steps are implemented using the base Step class.
-
 This page shows **three advanced skills** for users who need to go beyond pre-defined steps:
 
 1. Write *custom processing functions* and wire them into pipelines using the base Step class

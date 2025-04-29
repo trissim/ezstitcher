@@ -2,15 +2,10 @@
 Basic Usage
 ===========
 
-.. note::
-   **Complexity Level: Beginner**
-
-   This section is designed for beginners who want to get started with EZStitcher quickly.
-
-This page provides an overview of how to use EZStitcher for basic image stitching tasks. If you're looking for a quick start guide, see :doc:`../getting_started/quick_start`.
+This page provides an overview of how to use EZStitcher for basic image stitching tasks. If you're looking for a quick start guide, see :doc:`/getting_started/getting_started`.
 
 Three-Tier Approach
------------------
+------------------
 
 EZStitcher offers three main approaches for creating stitching pipelines, each designed for a different level of user experience and need for control:
 
@@ -35,7 +30,7 @@ EZStitcher offers three main approaches for creating stitching pipelines, each d
 This guide focuses on the EZ Module approach, which is recommended for most users.
 
 Getting Started with EZStitcher
------------------------------
+------------------------------
 
 The simplest way to use EZStitcher is through the EZ module, which provides a one-liner function for stitching microscopy images:
 
@@ -54,7 +49,7 @@ That's it! This single line will:
 4. Save the output to a new directory
 
 Key Parameters
-------------
+--------------
 
 While the default settings work well for most cases, you can customize the behavior with a few key parameters:
 
@@ -71,7 +66,7 @@ While the default settings work well for most cases, you can customize the behav
    )
 
 Z-Stack Processing
----------------
+------------------
 
 For plates with Z-stacks, you can control how they're flattened:
 
@@ -87,7 +82,7 @@ For plates with Z-stacks, you can control how they're flattened:
    stitch_plate("path/to/plate", flatten_z=True, z_method="mean")
 
 More Control
----------
+------------
 
 For slightly more control while keeping things simple, use the ``EZStitcher`` class:
 
@@ -108,7 +103,7 @@ For slightly more control while keeping things simple, use the ``EZStitcher`` cl
    stitcher.stitch()
 
 Troubleshooting
-------------
+---------------
 
 **Common issues:**
 
@@ -117,7 +112,7 @@ Troubleshooting
 - **Poor quality**: Try different ``z_method`` values or adjust ``channel_weights``
 
 Understanding Key Concepts
------------------------
+------------------------
 
 Here are the key concepts you need to understand for basic usage:
 
@@ -149,7 +144,7 @@ The EZ module handles all these steps automatically, so you don't need to worry 
 For more detailed information about EZStitcher's architecture and concepts, see :doc:`../concepts/architecture_overview` and the :doc:`../concepts/index` section.
 
 When You Need More Control
------------------------
+------------------------
 
 If you need more flexibility than the EZ module provides:
 

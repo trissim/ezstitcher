@@ -2,11 +2,6 @@
 Intermediate Usage
 =================
 
-.. note::
-   **Complexity Level: Intermediate**
-
-   This section is designed for users who need more control than the EZ module provides.
-
 This section shows how to reimplement the EZ module functionality using pipelines and steps, providing a bridge between the simplified EZ module and the advanced usage of EZStitcher.
 
 **What You'll Learn:**
@@ -20,9 +15,8 @@ This section shows how to reimplement the EZ module functionality using pipeline
 1. If you are new to EZStitcher, start with the :doc:`basic_usage` guide (beginner level)
 2. After completing this intermediate guide, see :doc:`advanced_usage` for advanced techniques
 
-.. note::
-   EZStitcher automatically chains *input_dir* / *output_dir* between steps.
-   See :doc:`../concepts/directory_structure` for details on how directories are managed.
+EZStitcher automatically chains *input_dir* / *output_dir* between steps.
+See :doc:`../concepts/directory_structure` for details on how directories are managed.
 
 --------------------------------------------------------------------
 Understanding the EZ Module Under the Hood

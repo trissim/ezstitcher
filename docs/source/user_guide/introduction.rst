@@ -68,30 +68,10 @@ For details about specific components, see:
 * :doc:`../concepts/pipeline` - Details about Pipelines
 * :doc:`../concepts/step` - Details about Steps
 
-Installation
---------------------
-
-EZStitcher requires Python 3.11 or higher. For installation instructions, see the :doc:`../getting_started/installation` guide.
-
 Getting Started
 ---------------------
 
-.. _three-tier-approach:
-
-EZStitcher offers three main approaches for creating stitching pipelines, each designed for a different level of user experience and need for control:
-
-1. **EZ Module (Beginner Level)**: A simplified, one-liner interface for beginners and non-coders
-2. **Custom Pipelines with Steps (Intermediate Level)**: More flexibility and control using pre-defined steps
-3. **Library Extension with Base Step (Advanced Level)**: For advanced users who need to understand implementation details
-
-For detailed information about each approach and when to use them, see :doc:`basic_usage`.
-
-When to Use Which Approach
--------------------------
-
-For guidance on when to use each approach, see :doc:`basic_usage`.
-
-For a quick introduction with a minimal working example, see the :doc:`../getting_started/quick_start` guide.
+For installation instructions and a quick introduction with examples, see the :doc:`../getting_started/getting_started` guide.
 
 Key Concepts
 -----------
@@ -105,19 +85,6 @@ EZStitcher is built around several key concepts that work together to provide a 
 * :doc:`../concepts/function_handling` - Details about function handling
 * :doc:`../concepts/directory_structure` - Details about directory structure
 * :doc:`best_practices` - Best practices for using EZStitcher
-
-How to Use This Guide
--------------------
-
-This user guide is organized by complexity level to provide a clear learning path:
-
-* **Basic Usage (Beginner Level)**: Get started quickly with the EZ module
-* **Intermediate Usage (Custom Pipelines)**: Learn how to create custom pipelines with steps
-* **Advanced Usage (Implementation Details)**: Master advanced features and understand how steps are implemented
-* **Best Practices**: Learn recommended practices for all levels
-* **Integration**: Integrate EZStitcher with other tools (advanced level)
-
-Each section is clearly marked with its complexity level to help you navigate the documentation based on your experience. Start with the sections that match your current level and progress through the guide as you become more familiar with EZStitcher.
 
 For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
 

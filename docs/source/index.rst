@@ -52,7 +52,6 @@ Key Resources
    :maxdepth: 2
    :caption: User Guide
 
-   user_guide/index
    user_guide/introduction
    user_guide/basic_usage
    user_guide/intermediate_usage
@@ -64,7 +63,6 @@ Key Resources
    :maxdepth: 2
    :caption: Core Concepts
 
-   concepts/overview
    concepts/basic_microscopy
    concepts/architecture_overview
    concepts/pipeline_orchestrator

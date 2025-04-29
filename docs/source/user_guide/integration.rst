@@ -2,11 +2,6 @@
 Integrating EZStitcher with Other Tools
 =========================
 
-.. note::
-   **Complexity Level: Advanced**
-
-   This section is designed for advanced users who want to integrate EZStitcher with other tools and libraries.
-
 This page demonstrates **two realistic integration patterns** that crop up in fluorescence-microscopy workflows:
 
 1. **Illumination correction with *BaSiCPy*** ➜ **self-supervised denoising with *N2V2* (Careamics)**
@@ -14,8 +9,7 @@ This page demonstrates **two realistic integration patterns** that crop up in fl
 
 If you have not read :doc:`advanced_usage`, start there first - it explains custom functions and multithreading, which we reuse below.
 
-.. note::
-   All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length.  Saving to disk should be handled by the pipeline or a separate post-hoc script.
+All functions passed to :class:`~ezstitcher.core.steps.Step` **must** accept a *list of images* and return a *list of images* of equal length. Saving to disk should be handled by the pipeline or a separate post-hoc script.
 
 --------------------------------------------------------------------
 1. BaSiCPy + N2V2 denoising
