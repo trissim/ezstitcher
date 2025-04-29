@@ -5,9 +5,9 @@ Advanced Usage
 .. note::
    **Complexity Level: Advanced**
 
-   This section is designed for advanced users who need to understand how wrapped steps are implemented using the base Step class.
+   This section is designed for advanced users who need to understand how steps are implemented using the base Step class.
 
-This page shows **three advanced skills** for users who need to go beyond wrapped steps:
+This page shows **three advanced skills** for users who need to go beyond pre-defined steps:
 
 1. Write *custom processing functions* and wire them into pipelines using the base Step class
 2. Enable **multithreaded** execution for large plates
@@ -15,15 +15,14 @@ This page shows **three advanced skills** for users who need to go beyond wrappe
 
 **Learning Path:**
 
-1. If you are new to EZStitcher, start with the :doc:`ez_module` guide (beginner level)
-2. Then read the :doc:`transitioning_from_ez` guide to understand how to bridge the gap between the EZ module and custom pipelines
-3. Next, learn about custom pipelines with wrapped steps in :doc:`intermediate_usage` (intermediate level)
-4. Now you're ready for this advanced usage guide with the base Step class
-5. For integration with other tools, see :doc:`integration`
+1. If you are new to EZStitcher, start with the :doc:`basic_usage` guide (beginner level)
+2. Next, learn about custom pipelines with steps in :doc:`intermediate_usage` (intermediate level)
+3. Now you're ready for this advanced usage guide with the base Step class
+4. For integration with other tools, see :doc:`integration`
 
 .. note::
-   Wrapped steps (``NormStep``, ``ZFlatStep``, ``CompositeStep``, ``FocusStep``) are built on top of the base Step class.
-   This section explains how these wrapped steps are implemented and how to create your own custom steps.
+   Steps like ``NormStep``, ``ZFlatStep``, ``CompositeStep``, and ``FocusStep`` are built on top of the base Step class.
+   This section explains how these steps are implemented and how to create your own custom steps.
    See :doc:`../concepts/step` for detailed information about the base Step class.
 
 .. important::
@@ -218,7 +217,8 @@ Choosing the right tool
 ---------------------------------------------------------------------
 
 * **EZ module** → quick wins with minimal code for standard plates.
-* **Custom pipelines** → full control for research prototypes and advanced workflows.
+* **Custom pipelines with pre-defined steps** → more control for custom workflows.
+* **Custom pipelines with base Step class** → full control for research prototypes and advanced workflows.
 * **Custom handlers** → organisation‑wide automation (for contributors).
 
 For more information on the three-tier approach and when to use each approach, see the :ref:`three-tier-approach` section in the introduction.

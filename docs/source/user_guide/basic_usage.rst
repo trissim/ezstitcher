@@ -120,7 +120,7 @@ When You Need More Control
 If you need more flexibility than the EZ module provides:
 
 1. First, explore all the options available in the EZ module (see the Key Parameters section above)
-2. If you still need more control, see :doc:`transitioning_from_ez` to learn how to bridge the gap to custom pipelines
-3. For even more advanced usage, see :doc:`intermediate_usage` for creating custom pipelines with wrapped steps
+2. If you still need more control, see :doc:`intermediate_usage` to learn how to create custom pipelines with steps
+3. For even more advanced usage, see :doc:`advanced_usage` for understanding implementation details
 
 For detailed API documentation of the EZ module, see :doc:`../api/ez`.

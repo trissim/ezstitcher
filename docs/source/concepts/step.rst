@@ -11,8 +11,8 @@ For an overview of the complete architecture, see :doc:`architecture_overview`.
 EZStitcher provides several types of steps:
 
 1. **Base Step**: The foundation for all step types, providing core functionality
-2. **Step Factories**: Pre-configured steps for common operations (ZFlatStep, FocusStep, CompositeStep)
-3. **Specialized Steps**: Steps for specific tasks (PositionGenerationStep, ImageStitchingStep)
+2. **Pre-defined Steps**: Steps for common operations (ZFlatStep, FocusStep, CompositeStep)
+3. **Task-specific Steps**: Steps for specific tasks (PositionGenerationStep, ImageStitchingStep)
 
 The base ``Step`` class provides:
 
