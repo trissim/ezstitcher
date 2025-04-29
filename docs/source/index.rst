@@ -19,7 +19,7 @@ The fastest way to get started with EZStitcher is to use the ``EZ module``:
     # Stitch a plate with a single function call
     stitch_plate("path/to/microscopy/data")
 
-For a complete quick start guide, see :doc:`getting_started/quick_start`.
+For a complete guide including installation and examples, see :doc:`getting_started/getting_started`.
 
 Key Features
 ------------
@@ -36,17 +36,17 @@ Key Features
 Key Resources
 -----------
 
-* :doc:`getting_started/quick_start` - Get started in minutes with a minimal example
-* :doc:`user_guide/basic_usage` - Learn about the simplified interface for non-coders (recommended for beginners)
-* :doc:`user_guide/intermediate_usage` - Learn how to create custom pipelines with steps
-* :doc:`user_guide/introduction` - Learn about ezstitcher's architecture and concepts
+* :doc:`getting_started/getting_started` - Install EZStitcher and run your first pipeline in minutes
+* :doc:`user_guide/basic_usage` - Learn about the simplified interface for non-coders
+* :doc:`concepts/architecture_overview` - Learn about EZStitcher's architecture
+* :doc:`user_guide/intermediate_usage` - Create custom pipelines with steps
+* :doc:`user_guide/best_practices` - Learn best practices for using EZStitcher
 
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started
 
-   getting_started/quick_start
-   getting_started/installation
+   getting_started/getting_started
 
 .. toctree::
    :maxdepth: 2
