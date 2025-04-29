@@ -82,47 +82,36 @@ These components work together to process microscopy images in a flexible and ex
 3. Image processing operations
 4. Supporting infrastructure
 
-PipelineOrchestrator
-------------------
+Key Component Relationships
+------------------------
 
-The PipelineOrchestrator serves as the central manager for the entire processing workflow, handling key responsibilities that simplify working with microscopy data:
+The relationship between the main components is hierarchical, with the PipelineOrchestrator at the top level, managing Pipelines, which in turn manage Steps:
 
-**Microscope Detection and Workspace Setup**:
-- Automatically detects the microscope type based on file patterns
-- Instantiates the appropriate MicroscopeHandler, which is crucial for all file loading and writing operations
-- Provides the MicroscopeHandler as a service to pipeline steps for consistent file handling
-- Creates a workspace directory (`plate_workspace`) with symlinks to protect original data
-- Ensures all processing happens on the workspace, preserving original source files
+- **PipelineOrchestrator**: Coordinates execution across wells and provides plate-specific services
+- **Pipeline**: Contains and manages a sequence of Steps
+- **Step**: Performs specific processing operations
 
-**Multithreaded Processing**:
-- Distributes processing across multiple wells in parallel
-- Manages thread pools for efficient resource utilization
-- Ensures thread safety during concurrent execution
-- Collects and aggregates results from all processing threads
+For detailed information about the PipelineOrchestrator, see :doc:`pipeline_orchestrator`.
 
-By abstracting these complex tasks, the PipelineOrchestrator allows users to focus on defining their processing workflows rather than dealing with low-level setup and execution details.
-
-Processing Workflow and Modularity
+Workflow Composition and Modularity
 -----------------------------
 
-EZStitcher's architecture is designed around a modular, composable API that allows for flexible workflow creation. The interaction between PipelineOrchestrator, Pipeline, and Step components creates a powerful system for building custom image processing workflows:
+EZStitcher's architecture is designed around a modular, composable API that allows for flexible workflow creation. The interaction between components creates a powerful system for building custom image processing workflows:
 
-**Architectural Design**
+**Component Roles**
 
-- **PipelineOrchestrator**: Acts as a plate manager that handles plate-level organization and multithreaded processing. It provides configured services to steps based on the plate being processed, and mirrors the plate folder structure to a workspace using symlinks to protect original source files.
+- **Pipeline**: Serves as a container for a sequence of steps, managing their execution order and data flow. Pipelines can be composed, reused, and shared across different projects. For detailed information, see :doc:`pipeline`.
 
-- **Pipeline**: Serves as a container for a sequence of steps, managing their execution order and data flow. Pipelines can be composed, reused, and shared across different projects.
+- **Step**: Represents a single processing operation with well-defined inputs and outputs. Steps are highly configurable through parameters like `variable_components` and `group_by`, allowing for flexible function handling patterns. For detailed information, see :doc:`step`.
 
-- **Step**: Represents a single processing operation with well-defined inputs and outputs. Steps are highly configurable through parameters like `variable_components` and `group_by`, allowing for flexible function handling patterns.
-
-- **Step Types**: EZStitcher provides various step types for common tasks:
+**Step Types**: EZStitcher provides various step types for common tasks:
   - **PositionGenerationStep**: Analyzes images to generate position files describing how tiles fit together
   - **ImageStitchingStep**: Assembles processed images into a single stitched image using position files
   - **ZFlatStep**: Handles Z-stack flattening with pre-configured projection methods
   - **FocusStep**: Performs focus-based Z-stack processing using focus detection algorithms
   - **CompositeStep**: Creates composite images from multiple channels with configurable weights
 
-  These step types can be seamlessly mixed in the same pipeline, allowing you to combine image processing, Z-stack handling, channel compositing, position generation, and image assembly in a single workflow.
+These step types can be seamlessly mixed in the same pipeline, allowing you to combine image processing, Z-stack handling, channel compositing, position generation, and image assembly in a single workflow.
 
 **Workflow Composition**
 
