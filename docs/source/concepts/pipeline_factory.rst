@@ -9,7 +9,14 @@ Pipeline Factory
 Overview
 --------
 
+Pipeline factories are used internally by the EZ module to create pipelines with sensible defaults.
+They are not typically used directly by end users, who should prefer the EZ module or custom pipelines.
+
 The ``AutoPipelineFactory`` is a unified factory class that creates pre-configured pipelines for all common stitching workflows. It simplifies pipeline creation by automatically configuring the appropriate steps based on input parameters, with no need to differentiate between different types of pipelines.
+
+.. note::
+   The EZ module provides a simplified interface that wraps the `AutoPipelineFactory`. 
+   For details, see :doc:`../user_guide/basic_usage`.
 
 .. code-block:: python
 
@@ -47,13 +54,28 @@ Pipeline Structure
 
 The ``AutoPipelineFactory`` creates two pipelines with a consistent structure:
 
-1. **Position Generation Pipeline**: Creates position files for stitching
-   - Steps: [flatten Z (if flatten_z=True), normalize (if normalize=True), create_composite (always), generate positions (always)]
-   - Purpose: Process images and generate position files for stitching
+1. **Position Generation Pipeline**
+   
+   Creates position files for stitching
 
-2. **Image Assembly Pipeline**: Stitches images using the position files
-   - Steps: [normalize (if normalize=True), flatten Z (if flatten_z=True), stitch_images (always)]
-   - Purpose: Process and stitch images using the position files
+   * **Steps:**
+     * Flatten Z (if ``flatten_z=True``)
+     * Normalize (if ``normalize=True``)
+     * Create composite (always)
+     * Generate positions (always)
+   
+   * **Purpose:** Process images and generate position files for stitching
+
+2. **Image Assembly Pipeline**
+   
+   Stitches images using the position files
+
+   * **Steps:**
+     * Normalize (if ``normalize=True``)
+     * Flatten Z (if ``flatten_z=True``)
+     * Stitch images (always)
+   
+   * **Purpose:** Process and stitch images using the position files
 
 This structure is consistent regardless of data type (single/multi-channel, single/multi-Z), with parameters controlling step behavior rather than pipeline structure.
 
@@ -61,6 +83,8 @@ This structure is consistent regardless of data type (single/multi-channel, sing
 
 Parameters
 ---------
+
+For detailed API documentation, see :doc:`../api/pipeline_factory`.
 
 The ``AutoPipelineFactory`` accepts the following parameters:
 
@@ -81,12 +105,12 @@ Important behaviors to note:
 - Channel compositing is always performed for position generation
 - If ``channel_weights`` is None, weights are distributed evenly across all channels
 
-.. _pipeline-factory-specialized-steps:
+.. _pipeline-factory-steps:
 
-Specialized Steps
----------------
+Step Types
+---------
 
-The ``AutoPipelineFactory`` uses specialized steps from the :doc:`specialized_steps` module:
+The ``AutoPipelineFactory`` uses various step types from the steps module:
 
 - ``ZFlatStep``: For Z-stack flattening using projection methods (used in both pipelines when appropriate)
 - ``FocusStep``: For Z-stack processing using focus detection methods (used when z_method is a focus method)
@@ -94,7 +118,7 @@ The ``AutoPipelineFactory`` uses specialized steps from the :doc:`specialized_st
 - ``PositionGenerationStep``: For generating position files
 - ``ImageStitchingStep``: For stitching images
 
-These specialized steps simplify the pipeline creation process by encapsulating common operations with appropriate defaults.
+These steps simplify the pipeline creation process by encapsulating common operations with appropriate defaults.
 
 .. _pipeline-factory-examples:
 
@@ -194,11 +218,10 @@ For custom workflows, create pipelines from scratch instead of modifying factory
 .. code-block:: python
 
     from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step
-    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.steps import Step, ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
-    # Create a custom pipeline with specialized steps
+    # Create a custom pipeline with steps
     position_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
         steps=[
@@ -228,15 +251,9 @@ For custom workflows, create pipelines from scratch instead of modifying factory
         input_dir=orchestrator.workspace_path,
         steps=[
             # Step 1: Normalize images
-            Step(
-                name="Normalize Images",
-                func=IP.stack_percentile_normalize
-            ),
+            NormStep(),
 
-            # Step 2: Flatten Z-stacks (if needed)
-            ZFlatStep(method="max"),
-
-            # Step 3: Stitch images
+            # Step 2: Stitch images
             ImageStitchingStep()
         ],
         name="Custom Assembly Pipeline"
@@ -254,6 +271,7 @@ This approach provides several benefits:
 
 .. seealso::
    - :doc:`pipeline` for more information about pipelines
-   - :doc:`specialized_steps` for more information about specialized steps
+   - :doc:`step` for more information about steps
    - :doc:`../user_guide/basic_usage` for beginner examples
    - :doc:`../user_guide/intermediate_usage` for intermediate examples
+   - :doc:`../development/extending` for information about extending pipeline factories

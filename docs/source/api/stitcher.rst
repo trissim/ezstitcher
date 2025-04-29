@@ -12,7 +12,7 @@ For comprehensive information about the stitching process, including:
 * Typical stitching workflows
 * Best practices for stitching
 
-See :ref:`image-stitching-step` in the :doc:`../concepts/specialized_steps` documentation.
+See the ImageStitchingStep class in the :doc:`steps` documentation.
 
 Stitcher
 -------

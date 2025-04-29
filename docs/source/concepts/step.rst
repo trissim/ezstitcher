@@ -5,7 +5,16 @@ Step
 Overview
 -------
 
-A ``Step`` is a single processing operation that can be applied to images. The base ``Step`` class provides:
+A ``Step`` is a single processing operation that can be applied to images. It is a key component of the EZStitcher architecture.
+For an overview of the complete architecture, see :doc:`architecture_overview`.
+
+EZStitcher provides several types of steps:
+
+1. **Base Step**: The foundation for all step types, providing core functionality
+2. **Pre-defined Steps**: Steps for common operations (ZFlatStep, FocusStep, CompositeStep)
+3. **Task-specific Steps**: Steps for specific tasks (PositionGenerationStep, ImageStitchingStep)
+
+The base ``Step`` class provides:
 
 * Image loading and saving
 * Processing function application
@@ -35,6 +44,8 @@ Creating a Basic Step
 Step Parameters
 -------------
 
+For detailed API documentation, see :doc:`../api/steps`.
+
 * ``name``: Human-readable name for the step
 * ``func``: The processing function(s) to apply (see :doc:`function_handling`)
 * ``variable_components``: Components that vary across files (e.g., 'z_index', 'channel')
@@ -53,7 +64,7 @@ For practical examples of how to use these parameters in different scenarios, se
 Processing Arguments
 ------------------
 
-Processing arguments are passed directly with the function using the tuple pattern ``(func, kwargs)``. For detailed information about function handling patterns, see :ref:`function-handling`.
+Processing arguments are passed directly with the function using the tuple pattern ``(func, kwargs)``. For detailed information about function patterns and usage, see :doc:`function_handling`.
 
 .. code-block:: python
 
@@ -66,6 +77,7 @@ Processing arguments are passed directly with the function using the tuple patte
     )
 
 This pattern can be used with:
+
 * Single functions (:ref:`function-single`, :ref:`function-with-arguments`)
 * Lists of functions (:ref:`function-lists`, :ref:`function-lists-with-arguments`)
 * Dictionaries of functions (:ref:`function-dictionaries`, :ref:`function-dictionary-tuples`)
@@ -80,7 +92,8 @@ Step Initialization Best Practices
 
 When initializing steps, it's important to follow best practices for directory specification.
 
-For detailed information on step initialization best practices, directory resolution, and directory flow, see :doc:`directory_structure`.
+Steps can specify input and output directories.
+For detailed information about directory structure, see :doc:`directory_structure`.
 
 .. _variable-components:
 
@@ -102,7 +115,7 @@ For practical examples of how to use variable_components in different scenarios,
 
     # IMPORTANT: For Z-stack flattening, use ZFlatStep instead of raw Step with variable_components
     # This is the recommended approach for Z-stack flattening
-    from ezstitcher.core.specialized_steps import ZFlatStep
+    from ezstitcher.core.steps import ZFlatStep
 
     # Maximum intensity projection (default)
     step = ZFlatStep()  # Uses max_projection by default
@@ -112,7 +125,7 @@ For practical examples of how to use variable_components in different scenarios,
 
     # IMPORTANT: For channel compositing, use CompositeStep instead of raw Step with variable_components
     # This is the recommended approach for channel compositing
-    from ezstitcher.core.specialized_steps import CompositeStep
+    from ezstitcher.core.steps import CompositeStep
 
     # Without weights (equal weighting for all channels)
     step = CompositeStep()  # Equal weights for all channels
@@ -203,52 +216,14 @@ In this example:
 
 6. ``well_filter`` is optional and will inherit from the pipeline's context if not specified.
 
-Step Parameters Best Practices
-----------------------------
+.. _step-best-practices:
 
-When configuring step parameters, follow these best practices:
+Best Practices
+------------
 
-1. **Use Descriptive Names**:
-   - Choose clear, descriptive names for your steps
-   - This makes pipelines easier to understand and debug
+For comprehensive best practices on using steps effectively, see :ref:`best-practices-steps` in the :doc:`../user_guide/best_practices` guide.
 
-2. **Function Handling**:
-   - Use the tuple pattern ``(func, kwargs)`` for passing arguments to functions
-   - Use lists of functions for sequential processing
-   - Use dictionaries of functions with ``group_by`` for component-specific processing
-   - Use the ``stack()`` utility for adapting single-image functions
-
-3. **Variable Components**:
-   - Use ``ZFlatStep`` instead of setting ``variable_components=['z_index']`` for Z-stack flattening
-   - Use ``CompositeStep`` instead of setting ``variable_components=['channel']`` for channel compositing
-   - Leave at default ``['site']`` for most other operations
-   - Only set ``variable_components`` directly when you have a specific need not covered by specialized steps
-
-4. **Directory Management**:
-   - Always specify ``input_dir`` for the first step, using ``orchestrator.workspace_path``
-   - Let EZStitcher handle directory resolution for subsequent steps
-   - Only specify ``output_dir`` when you need a specific directory structure
-
-5. **Parameter Validation**:
-   - Ensure ``group_by`` is never the same as ``variable_components``
-   - Only use ``group_by`` with dictionary functions
-   - Verify that all required parameters are specified
-
-.. _when-to-use-specialized-steps:
-
-When to Use Specialized Steps
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For common operations, ezstitcher provides specialized step subclasses that encapsulate the appropriate
-configuration:
-
-1. **ZFlatStep**: Use for Z-stack flattening instead of manually configuring ``variable_components=['z_index']``
-2. **FocusStep**: Use for focus detection in Z-stacks
-3. **CompositeStep**: Use for channel compositing instead of manually configuring ``variable_components=['channel']``
-
-These specialized steps provide cleaner, more readable code and ensure proper configuration. Use them with minimal parameters unless you need to override defaults.
+For information on when to use specialized steps, see :ref:`best-practices-steps` in the :doc:`../user_guide/best_practices` guide.
 
 For channel-specific processing with different functions per channel, using a raw ``Step`` with a dictionary
 of functions and ``group_by='channel'`` is the appropriate approach.
-
-For more information about specialized steps, see :doc:`specialized_steps`.

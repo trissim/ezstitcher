@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
 
-from ezstitcher.core.specialized_steps import ZFlatStep, FocusStep, CompositeStep
+from ezstitcher.core.steps import ZFlatStep, FocusStep, CompositeStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 

@@ -9,11 +9,11 @@ Core Components
 .. toctree::
    :maxdepth: 2
 
+   ez
    pipeline_orchestrator
    pipeline
    pipeline_factory
    steps
-   specialized_steps
    stitcher
    focus_analyzer
    image_processor

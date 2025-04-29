@@ -12,8 +12,7 @@ from typing import List, Optional, Union, Dict, Any
 from pathlib import Path
 
 from .pipeline import Pipeline
-from .steps import Step, PositionGenerationStep, ImageStitchingStep
-from .specialized_steps import ZFlatStep, FocusStep, CompositeStep
+from .steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, FocusStep, CompositeStep, NormStep
 from .image_processor import ImageProcessor as IP
 
 
@@ -92,10 +91,7 @@ class AutoPipelineFactory:
                 ZFlatStep(method="max"),
 
                 # Include normalization if enabled
-                Step(
-                    func=(IP.stack_percentile_normalize, self.normalization_params),
-                    name="Normalization"
-                ) if self.normalize else None,
+                NormStep(**self.normalization_params) if self.normalize else None,
 
                 # Always include channel compositing for reference image
                 CompositeStep(weights=self.channel_weights),
@@ -116,10 +112,7 @@ class AutoPipelineFactory:
             output_dir=self.output_dir,
             steps=[
                 # Include normalization if enabled (create new instance)
-                Step(
-                    func=(IP.stack_percentile_normalize, self.normalization_params),
-                    name="Normalization"
-                ) if self.normalize else None,
+                NormStep(**self.normalization_params) if self.normalize else None,
 
                 # Include Z-flattening for assembly if enabled
                 (FocusStep(

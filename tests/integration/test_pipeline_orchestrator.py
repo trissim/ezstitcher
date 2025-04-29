@@ -7,7 +7,7 @@ from typing import List, Union
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 from ezstitcher.core.config import StitcherConfig, PipelineConfig
 from ezstitcher.core.pipeline import Pipeline
-from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
+from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, NormStep, CompositeStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
 from ezstitcher.core.file_system_manager import FileSystemManager
@@ -311,10 +311,8 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
                  input_dir=orchestrator.workspace_path
                  ),
 
-            # Step 2: Process channels
-            Step(name="Channel Processing",
-                 func=IP.stack_percentile_normalize,
-            ),
+            # Step 2: Normalize images
+            NormStep(),
 
             ImageStitchingStep()
         ],
@@ -418,12 +416,13 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
                  variable_components=['z_index'],
                  input_dir=orchestrator.workspace_path),
 
-            # Step 2: Process channels
-            Step(name="Channel Processing",
-                 func=IP.stack_percentile_normalize,
-                 variable_components=['channel']),
+            # Step 2: Normalize images
+            NormStep(),
 
-            # Step 3: Generate positions
+            # Step 3: Flatten Channels
+            CompositeStep(),
+
+            # Step 4: Generate positions
             PositionGenerationStep()
         ],
         name="Position Generation Pipeline"
@@ -480,10 +479,7 @@ def test_minimal_pipeline_with_defaults(flat_plate_dir, base_pipeline_config, th
         # No output_dir defined - should be handled automatically
         steps=[
             # Step 1: Basic image processing
-            Step(
-                name="Basic Processing",
-                func=IP.stack_percentile_normalize
-            ),
+            NormStep(),
 
             PositionGenerationStep(),
 

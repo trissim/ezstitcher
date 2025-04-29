@@ -2,25 +2,51 @@
 Advanced Usage
 ==============
 
-This page shows **three advanced skills**:
+This page shows **three advanced skills** for users who need to go beyond pre-defined steps:
 
-1. Write *custom processing functions* and wire them into pipelines.
-2. Enable **multithreaded** execution for large plates.
-3. Extend EZStitcher via custom factories or microscope handlers.
+1. Write *custom processing functions* and wire them into pipelines using the base Step class
+2. Enable **multithreaded** execution for large plates
+3. Implement advanced functional patterns for complex workflows
 
-If you are new to the library, first read :doc:`basic_usage` and :doc:`intermediate_usage`.
+**Learning Path:**
 
-.. note::
-   Use specialised steps (``ZFlatStep``, ``CompositeStep``, ``FocusStep``) whenever you need to loop over *z-index* or *channel*.  A raw :class:`~ezstitcher.core.steps.Step` is only required when no specialised variant exists.
+1. If you are new to EZStitcher, start with the :doc:`basic_usage` guide (beginner level)
+2. Next, learn about custom pipelines with steps in :doc:`intermediate_usage` (intermediate level)
+3. Now you're ready for this advanced usage guide with the base Step class
+4. For integration with other tools, see :doc:`integration`
 
-.. important::
-   The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.  Review :doc:`../concepts/step` before writing advanced pipelines.
+---------------------------------------------------------------------
+Understanding Pre-defined Steps
+---------------------------------------------------------------------
+
+Pre-defined steps are simply wrapped versions of the base Step class with pre-configured parameters.
+For example, when you use ``NormStep()``, you're actually using this under the hood:
+
+.. code-block:: python
+
+   # NormStep is equivalent to:
+   Step(
+       func=(IP.stack_percentile_normalize, {
+           'low_percentile': 0.1,
+           'high_percentile': 99.9
+       }),
+       name="Percentile Normalization"
+   )
+
+Similarly, ``ZFlatStep`` wraps ``IP.create_projection`` with ``variable_components=['z_index']``,
+and ``CompositeStep`` wraps ``IP.create_composite`` with ``variable_components=['channel']``.
+
+You can create your own custom steps by following the same pattern. For more details, see:
+- :doc:`../concepts/step` for step configuration
+- :doc:`../concepts/function_handling` for function patterns
+- :doc:`../api/steps` for API reference
 
 ---------------------------------------------------------------------
 1. Creating custom processing functions
 ---------------------------------------------------------------------
 
 Custom functions receive **a list of NumPy arrays** (images) and must return the *same‑length* list.
+For details on function patterns, see :doc:`../concepts/function_handling`.
 
 .. code-block:: python
 
@@ -36,6 +62,10 @@ Custom functions receive **a list of NumPy arrays** (images) and must return the
            out.append(np.clip(mean + contrast * (blurred - mean), 0, 1))
        return out
 
+   # Use in a Step with any of the function patterns:
+   step = Step(func=custom_enhance)  # Basic usage
+   step = Step(func=(custom_enhance, {'sigma': 2.0, 'contrast': 1.8}))  # With arguments
+
 ---------------------------------------------------------------------
 2. Building an advanced custom pipeline
 ---------------------------------------------------------------------
@@ -48,8 +78,7 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
 
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline           import Pipeline
-   from ezstitcher.core.steps              import Step, PositionGenerationStep, ImageStitchingStep
-   from ezstitcher.core.specialized_steps  import ZFlatStep, CompositeStep
+   from ezstitcher.core.steps              import Step, NormStep, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
    from ezstitcher.core.image_processor    import ImageProcessor as IP
 
    # ---------- orchestrator ----------------------------------------
@@ -65,11 +94,11 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
    pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           ZFlatStep(method="max"),
-           Step(func=(denoise, {"strength": 0.4})),
-           Step(func=IP.stack_percentile_normalize),
-           CompositeStep(),
-           PositionGenerationStep(),
+           ZFlatStep(method="max"),  # Z-stack flattening
+           Step(func=(denoise, {"strength": 0.4})),  # Custom denoising
+           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
+           CompositeStep(),  # Channel compositing
+           PositionGenerationStep(),  # Position generation
        ],
        name="Position Generation",
    )
@@ -80,9 +109,9 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
        input_dir=orchestrator.workspace_path,
        output_dir=Path("out/stitched"),
        steps=[
-           Step(func=(denoise, {"strength": 0.4})),
-           Step(func=IP.stack_percentile_normalize),
-           ImageStitchingStep(positions_dir=positions_dir),
+           Step(func=(denoise, {"strength": 0.4})),  # Custom denoising
+           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
+           ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
        ],
        name="Assembly",
    )
@@ -102,6 +131,10 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
        return IP.stack_percentile_normalize([IP.sharpen(im, sigma=1.0, amount=1.5) for im in images])
 
    channel_step = Step(func={"1": process_dapi, "2": process_gfp}, group_by="channel")
+
+.. important::
+   The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**. 
+   See :doc:`../concepts/step` and :doc:`../concepts/function_handling` for detailed explanations.
 
 ---------------------------------------------------------------------
 4. Conditional processing based on context
@@ -134,56 +167,27 @@ Threads are allocated **per well**; inside a well, steps run sequentially.
 Adjust `num_workers` to avoid memory exhaustion.
 
 ---------------------------------------------------------------------
-6. Extending ``AutoPipelineFactory``
----------------------------------------------------------------------
-
-Create your own factory when defaults don’t cover a use‑case.
-
-.. code-block:: python
-
-   from ezstitcher.factories import AutoPipelineFactory
-   from ezstitcher.core.steps  import Step
-
-   class QCFactory(AutoPipelineFactory):
-       """Adds an analysis pipeline after stitching."""
-
-       def create_pipelines(self):
-           pipelines = super().create_pipelines()
-
-           stitched_dir = pipelines[1].output_dir  # from assembly
-           analysis    = Pipeline(
-               input_dir=stitched_dir,
-               steps=[Step(func=self.simple_qc)],
-               name="QC",
-           )
-           pipelines.append(analysis)
-           return pipelines
-
-       @staticmethod
-       def simple_qc(images):
-           from skimage.exposure import histogram
-           return [histogram(im)[0] for im in images]
-
----------------------------------------------------------------------
-7. Adding a new microscope handler
+6. Adding a new microscope handler
 ---------------------------------------------------------------------
 
 Implement :class:`~ezstitcher.core.microscope_handler.BaseMicroscopeHandler` and register it via ``register_handler``.
 See :doc:`../development/extending` for the full walkthrough.
 
 ---------------------------------------------------------------------
-Choosing the right tool
----------------------------------------------------------------------
+Choosing the right approach
+--------------------------
 
-* **AutoPipelineFactory** → quick wins on standard plates.
-* **Custom pipelines** → full control for research prototypes.
-* **Custom factory / handler** → organisation‑wide automation.
+* **EZ module** → Quick wins with minimal code for standard plates
+* **Custom pipelines** → Full control for specialized workflows and research prototypes
+
+For more information on the three-tier approach and when to use each approach, see the :ref:`three-tier-approach` section in the introduction.
 
 
 Next steps
 ~~~~~~~~~~
 
-* Read the :doc:`integration` guide for napari and CellProfiler hooks.
-* Follow the “learning path” outline in :ref:`learning-path` to master EZStitcher.
+* Read the :doc:`integration` guide for BaSiCPy and N2V2 (Careamics) integration examples
+* Review :doc:`../concepts/best_practices` for pipeline organization and optimization tips
+* Explore :doc:`../concepts/architecture_overview` to understand core concepts in greater detail
 
 

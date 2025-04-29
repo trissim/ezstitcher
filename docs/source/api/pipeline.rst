@@ -5,16 +5,8 @@ Pipeline
 
 This module contains the Pipeline class and related components for the EZStitcher pipeline architecture.
 
-For comprehensive information about pipelines, including:
-
-* Creating and configuring pipelines
-* Running pipelines
-* Pipeline context and data flow
-* Multithreaded processing
-* Directory resolution
-* Best practices
-
-See :ref:`pipeline-concept` in the :doc:`../concepts/pipeline` documentation.
+For conceptual explanation, see :doc:`../concepts/pipeline`.
+For information about directory structure, see :doc:`../concepts/directory_structure`.
 
 Pipeline
 -------
@@ -133,7 +125,7 @@ ProcessingContext
 
       :type: dict
 
-Specialized Step Classes
---------------------
+Step Classes
+-----------
 
-For documentation on specialized step classes like ``ImageStitchingStep``, see :doc:`steps`.
+For documentation on step classes like ``ImageStitchingStep``, see :doc:`steps`.
