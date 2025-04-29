@@ -44,27 +44,3 @@ Next Steps
 * :doc:`basic_usage` - Learn about the simplified interface for non-coders
 * :doc:`intermediate_usage` - Create custom pipelines with steps
 * :doc:`best_practices` - Learn best practices for using EZStitcher
-
-EZStitcher is designed for researchers working with microscopy data who need a flexible, code-based approach to image processing and stitching.
-
-Getting Started
----------------------
-
-For installation instructions and a quick introduction with examples, see the :doc:`../getting_started/getting_started` guide.
-
-Key Concepts
------------
-
-EZStitcher is built around several key concepts that work together to provide a flexible and powerful image processing framework. For detailed information about each concept, see the corresponding documentation:
-
-* :doc:`../concepts/architecture_overview` - Overview of EZStitcher's architecture
-* :doc:`../concepts/pipeline_orchestrator` - Details about the Orchestrator
-* :doc:`../concepts/pipeline` - Details about Pipelines
-* :doc:`../concepts/step` - Details about Steps
-* :doc:`../concepts/function_handling` - Details about function handling
-* :doc:`../concepts/directory_structure` - Details about directory structure
-* :doc:`best_practices` - Best practices for using EZStitcher
-
-For a comprehensive understanding of EZStitcher's architecture and concepts, please refer to the :doc:`../concepts/index` section.
-
-
