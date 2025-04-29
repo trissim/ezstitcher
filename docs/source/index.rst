@@ -10,7 +10,7 @@ EZStitcher is a Python package for stitching microscopy images with support for 
 Getting Started Quickly
 --------------------
 
-The fastest way to get started with EZStitcher is to use the ``EZ module``:
+The fastest way to get started with EZStitcher is to use ``stitch_plate``:
 
 .. code-block:: python
 
@@ -24,7 +24,7 @@ For a complete guide including installation and examples, see :doc:`getting_star
 Key Features
 ------------
 
-- **Simplified Interface for Non-Coders**: Process and stitch images with minimal code using the EZ module
+- **Simplified Interface for Non-Coders**: Process and stitch images with minimal code using stitch_plate
 - **Multi-channel fluorescence support**: Process and stitch multiple fluorescence channels
 - **Z-stack handling**: Process 3D image stacks with various projection methods
 - **Advanced focus detection**: Find the best focused plane in Z-stacks
