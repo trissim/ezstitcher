@@ -59,7 +59,8 @@ Pipeline Best Practices
 
 ✔ Name your pipeline (`name="Plate A - Max proj"`)—the logger shows it.
 
-✘ Avoid inserting steps **after** `ImageStitchingStep`; do post-analysis in a separate pipeline or script.
+✘ Avoid inserting steps after PositionGenerationStep. It is only compatible with ImageStitchingStep.
+
 
 **Pipeline Structure Best Practices**
 
