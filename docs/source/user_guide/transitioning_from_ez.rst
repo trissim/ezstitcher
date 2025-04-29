@@ -133,7 +133,7 @@ The intermediate usage level provides more control while still using wrapped ste
 Next Steps
 ---------
 
-* For beginners who want to stay with the EZ module, return to :doc:`ez_module` for more examples
+* For beginners who want to stay with the EZ module, return to :doc:`basic_usage` for more examples
 * For intermediate users ready to create custom pipelines, proceed to :doc:`intermediate_usage`
 * For detailed information about pipeline configuration, see :doc:`../concepts/pipeline`
 * For detailed information about step configuration, see :doc:`../concepts/step`

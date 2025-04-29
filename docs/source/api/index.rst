@@ -9,6 +9,7 @@ Core Components
 .. toctree::
    :maxdepth: 2
 
+   ez
    pipeline_orchestrator
    pipeline
    pipeline_factory

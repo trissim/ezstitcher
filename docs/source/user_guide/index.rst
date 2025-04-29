@@ -7,8 +7,8 @@ This user guide provides a comprehensive overview of EZStitcher, from basic conc
 The guide is organized by complexity level to provide a clear learning path:
 
 1. **Introduction**: Learn about ezstitcher's architecture and key concepts
-2. **EZ Module (Beginner Level)**: Use the simplified interface for non-coders (recommended for most users)
-3. **Transitioning from EZ Module**: Bridge the gap between the EZ module and custom pipelines
+2. **Basic Usage (Beginner Level)**: Get started quickly with the EZ module
+3. **Transitioning from Basic Usage**: Bridge the gap between the EZ module and custom pipelines
 4. **Intermediate Usage**: Create custom pipelines with wrapped steps (NormStep, ZFlatStep, etc.)
 5. **Advanced Usage**: Master advanced features and understand how wrapped steps are implemented
 6. **Best Practices**: Learn recommended practices for effective use
@@ -19,7 +19,7 @@ If you're new to ezstitcher, we recommend starting with the :doc:`../getting_sta
 .. important::
    The user guide follows a three-tier approach to accommodate different user needs:
 
-   * **Beginner Level (EZ Module)**: For non-coders and beginners who want minimal code
+   * **Beginner Level (Basic Usage)**: For non-coders and beginners who want minimal code
    * **Intermediate Level (Wrapped Steps)**: For users who need more control with wrapped steps (NormStep, ZFlatStep, etc.)
    * **Advanced Level (Base Step Implementation)**: For users who need to understand implementation details
 

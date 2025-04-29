@@ -98,7 +98,7 @@ What's Next
 
 Now that you've run your first stitching pipeline, you can:
 
-- Learn more about the EZ module in the :doc:`../user_guide/ez_module` guide
-- Explore custom pipelines in the :doc:`../user_guide/basic_usage` guide
+- Learn more about basic usage in the :doc:`../user_guide/basic_usage` guide
 - Learn about ezstitcher's architecture in the :doc:`../user_guide/introduction`
+- Explore transitioning to custom pipelines in the :doc:`../user_guide/transitioning_from_ez` guide
 - Discover advanced features in the :doc:`../user_guide/advanced_usage` guide
