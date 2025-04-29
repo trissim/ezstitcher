@@ -17,9 +17,9 @@ EZStitcher is built around a flexible pipeline architecture that allows you to c
 
 Key components:
 
-* :doc:`pipeline_orchestrator`
-* :doc:`pipeline`
-* :doc:`step`
+* :doc:`PipelineOrchestrator <pipeline_orchestrator>`
+* :doc:`Pipeline <pipeline>`
+* :doc:`Step <step>`
 
 This hierarchical design allows complex workflows to be built from simple, reusable components:
 
@@ -48,8 +48,8 @@ Core Components
 
 **Pipeline Management:**
 
-* **PipelineOrchestrator**: Coordinates the entire workflow and manages plate-specific operations
-* **Pipeline**: A sequence of processing steps that are executed in order
+* :doc:`**PipelineOrchestrator** <pipeline_orchestrator>`: Coordinates the entire workflow and manages plate-specific operations
+* :doc:`**Pipeline** <pipeline>`: A sequence of processing steps that are executed in order
 * **ProcessingContext**: Maintains state during pipeline execution
 
 **Pipeline Factories:**
@@ -58,9 +58,8 @@ Core Components
 
 **Step Components:**
 
-* **Step**: A single processing operation that can be applied to images
+* :doc:`**Step** <step>`: A single processing operation that can be applied to images
 * **Pre-defined Steps**: Provides optimized implementations for common operations (ZFlatStep, CompositeStep, etc.)
-* For detailed information about steps, see :doc:`step`
 
 **Image Processing:**
 
