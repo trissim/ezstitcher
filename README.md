@@ -66,18 +66,6 @@ from ezstitcher import stitch_plate
 stitch_plate("path/to/microscopy/data")
 ```
 
-### Using AutoPipelineFactory
-
-```python
-from ezstitcher.core import AutoPipelineFactory
-from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-
-orchestrator = PipelineOrchestrator(plate_path="path/to/images")
-factory = AutoPipelineFactory(input_dir=orchestrator.workspace_path)
-pipelines = factory.create_pipelines()
-orchestrator.run(pipelines=pipelines)
-```
-
 ## 🔧 Advanced Usage Example
 
 ```python
@@ -132,7 +120,7 @@ orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 Our comprehensive documentation is organized into several sections:
 
-- [Quick Start Guide](https://ezstitcher.readthedocs.io/en/latest/getting_started/quick_start.html): Get up and running in minutes
+- [Quick Start Guide](https://ezstitcher.readthedocs.io/en/latest/getting_started/getting_started.html): Get up and running in minutes
 - [Basic Usage](https://ezstitcher.readthedocs.io/en/latest/user_guide/basic_usage.html): Simple one-liner interface for common tasks
 - [Intermediate Usage](https://ezstitcher.readthedocs.io/en/latest/user_guide/intermediate_usage.html): Custom pipelines with pre-built steps
 - [Advanced Usage](https://ezstitcher.readthedocs.io/en/latest/user_guide/advanced_usage.html): Create custom steps and extend functionality
