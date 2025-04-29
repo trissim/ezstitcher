@@ -29,14 +29,4 @@ If you're new to ezstitcher, we recommend starting with the :doc:`../getting_sta
    * Multithreaded processing
    * Custom processing functions
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-   introduction
-   ez_module
-   basic_usage
-   intermediate_usage
-   advanced_usage
-   best_practices
-   integration
+For a complete list of topics, see the navigation menu on the left.
