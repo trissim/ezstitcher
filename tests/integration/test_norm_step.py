@@ -1,8 +1,7 @@
 """
-Integration tests for step factories and specialized steps.
+Integration tests for NormStep.
 
-This module tests the various step types in a pipeline with multichannel flat plate
-and z-stack data.
+This module tests the NormStep class in a pipeline with multichannel flat plate data.
 """
 
 import shutil
@@ -31,13 +30,13 @@ from tests.integration.test_pipeline_orchestrator import (
 from ezstitcher.core.utils import track_thread_activity, clear_thread_activity, print_thread_activity_report
 
 
-def test_step_factories_flat_plate(flat_plate_dir, base_pipeline_config, thread_tracker):
+def test_norm_step_flat_plate(flat_plate_dir, base_pipeline_config, thread_tracker):
     """
-    Test step factories with multichannel flat plate data.
+    Test NormStep with multichannel flat plate data.
 
     Pipeline:
     1. ZFlatStep (max) for z-stack flattening
-    2. Step for percentile normalization
+    2. NormStep for percentile normalization
     3. CompositeStep for channel compositing
     4. PositionGenerationStep
     5. ImageStitchingStep for stitching original pictures
@@ -51,13 +50,20 @@ def test_step_factories_flat_plate(flat_plate_dir, base_pipeline_config, thread_
         input_dir=orchestrator.workspace_path,  # Set the input directory for the pipeline
         steps=[
             # Step 1: Flatten Z-stacks using ZFlatStep
-            ZFlatStep(),
+            ZFlatStep(
+                method="max"
+            ),
 
-            # Step 2: Normalize images
-            NormStep(),  
+            # Step 2: Normalize images using NormStep
+            NormStep(
+                low_percentile=0.1,
+                high_percentile=99.9
+            ),
 
             # Step 3: Create composite using CompositeStep
-            CompositeStep(),
+            CompositeStep(
+                weights=[0.7, 0.3]
+            ),
 
             # Step 4: Generate positions
             PositionGenerationStep()
@@ -91,20 +97,20 @@ def test_step_factories_flat_plate(flat_plate_dir, base_pipeline_config, thread_
     print_thread_activity_report()
 
 
-def test_step_factories_zstack(zstack_plate_dir, base_pipeline_config, thread_tracker):
+def test_norm_step_zstack(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """
-    Test step factories with multichannel z-stack data.
+    Test NormStep with multichannel z-stack data.
 
     First pipeline:
     1. ZFlatStep (max) for z-stack flattening
-    2. Step for percentile normalization
+    2. NormStep for percentile normalization
     3. CompositeStep for channel compositing
     4. PositionGenerationStep
     5. ImageStitchingStep for stitching original pictures
 
     Second pipeline:
     1. FocusStep for best focus selection
-    2. Step for percentile normalization
+    2. NormStep for percentile normalization
     3. ImageStitchingStep for stitching best focus planes
     """
     # Set up the orchestrator
@@ -116,13 +122,20 @@ def test_step_factories_zstack(zstack_plate_dir, base_pipeline_config, thread_tr
         input_dir=orchestrator.workspace_path,  # Set the input directory for the pipeline
         steps=[
             # Step 1: Flatten Z-stacks using ZFlatStep
-            ZFlatStep(),
+            ZFlatStep(
+                method="max"
+            ),
 
-            # Step 2: Normalize images
-            NormStep(),
+            # Step 2: Normalize images using NormStep
+            NormStep(
+                low_percentile=0.1,
+                high_percentile=99.9
+            ),
 
             # Step 3: Create composite using CompositeStep
-            CompositeStep(),
+            CompositeStep(
+                weights=[0.7, 0.3]
+            ),
 
             # Step 4: Generate positions
             PositionGenerationStep()
@@ -152,8 +165,11 @@ def test_step_factories_zstack(zstack_plate_dir, base_pipeline_config, thread_tr
                 }
             ),
 
-            # Step 2: Normalize images
-            NormStep(),
+            # Step 2: Normalize images using NormStep
+            NormStep(
+                low_percentile=0.1,
+                high_percentile=99.9
+            ),
 
             # Step 3: Stitch best focus planes
             ImageStitchingStep()

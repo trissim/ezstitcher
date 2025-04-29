@@ -197,13 +197,7 @@ step = Step(
 )
 ```
 
-**When to use stack()**:
-
-* Use `stack()` when you have a function that operates on a single image but you need to apply it to a stack of images
-* Use `stack()` with functions from libraries like scikit-image that operate on single images
-* Use `stack()` when you want to apply the same operation to each image in a stack independently
-
-For detailed information on function handling patterns, see :doc:`../concepts/function_handling`.
+For detailed explanation and examples of the `stack()` utility function, see :ref:`function-stack-utility` in :doc:`../concepts/function_handling`.
 
 
 .. _best-practices-custom-pipelines:

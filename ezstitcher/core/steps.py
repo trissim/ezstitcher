@@ -748,18 +748,17 @@ class ZFlatStep(Step):
     def __init__(
         self,
         method: str = "max",
-        input_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
-        well_filter: Optional[List[str]] = None,
+        **kwargs
     ):
         """
         Initialize a Z-stack flattening step.
 
         Args:
             method: Projection method. Options: "max", "mean", "median", "min", "std", "sum"
-            input_dir: Input directory
-            output_dir: Output directory
-            well_filter: Wells to process
+            **kwargs: Additional arguments passed to the parent Step class:
+                input_dir: Input directory
+                output_dir: Output directory
+                well_filter: Wells to process
         """
         # Validate method
         if method not in self.PROJECTION_METHODS and method not in self.PROJECTION_METHODS.values():
@@ -775,10 +774,8 @@ class ZFlatStep(Step):
             func=(IP.create_projection, {'method': full_method}),
             variable_components=['z_index'],
             group_by=None,
-            input_dir=input_dir,
-            output_dir=output_dir,
-            well_filter=well_filter,
-            name=f"{method.capitalize()} Projection"
+            name=f"{method.capitalize()} Projection",
+            **kwargs
         )
 
 
@@ -793,9 +790,7 @@ class FocusStep(Step):
     def __init__(
         self,
         focus_options: Optional[Dict[str, Any]] = None,
-        input_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
-        well_filter: Optional[List[str]] = None,
+        **kwargs
     ):
         """
         Initialize a focus step.
@@ -804,9 +799,10 @@ class FocusStep(Step):
             focus_options: Dictionary of focus analyzer options:
                 - metric: Focus metric. Options: "combined", "normalized_variance",
                          "laplacian", "tenengrad", "fft" (default: "combined")
-            input_dir: Input directory
-            output_dir: Output directory
-            well_filter: Wells to process
+            **kwargs: Additional arguments passed to the parent Step class:
+                input_dir: Input directory
+                output_dir: Output directory
+                well_filter: Wells to process
         """
         # Initialize focus options
         focus_options = focus_options or {'metric': 'combined'}
@@ -821,10 +817,8 @@ class FocusStep(Step):
             func=(process_func, {}),
             variable_components=['z_index'],
             group_by=None,
-            input_dir=input_dir,
-            output_dir=output_dir,
-            well_filter=well_filter,
-            name=f"Best Focus ({metric})"
+            name=f"Best Focus ({metric})",
+            **kwargs
         )
 
 
@@ -839,26 +833,61 @@ class CompositeStep(Step):
     def __init__(
         self,
         weights: Optional[List[float]] = None,
-        input_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
-        well_filter: Optional[List[str]] = None,
+        **kwargs
     ):
         """
         Initialize a channel compositing step.
 
         Args:
             weights: List of weights for each channel. If None, equal weights are used.
-            input_dir: Input directory
-            output_dir: Output directory
-            well_filter: Wells to process
+            **kwargs: Additional arguments passed to the parent Step class:
+                input_dir: Input directory
+                output_dir: Output directory
+                well_filter: Wells to process
         """
         # Initialize the Step with pre-configured parameters
         super().__init__(
             func=(IP.create_composite, {'weights': weights}),
             variable_components=['channel'],
             group_by=None,
-            input_dir=input_dir,
-            output_dir=output_dir,
-            well_filter=well_filter,
-            name="Channel Composite"
+            name="Channel Composite",
+            **kwargs
+        )
+
+
+class NormStep(Step):
+    """
+    Specialized step for image normalization.
+
+    This step performs percentile-based normalization on images.
+    It pre-configures func=IP.stack_percentile_normalize with customizable percentile parameters.
+    """
+
+    def __init__(
+        self,
+        low_percentile: float = 0.1,
+        high_percentile: float = 99.9,
+        **kwargs
+    ):
+        """
+        Initialize a normalization step.
+
+        Args:
+            low_percentile: Low percentile for normalization (0-100)
+            high_percentile: High percentile for normalization (0-100)
+            **kwargs: Additional arguments passed to the parent Step class:
+                input_dir: Input directory
+                output_dir: Output directory
+                well_filter: Wells to process
+                variable_components: Components that vary across files (default: ['site'])
+                group_by: How to group files for processing (default: None)
+        """
+        # Initialize the Step with pre-configured parameters
+        super().__init__(
+            func=(IP.stack_percentile_normalize, {
+                'low_percentile': low_percentile,
+                'high_percentile': high_percentile
+            }),
+            name="Percentile Normalization",
+            **kwargs
         )
