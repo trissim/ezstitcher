@@ -115,17 +115,19 @@ orchestrator.run(pipelines=[position_pipeline, assembly_pipeline])
 
 ## 📚 Documentation
 
-Comprehensive documentation is available at [Read the Docs](https://ezstitcher.readthedocs.io/en/latest/), including:
+Our comprehensive documentation is organized into several sections:
 
-- [Quick Start Guide](https://ezstitcher.readthedocs.io/en/latest/getting_started/quick_start.html)
-- [Core Concepts](https://ezstitcher.readthedocs.io/en/latest/concepts/index.html)
-- [User Guide](https://ezstitcher.readthedocs.io/en/latest/user_guide/index.html)
-- [API Reference](https://ezstitcher.readthedocs.io/en/latest/api/index.html)
+- [Quick Start Guide](https://ezstitcher.readthedocs.io/en/latest/getting_started/quick_start.html): Get up and running in minutes
+- [Basic Usage](https://ezstitcher.readthedocs.io/en/latest/user_guide/basic_usage.html): Simple one-liner interface for common tasks
+- [Intermediate Usage](https://ezstitcher.readthedocs.io/en/latest/user_guide/intermediate_usage.html): Custom pipelines with pre-built steps
+- [Advanced Usage](https://ezstitcher.readthedocs.io/en/latest/user_guide/advanced_usage.html): Create custom steps and extend functionality
+- [Core Concepts](https://ezstitcher.readthedocs.io/en/latest/concepts/index.html): Understanding EZStitcher's architecture
+- [API Reference](https://ezstitcher.readthedocs.io/en/latest/api/index.html): Detailed API documentation
 
 ## 🤝 Contributing
 
 We welcome contributions! See our [Contributing Guide](https://ezstitcher.readthedocs.io/en/latest/development/contributing.html) to get started.
 
-## 📄 License
+## 📝 License
 
-EZStitcher is released under the MIT License. See the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
