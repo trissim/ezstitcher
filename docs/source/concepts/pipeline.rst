@@ -157,7 +157,7 @@ The context serves as a communication mechanism between:
 2. The pipeline and its steps
 3. Different steps within the pipeline
 
-For example, specialized steps like ``PositionGenerationStep`` use the orchestrator reference in the context to access plate-specific services. For more information on the relationship between the orchestrator and pipeline, see :ref:`orchestrator-pipeline-relationship`.
+For example, steps like ``PositionGenerationStep`` use the orchestrator reference in the context to access plate-specific services. For more information on the relationship between the orchestrator and pipeline, see :ref:`orchestrator-pipeline-relationship`.
 
 .. _pipeline-multithreaded:
 

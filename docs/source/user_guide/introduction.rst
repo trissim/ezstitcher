@@ -123,10 +123,8 @@ EZStitcher is built around several key concepts that work together to provide a 
      - :doc:`../concepts/pipeline_orchestrator`
    * - **Pipeline**
      - :doc:`../concepts/pipeline`
-   * - **Steps**
+   * - **Steps and Step Types**
      - :doc:`../concepts/step`
-   * - **Specialized Steps**
-     - :doc:`../concepts/specialized_steps`
    * - **Function Handling**
      - :doc:`../concepts/function_handling`
    * - **Directory Structure**
@@ -165,7 +163,7 @@ EZStitcher provides a flexible framework for processing and stitching microscopy
 **Intermediate Usage:**
 
 * Learn more complex workflows in :doc:`intermediate_usage`
-* Study :doc:`../concepts/specialized_steps` to understand specialized steps
+* Study :doc:`../concepts/step` to understand different step types
 * Review best practices in :doc:`best_practices`
 
 **Advanced Usage:**

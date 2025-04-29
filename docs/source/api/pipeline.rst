@@ -125,7 +125,7 @@ ProcessingContext
 
       :type: dict
 
-Specialized Step Classes
---------------------
+Step Classes
+-----------
 
-For documentation on specialized step classes like ``ImageStitchingStep``, see :doc:`steps`.
+For documentation on step classes like ``ImageStitchingStep``, see :doc:`steps`.

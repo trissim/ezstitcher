@@ -219,12 +219,10 @@ When to Use Each Pattern
 
 For detailed API documentation, see :doc:`../api/steps`.
 
-* **Single Function**: When you need to apply the same processing to all images with default parameters
-* **Function with Arguments**: When you need to apply a single function with specific parameters
-* **List of Functions**: When you need to apply multiple processing steps in sequence with default parameters
-* **List of Functions with Arguments**: When you need to apply multiple processing steps with specific parameters
-* **Dictionary of Functions**: When you need to apply different processing to different components with default parameters
-* **Dictionary of Function Tuples**: When you need to apply different processing to different components with specific parameters
+.. _function-best-practices:
+
+Best Practices
+------------
 
 For comprehensive best practices for function handling, see :ref:`best-practices-function-handling` in the :doc:`../user_guide/best_practices` guide.
 
@@ -232,10 +230,8 @@ For comprehensive best practices for function handling, see :ref:`best-practices
    Using a dictionary of functions with ``group_by='channel'`` is the appropriate approach for
    channel-specific processing. This allows you to apply different processing functions to different channels.
 
-   For common operations like Z-stack flattening and channel compositing, prefer specialized step
-   subclasses like ``ZFlatStep`` and ``CompositeStep`` over manually configuring ``variable_components``.
-
-   For information about specialized step implementations, see :doc:`specialized_steps`.
+   For common operations like Z-stack flattening and channel compositing, prefer specialized steps
+   like ``ZFlatStep`` and ``CompositeStep`` over manually configuring ``variable_components``.
 
 .. _function-stack-utility:
 
@@ -274,11 +270,7 @@ The ``stack()`` utility function is a key tool for adapting single-image functio
         # variable_components defaults to ['site']
     )
 
-**When to use stack()**:
-
-* Use ``stack()`` when you have a function that operates on a single image but you need to apply it to a stack of images
-* Use ``stack()`` with functions from libraries like scikit-image that operate on single images
-* Use ``stack()`` when you want to apply the same operation to each image in a stack independently
+For best practices on when and how to use the ``stack()`` utility, see :ref:`best-practices-function-handling` in the :doc:`../user_guide/best_practices` guide.
 
 **How stack() works**:
 

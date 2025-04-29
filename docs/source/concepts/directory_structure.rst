@@ -275,7 +275,7 @@ When to Specify Directories Explicitly
    - Each step's output directory automatically becomes the next step's input directory
    - This reduces code verbosity and potential for errors
 
-4. **Don't specify directories for specialized steps unless needed**:
+4. **Don't specify directories for steps unless needed**:
    - `PositionGenerationStep` and `ImageStitchingStep` have intelligent directory handling
    - They automatically find the right directories based on the pipeline context
 
@@ -318,21 +318,7 @@ This allows you to customize the directory structure to match your organization'
 
 .. _directory-best-practices:
 
-Directory Structure Best Practices
---------------------------------
-
-Here are some key recommendations for directory management:
-
-1. **Use the workspace path for the first step**:
-   - Always use `orchestrator.workspace_path` as the input directory for the first step
-   - This ensures that original data is protected from modification
-
-2. **Minimize directory specification**:
-   - Only specify directories when necessary
-   - Let EZStitcher handle directory resolution automatically when possible
-
-3. **Use consistent directory naming**:
-   - Follow the default naming conventions when possible
-   - Or configure custom suffixes through PipelineConfig for consistent naming
+Best Practices
+------------
 
 For comprehensive best practices for directory management, see :ref:`best-practices-directory` in the :doc:`../user_guide/best_practices` guide.

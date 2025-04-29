@@ -90,12 +90,12 @@ Important behaviors to note:
 - Channel compositing is always performed for position generation
 - If ``channel_weights`` is None, weights are distributed evenly across all channels
 
-.. _pipeline-factory-specialized-steps:
+.. _pipeline-factory-steps:
 
-Specialized Steps
----------------
+Step Types
+---------
 
-The ``AutoPipelineFactory`` uses specialized steps from the :doc:`specialized_steps` module:
+The ``AutoPipelineFactory`` uses various step types from the steps module:
 
 - ``ZFlatStep``: For Z-stack flattening using projection methods (used in both pipelines when appropriate)
 - ``FocusStep``: For Z-stack processing using focus detection methods (used when z_method is a focus method)
@@ -103,7 +103,7 @@ The ``AutoPipelineFactory`` uses specialized steps from the :doc:`specialized_st
 - ``PositionGenerationStep``: For generating position files
 - ``ImageStitchingStep``: For stitching images
 
-These specialized steps simplify the pipeline creation process by encapsulating common operations with appropriate defaults.
+These steps simplify the pipeline creation process by encapsulating common operations with appropriate defaults.
 
 .. _pipeline-factory-examples:
 
@@ -203,11 +203,10 @@ For custom workflows, create pipelines from scratch instead of modifying factory
 .. code-block:: python
 
     from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step
-    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+    from ezstitcher.core.steps import Step, ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
-    # Create a custom pipeline with specialized steps
+    # Create a custom pipeline with steps
     position_pipeline = Pipeline(
         input_dir=orchestrator.workspace_path,
         steps=[
@@ -263,7 +262,7 @@ This approach provides several benefits:
 
 .. seealso::
    - :doc:`pipeline` for more information about pipelines
-   - :doc:`specialized_steps` for more information about specialized steps
+   - :doc:`step` for more information about steps
    - :doc:`../user_guide/basic_usage` for beginner examples
    - :doc:`../user_guide/intermediate_usage` for intermediate examples
    - :doc:`../development/extending` for information about extending pipeline factories

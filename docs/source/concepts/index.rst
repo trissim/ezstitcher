@@ -14,7 +14,6 @@ This section explains the core concepts of microscopy image stitching and how EZ
    pipeline
    pipeline_factory
    step
-   specialized_steps
    function_handling
    processing_context
    directory_structure

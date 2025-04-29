@@ -14,7 +14,6 @@ This guide focuses on creating custom pipelines for maximum flexibility and cont
 
 .. note::
    For information about the underlying architecture, see :doc:`../concepts/architecture_overview`.
-   Custom pipelines provide maximum flexibility and control, as described in the :ref:`three-tier-approach` section of the introduction.
 
 
 
@@ -27,8 +26,7 @@ Creating Custom Pipelines
    from pathlib import Path
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline           import Pipeline
-   from ezstitcher.core.steps              import Step, PositionGenerationStep, ImageStitchingStep
-   from ezstitcher.core.specialized_steps  import ZFlatStep, CompositeStep
+   from ezstitcher.core.steps              import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
    from ezstitcher.core.image_processor    import ImageProcessor as IP
 
    plate_path   = Path("~/data/PlateA").expanduser()

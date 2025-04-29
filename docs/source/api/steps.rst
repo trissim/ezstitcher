@@ -3,13 +3,12 @@ Steps
 
 .. module:: ezstitcher.core.steps
 
-This module contains the Step class and its specialized subclasses for the EZStitcher pipeline architecture.
+This module contains the Step class and all step implementations for the EZStitcher pipeline architecture,
+including the base Step class and various step types like ZFlatStep, FocusStep, CompositeStep, PositionGenerationStep, and ImageStitchingStep.
 
 For conceptual explanation, see :doc:`../concepts/step`.
 For information about function handling in steps, see :doc:`../concepts/function_handling`.
 For information about directory structure, see :doc:`../concepts/directory_structure`.
-
-For detailed information about specialized steps like PositionGenerationStep and ImageStitchingStep, see :ref:`specialized-steps` in the :doc:`../concepts/specialized_steps` documentation.
 
 Step
 ----
@@ -24,7 +23,7 @@ Step
 
    For information about the group_by parameter, see :ref:`group-by` in the :doc:`../concepts/step` documentation.
 
-   For best practices when using steps, see :ref:`best-practices-specialized-steps` in the :doc:`../user_guide/best_practices` documentation.
+   For best practices when using steps, see :doc:`../user_guide/best_practices` documentation.
 
    :param func: The processing function(s) to apply. Can be a single callable, a tuple of (function, kwargs), a list of functions or function tuples, or a dictionary mapping component values to functions or function tuples.
    :type func: callable, tuple, list, or dict
@@ -57,11 +56,8 @@ PositionGenerationStep
 
    A specialized Step for generating positions.
 
-   For detailed information about how this step works, see :ref:`position-generation-step` in the :doc:`../concepts/specialized_steps` documentation.
-
-   For information about typical stitching workflows using this step, see :ref:`typical-stitching-workflows` in the :doc:`../concepts/specialized_steps` documentation.
-
-   For best practices when using specialized steps, see :ref:`specialized-steps-best-practices` in the :doc:`../concepts/specialized_steps` documentation.
+   This step takes processed reference images and generates position files for stitching.
+   It stores the positions file in the context for later use by ImageStitchingStep.
 
    :param name: Name of the step (optional)
    :type name: str
@@ -86,11 +82,8 @@ ImageStitchingStep
 
    A specialized Step for stitching images using position files.
 
-   For detailed information about how this step works, see :ref:`image-stitching-step` in the :doc:`../concepts/specialized_steps` documentation.
-
-   For information about typical stitching workflows using this step, see :ref:`typical-stitching-workflows` in the :doc:`../concepts/specialized_steps` documentation.
-
-   For best practices when using specialized steps, see :ref:`specialized-steps-best-practices` in the :doc:`../concepts/specialized_steps` documentation.
+   This step stitches images using position files. It works with the PositionGenerationStep
+   to create complete stitched images from individual tiles.
 
    :param name: Name of the step (optional)
    :type name: str
@@ -115,3 +108,62 @@ ImageStitchingStep
       :type context: :class:`~ezstitcher.core.pipeline.ProcessingContext`
       :return: The updated processing context
       :rtype: :class:`~ezstitcher.core.pipeline.ProcessingContext`
+
+ZFlatStep
+--------
+
+.. py:class:: ZFlatStep(method="max", input_dir=None, output_dir=None, well_filter=None)
+
+   Specialized step for Z-stack flattening.
+
+   This step performs Z-stack flattening using the specified method.
+   It pre-configures variable_components=['z_index'] and group_by=None.
+
+   :param method: Projection method. Options: "max", "mean", "median", "min", "std", "sum"
+   :type method: str
+   :param input_dir: Input directory
+   :type input_dir: str or Path, optional
+   :param output_dir: Output directory
+   :type output_dir: str or Path, optional
+   :param well_filter: Wells to process
+   :type well_filter: list, optional
+
+FocusStep
+--------
+
+.. py:class:: FocusStep(focus_options=None, input_dir=None, output_dir=None, well_filter=None)
+
+   Specialized step for focus-based Z-stack processing.
+
+   This step finds the best focus plane in a Z-stack using FocusAnalyzer.
+   It pre-configures variable_components=['z_index'] and group_by=None.
+
+   :param focus_options: Dictionary of focus analyzer options:
+                        - metric: Focus metric. Options: "combined", "normalized_variance",
+                                 "laplacian", "tenengrad", "fft" or a dictionary of weights (default: "combined")
+   :type focus_options: dict, optional
+   :param input_dir: Input directory
+   :type input_dir: str or Path, optional
+   :param output_dir: Output directory
+   :type output_dir: str or Path, optional
+   :param well_filter: Wells to process
+   :type well_filter: list, optional
+
+CompositeStep
+-----------
+
+.. py:class:: CompositeStep(weights=None, input_dir=None, output_dir=None, well_filter=None)
+
+   Specialized step for creating composite images from multiple channels.
+
+   This step creates composite images from multiple channels with specified weights.
+   It pre-configures variable_components=['channel'] and group_by=None.
+
+   :param weights: List of weights for each channel. If None, equal weights are used.
+   :type weights: list, optional
+   :param input_dir: Input directory
+   :type input_dir: str or Path, optional
+   :param output_dir: Output directory
+   :type output_dir: str or Path, optional
+   :param well_filter: Wells to process
+   :type well_filter: list, optional

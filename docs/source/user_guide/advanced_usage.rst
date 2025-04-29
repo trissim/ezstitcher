@@ -12,7 +12,7 @@ If you are new to the library, first read :doc:`basic_usage` and :doc:`intermedi
 
 .. note::
    Use specialised steps (``ZFlatStep``, ``CompositeStep``, ``FocusStep``) whenever you need to loop over *z-index* or *channel*.
-   See :doc:`../concepts/specialized_steps` for detailed information about specialized steps.
+   See :doc:`../concepts/step` for detailed information about these steps.
 
 .. important::
    The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.
@@ -50,8 +50,7 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
 
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline           import Pipeline
-   from ezstitcher.core.steps              import Step, PositionGenerationStep, ImageStitchingStep
-   from ezstitcher.core.specialized_steps  import ZFlatStep, CompositeStep
+   from ezstitcher.core.steps              import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
    from ezstitcher.core.image_processor    import ImageProcessor as IP
 
    # ---------- orchestrator ----------------------------------------
@@ -146,8 +145,7 @@ Create powerful processing pipelines without extending core classes:
    from pathlib import Path
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline import Pipeline
-   from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-   from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+   from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
    from ezstitcher.core.image_processor import ImageProcessor as IP
 
    # ---------- orchestrator ----------------------------------------

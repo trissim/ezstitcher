@@ -68,7 +68,7 @@ Key Resources
    concepts/architecture_overview
    concepts/pipeline
    concepts/pipeline_factory
-   concepts/specialized_steps
+   concepts/step
    concepts/function_handling
    concepts/directory_resolution
 

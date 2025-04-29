@@ -48,8 +48,7 @@ For advanced users who need more control and flexibility:
     from pathlib import Path
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep
-    from ezstitcher.core.specialized_steps import ZFlatStep, CompositeStep
+    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
     from ezstitcher.core.image_processor import ImageProcessor as IP
 
     # Path to your microscopy data

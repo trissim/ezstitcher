@@ -12,8 +12,7 @@ from typing import List, Optional, Union, Dict, Any
 from pathlib import Path
 
 from .pipeline import Pipeline
-from .steps import Step, PositionGenerationStep, ImageStitchingStep
-from .specialized_steps import ZFlatStep, FocusStep, CompositeStep
+from .steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, FocusStep, CompositeStep
 from .image_processor import ImageProcessor as IP
 
 

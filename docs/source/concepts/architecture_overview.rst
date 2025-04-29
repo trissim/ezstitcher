@@ -58,7 +58,7 @@ Pipeline Factories:
 Step Components:
 - **Step**: A single processing operation that can be applied to images
 - **SpecializedSteps**: Provides optimized implementations for common operations
-- For detailed information about specialized steps, see :doc:`specialized_steps`
+- For detailed information about steps, see :doc:`step`
 
 Image Processing:
 - **ImageProcessor**: Provides static image processing functions
@@ -109,14 +109,14 @@ EZStitcher's architecture is designed around a modular, composable API that allo
 
 - **Step**: Represents a single processing operation with well-defined inputs and outputs. Steps are highly configurable through parameters like `variable_components` and `group_by`, allowing for flexible function handling patterns.
 
-- **Specialized Steps**: EZStitcher provides specialized steps for common tasks:
+- **Step Types**: EZStitcher provides various step types for common tasks:
   - **PositionGenerationStep**: Analyzes images to generate position files describing how tiles fit together
   - **ImageStitchingStep**: Assembles processed images into a single stitched image using position files
   - **ZFlatStep**: Handles Z-stack flattening with pre-configured projection methods
   - **FocusStep**: Performs focus-based Z-stack processing using focus detection algorithms
   - **CompositeStep**: Creates composite images from multiple channels with configurable weights
 
-  These specialized steps can be seamlessly mixed with regular processing steps in the same pipeline, allowing you to combine image processing, Z-stack handling, channel compositing, position generation, and image assembly in a single workflow.
+  These step types can be seamlessly mixed in the same pipeline, allowing you to combine image processing, Z-stack handling, channel compositing, position generation, and image assembly in a single workflow.
 
 **Workflow Composition**
 
