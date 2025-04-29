@@ -18,6 +18,7 @@ EZStitcher offers three main approaches for creating stitching pipelines, each d
    * Handles common use cases with a single function call
    * Example: ``stitch_plate("path/to/plate")``
 
+
 2. **Custom Pipelines with Steps (Intermediate Level)**
    
    More flexibility and control using pre-defined steps:
@@ -26,6 +27,7 @@ EZStitcher offers three main approaches for creating stitching pipelines, each d
    * Uses pre-defined steps that provide a clean interface for common operations
    * Allows customization of processing steps and parameters
    * See :doc:`intermediate_usage` for details
+   
 
 3. **Library Extension with Base Step (Advanced Level)**
    
@@ -35,6 +37,7 @@ EZStitcher offers three main approaches for creating stitching pipelines, each d
    * Uses the base Step class to create custom processing functions
    * Provides maximum flexibility and control
    * See :doc:`advanced_usage` for details
+
 
 This guide focuses on the EZ Module approach, which is recommended for most users.
 

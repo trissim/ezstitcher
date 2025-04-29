@@ -42,6 +42,29 @@ The EZ module provides a simplified interface, but behind the scenes, it creates
    #    - NormStep (for normalization)
    #    - ImageStitchingStep
 
+Each specialized step serves a specific purpose in the image processing pipeline:
+
+* ``ZFlatStep``: Converts 3D Z-stacks into 2D images using various projection methods
+    - ``method="max"``: Maximum intensity projection (brightest pixel)
+    - ``method="mean"``: Average intensity projection
+    - ``method="focus"``: Focus-based projection for better detail
+
+* ``NormStep``: Normalizes image intensities for consistent visualization
+    - Applies percentile-based normalization (default: 1-99 percentile)
+    - Helps balance brightness across different images
+
+* ``CompositeStep``: Combines multiple channels into a single reference image
+    - Accepts weights to control channel contributions, equal weighting by default
+    - Example: ``weights=[0.7, 0.3, 0]`` uses 70% channel 1, 30% channel 2, 0% channel 3
+
+* ``PositionGenerationStep``: Analyzes images to determine how tiles fit together
+    - Detects overlapping regions between adjacent tiles
+    - Generates position information for stitching
+
+* ``ImageStitchingStep``: Combines all tiles into final stitched image
+    - Uses positions from PositionGenerationStep
+    - Handles blending between overlapping regions
+
 By understanding this structure, you can create custom pipelines that provide more control while still leveraging the power of EZStitcher's steps.
 
 --------------------------------------------------------------------
@@ -64,22 +87,20 @@ Here's how to reimplement the basic EZ module functionality using pipelines and 
    pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           ZFlatStep(method="max"),  # Z-stack flattening
+           ZFlatStep(),  # Z-stack flattening
            NormStep(),  # Normalization
            CompositeStep(),  # Channel compositing
            PositionGenerationStep(),  # Position generation
        ],
        name="Position Generation",
    )
-   positions_dir = pos_pipe.steps[-1].output_dir
 
    # Assembly pipeline
    asm_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
-       output_dir=plate_path.parent / f"{plate_path.name}_stitched",
        steps=[
            NormStep(),  # Normalization
-           ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
+           ImageStitchingStep(),  # Image stitching
        ],
        name="Assembly",
    )
@@ -101,7 +122,7 @@ Here's how to process Z-stacks with custom pipelines:
    from pathlib import Path
    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
    from ezstitcher.core.pipeline import Pipeline
-   from ezstitcher.core.steps import NormStep, ZFlatStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
+   from ezstitcher.core.steps import NormStep, ZFlatStep, FocusStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
 
    plate_path = Path("~/data/PlateA").expanduser()
    orchestrator = PipelineOrchestrator(plate_path)
@@ -110,22 +131,22 @@ Here's how to process Z-stacks with custom pipelines:
    pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           ZFlatStep(method="max"),  # Z-stack flattening
+           ZFlatStep(),  # Z-stack flattening
            NormStep(),  # Normalization
            CompositeStep(),  # Channel compositing
            PositionGenerationStep(),  # Position generation
        ],
        name="Position Generation",
    )
-   positions_dir = pos_pipe.steps[-1].output_dir
 
    # Assembly pipeline
    asm_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
-       output_dir=plate_path.parent / f"{plate_path.name}_stitched",
        steps=[
            NormStep(),  # Normalization
-           ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
+           #This is the only difference from the previous example
+           FocusStep(focus_options={'metric': 'combined'}),  # Focus-based Z processing
+           ImageStitchingStep(),  # Image stitching
        ],
        name="Assembly",
    )
@@ -139,7 +160,11 @@ You can customize the behavior of steps by passing parameters:
 .. code-block:: python
 
    # Customize Z-flattening method
-   ZFlatStep(method="focus")  # Use focus-based flattening instead of max projection
+   ZFlatStep(method="mean")  # Use mean projection instead of max projection
+
+   # Customize focus metrics
+   FocusStep(focus_options={'metric': 'combined'})  # Use combined focus metric
+   FocusStep(focus_options={'metric': 'laplacian'})  # Use Laplacian focus metric
 
    # Customize normalization
    NormStep(percentile=95)  # Use 95th percentile for normalization
