@@ -9,6 +9,31 @@ Basic Usage
 
 This page provides an overview of how to use EZStitcher for basic image stitching tasks. If you're looking for a quick start guide, see :doc:`../getting_started/quick_start`.
 
+Three-Tier Approach
+-----------------
+
+EZStitcher offers three main approaches for creating stitching pipelines, each designed for a different level of user experience and need for control:
+
+1. **EZ Module (Beginner Level)**: A simplified, one-liner interface for beginners and non-coders
+   - "I just want to stitch my images quickly"
+   - Uses sensible defaults and auto-detection
+   - Handles common use cases with a single function call
+   - Example: ``stitch_plate("path/to/plate")``
+
+2. **Custom Pipelines with Steps (Intermediate Level)**: More flexibility and control using pre-defined steps
+   - "I need more control over the processing steps"
+   - Uses pre-defined steps that provide a clean interface for common operations
+   - Allows customization of processing steps and parameters
+   - See :doc:`intermediate_usage` for details
+
+3. **Library Extension with Base Step (Advanced Level)**: For advanced users who need to understand implementation details
+   - "I need to understand how the steps work under the hood"
+   - Uses the base Step class to create custom processing functions
+   - Provides maximum flexibility and control
+   - See :doc:`advanced_usage` for details
+
+This guide focuses on the EZ Module approach, which is recommended for most users.
+
 Getting Started with EZStitcher
 -----------------------------
 
@@ -94,6 +119,8 @@ Troubleshooting
 Understanding Key Concepts
 -----------------------
 
+Here are the key concepts you need to understand for basic usage:
+
 **Plates and Wells**
 
 EZStitcher processes microscopy data organized in plates and wells. A plate contains multiple wells, and each well contains multiple images.
@@ -104,7 +131,7 @@ Microscopy images can have multiple channels (e.g., DAPI, GFP, RFP) and Z-stacks
 
 **Processing Steps**
 
-Behind the scenes, EZStitcher processes images through a series of steps, such as:
+Behind the scenes, EZStitcher processes images through a series of steps:
 
 - Normalization: Adjusting image intensity for consistent visualization
 - Z-flattening: Converting 3D Z-stacks into 2D images
@@ -113,6 +140,8 @@ Behind the scenes, EZStitcher processes images through a series of steps, such a
 - Image stitching: Combining tiles into a complete image
 
 The EZ module handles all these steps automatically, so you don't need to worry about them unless you need more control.
+
+For more detailed information about EZStitcher's architecture and concepts, see :doc:`introduction` and the :doc:`../concepts/index` section.
 
 When You Need More Control
 -----------------------
