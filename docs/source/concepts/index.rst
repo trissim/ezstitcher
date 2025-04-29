@@ -1,12 +1,11 @@
-=============
-Core Concepts
-=============
+==========================
+Overview and Key Components
+==========================
 
 This section explains the core concepts of microscopy image stitching and how EZStitcher handles them.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    basic_microscopy
    architecture_overview
