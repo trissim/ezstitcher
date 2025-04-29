@@ -46,31 +46,37 @@ When you run a pipeline, data flows through the steps in sequence. Each step pro
 Core Components
 --------------
 
-Pipeline Management:
-- **PipelineOrchestrator**: Coordinates the entire workflow and manages plate-specific operations
-- **Pipeline**: A sequence of processing steps that are executed in order
-- **ProcessingContext**: Maintains state during pipeline execution
+**Pipeline Management:**
 
-Pipeline Factories:
-- Pipeline factories provide a convenient way to create common pipeline configurations
-- For detailed information about pipeline factories, see :doc:`pipeline_factory`
+* **PipelineOrchestrator**: Coordinates the entire workflow and manages plate-specific operations
+* **Pipeline**: A sequence of processing steps that are executed in order
+* **ProcessingContext**: Maintains state during pipeline execution
 
-Step Components:
-- **Step**: A single processing operation that can be applied to images
-- **SpecializedSteps**: Provides optimized implementations for common operations
-- For detailed information about steps, see :doc:`step`
+**Pipeline Factories:**
 
-Image Processing:
-- **ImageProcessor**: Provides static image processing functions
-- **FocusAnalyzer**: Provides static focus detection methods for Z-stacks
-- **Stitcher**: Performs image stitching
+* Pipeline factories provide a convenient way to create common pipeline configurations
+* For detailed information about pipeline factories, see :doc:`pipeline_factory`
 
-Infrastructure:
-- **MicroscopeHandler**: Handles microscope-specific functionality
-- **FileSystemManager**: Handles file system operations and image loading
-- **Config**: Manages configuration settings for various components
+**Step Components:**
+
+* **Step**: A single processing operation that can be applied to images
+* **SpecializedSteps**: Provides optimized implementations for common operations
+* For detailed information about steps, see :doc:`step`
+
+**Image Processing:**
+
+* **ImageProcessor**: Provides static image processing functions
+* **FocusAnalyzer**: Provides static focus detection methods for Z-stacks
+* **Stitcher**: Performs image stitching
+
+**Infrastructure:**
+
+* **MicroscopeHandler**: Handles microscope-specific functionality
+* **FileSystemManager**: Handles file system operations and image loading
+* **Config**: Manages configuration settings for various components
 
 These components work together to process microscopy images in a flexible and extensible way. The organization follows the typical workflow:
+
 1. Pipeline setup and management
 2. Step definition and execution
 3. Image processing operations
