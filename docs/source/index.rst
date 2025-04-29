@@ -65,7 +65,16 @@ Key Resources
    :maxdepth: 2
    :caption: Core Concepts
 
-   concepts/index
+   concepts/overview
+   concepts/basic_microscopy
+   concepts/architecture_overview
+   concepts/pipeline_orchestrator
+   concepts/pipeline
+   concepts/pipeline_factory
+   concepts/step
+   concepts/function_handling
+   concepts/processing_context
+   concepts/directory_structure
 
 .. toctree::
    :maxdepth: 2
