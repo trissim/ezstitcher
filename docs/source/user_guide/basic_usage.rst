@@ -146,7 +146,7 @@ These steps are organized into two standard pipelines:
 
 The EZ module handles all these steps automatically, so you don't need to worry about them unless you need more control.
 
-For more detailed information about EZStitcher's architecture and concepts, see :doc:`introduction` and the :doc:`../concepts/index` section.
+For more detailed information about EZStitcher's architecture and concepts, see :doc:`../concepts/architecture_overview` and the :doc:`../concepts/index` section.
 
 When You Need More Control
 -----------------------
