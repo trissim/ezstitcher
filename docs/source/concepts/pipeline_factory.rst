@@ -15,8 +15,8 @@ They are not typically used directly by end users, who should prefer the EZ modu
 The ``AutoPipelineFactory`` is a unified factory class that creates pre-configured pipelines for all common stitching workflows. It simplifies pipeline creation by automatically configuring the appropriate steps based on input parameters, with no need to differentiate between different types of pipelines.
 
 .. note::
-   The EZ module provides a simplified interface that wraps the AutoPipelineFactory.
-   See :doc:`../user_guide/ez_module` for details.
+   The EZ module provides a simplified interface that wraps the `AutoPipelineFactory`. 
+   For details, see :doc:`../user_guide/basic_usage`.
 
 .. code-block:: python
 
@@ -54,13 +54,28 @@ Pipeline Structure
 
 The ``AutoPipelineFactory`` creates two pipelines with a consistent structure:
 
-1. **Position Generation Pipeline**: Creates position files for stitching
-   - Steps: [flatten Z (if flatten_z=True), normalize (if normalize=True), create_composite (always), generate positions (always)]
-   - Purpose: Process images and generate position files for stitching
+1. **Position Generation Pipeline**
+   
+   Creates position files for stitching
 
-2. **Image Assembly Pipeline**: Stitches images using the position files
-   - Steps: [normalize (if normalize=True), flatten Z (if flatten_z=True), stitch_images (always)]
-   - Purpose: Process and stitch images using the position files
+   * **Steps:**
+     * Flatten Z (if ``flatten_z=True``)
+     * Normalize (if ``normalize=True``)
+     * Create composite (always)
+     * Generate positions (always)
+   
+   * **Purpose:** Process images and generate position files for stitching
+
+2. **Image Assembly Pipeline**
+   
+   Stitches images using the position files
+
+   * **Steps:**
+     * Normalize (if ``normalize=True``)
+     * Flatten Z (if ``flatten_z=True``)
+     * Stitch images (always)
+   
+   * **Purpose:** Process and stitch images using the position files
 
 This structure is consistent regardless of data type (single/multi-channel, single/multi-Z), with parameters controlling step behavior rather than pipeline structure.
 

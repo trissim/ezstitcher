@@ -15,10 +15,6 @@ This page shows **three advanced skills** for users who need to go beyond pre-de
 3. Now you're ready for this advanced usage guide with the base Step class
 4. For integration with other tools, see :doc:`integration`
 
-.. important::
-   The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.
-   See :doc:`../concepts/step` and :doc:`../concepts/function_handling` for detailed explanations.
-
 ---------------------------------------------------------------------
 Understanding Pre-defined Steps
 ---------------------------------------------------------------------
@@ -136,6 +132,10 @@ Below we denoise, normalise, enhance and then stitch — all with **two concise 
 
    channel_step = Step(func={"1": process_dapi, "2": process_gfp}, group_by="channel")
 
+.. important::
+   The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**. 
+   See :doc:`../concepts/step` and :doc:`../concepts/function_handling` for detailed explanations.
+
 ---------------------------------------------------------------------
 4. Conditional processing based on context
 ---------------------------------------------------------------------
@@ -174,13 +174,11 @@ Implement :class:`~ezstitcher.core.microscope_handler.BaseMicroscopeHandler` and
 See :doc:`../development/extending` for the full walkthrough.
 
 ---------------------------------------------------------------------
-Choosing the right tool
----------------------------------------------------------------------
+Choosing the right approach
+--------------------------
 
-* **EZ module** → quick wins with minimal code for standard plates.
-* **Custom pipelines with pre-defined steps** → more control for custom workflows.
-* **Custom pipelines with base Step class** → full control for research prototypes and advanced workflows.
-* **Custom handlers** → organisation‑wide automation (for contributors).
+* **EZ module** → Quick wins with minimal code for standard plates
+* **Custom pipelines** → Full control for specialized workflows and research prototypes
 
 For more information on the three-tier approach and when to use each approach, see the :ref:`three-tier-approach` section in the introduction.
 
@@ -188,7 +186,8 @@ For more information on the three-tier approach and when to use each approach, s
 Next steps
 ~~~~~~~~~~
 
-* Read the :doc:`integration` guide for BaSiCPy and N2V2 (Careamics) integration examples.
-* Follow the "learning path" outline in :ref:`learning-path` to master EZStitcher.
+* Read the :doc:`integration` guide for BaSiCPy and N2V2 (Careamics) integration examples
+* Review :doc:`../concepts/best_practices` for pipeline organization and optimization tips
+* Explore :doc:`../concepts/architecture_overview` to understand core concepts in greater detail
 
 

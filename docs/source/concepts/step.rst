@@ -64,7 +64,7 @@ For practical examples of how to use these parameters in different scenarios, se
 Processing Arguments
 ------------------
 
-Processing arguments are passed directly with the function using the tuple pattern ``(func, kwargs)``. For detailed information about function handling patterns, see :ref:`function-handling`.
+Processing arguments are passed directly with the function using the tuple pattern ``(func, kwargs)``. For detailed information about function patterns and usage, see :doc:`function_handling`.
 
 .. code-block:: python
 
@@ -77,6 +77,7 @@ Processing arguments are passed directly with the function using the tuple patte
     )
 
 This pattern can be used with:
+
 * Single functions (:ref:`function-single`, :ref:`function-with-arguments`)
 * Lists of functions (:ref:`function-lists`, :ref:`function-lists-with-arguments`)
 * Dictionaries of functions (:ref:`function-dictionaries`, :ref:`function-dictionary-tuples`)

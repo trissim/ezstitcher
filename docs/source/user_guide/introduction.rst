@@ -25,7 +25,7 @@ Key Features
 * :doc:`../concepts/pipeline`: Organize processing steps in a logical sequence
 * :doc:`../concepts/directory_structure`: Protect original data while maintaining organized outputs
 * :doc:`../concepts/function_handling`: Apply various processing functions in different patterns
-* :doc:`../user_guide/microscope_formats`: Work with data from different microscope types
+* :doc:`../appendices/microscope_formats`: Work with data from different microscope types
 * :doc:`../concepts/pipeline_orchestrator`: Process multiple wells in parallel for faster results
 
 For a detailed understanding of how these components work together, see :doc:`../concepts/architecture_overview`.

@@ -9,23 +9,32 @@ Three-Tier Approach
 
 EZStitcher offers three main approaches for creating stitching pipelines, each designed for a different level of user experience and need for control:
 
-1. **EZ Module (Beginner Level)**: A simplified, one-liner interface for beginners and non-coders
-   - "I just want to stitch my images quickly"
-   - Uses sensible defaults and auto-detection
-   - Handles common use cases with a single function call
-   - Example: ``stitch_plate("path/to/plate")``
+1. **EZ Module (Beginner Level)**
+   
+   A simplified, one-liner interface for beginners and non-coders:
 
-2. **Custom Pipelines with Steps (Intermediate Level)**: More flexibility and control using pre-defined steps
-   - "I need more control over the processing steps"
-   - Uses pre-defined steps that provide a clean interface for common operations
-   - Allows customization of processing steps and parameters
-   - See :doc:`intermediate_usage` for details
+   * "I just want to stitch my images quickly"
+   * Uses sensible defaults and auto-detection
+   * Handles common use cases with a single function call
+   * Example: ``stitch_plate("path/to/plate")``
 
-3. **Library Extension with Base Step (Advanced Level)**: For advanced users who need to understand implementation details
-   - "I need to understand how the steps work under the hood"
-   - Uses the base Step class to create custom processing functions
-   - Provides maximum flexibility and control
-   - See :doc:`advanced_usage` for details
+2. **Custom Pipelines with Steps (Intermediate Level)**
+   
+   More flexibility and control using pre-defined steps:
+
+   * "I need more control over the processing steps"
+   * Uses pre-defined steps that provide a clean interface for common operations
+   * Allows customization of processing steps and parameters
+   * See :doc:`intermediate_usage` for details
+
+3. **Library Extension with Base Step (Advanced Level)**
+   
+   For advanced users who need to understand implementation details:
+
+   * "I need to understand how the steps work under the hood"
+   * Uses the base Step class to create custom processing functions
+   * Provides maximum flexibility and control
+   * See :doc:`advanced_usage` for details
 
 This guide focuses on the EZ Module approach, which is recommended for most users.
 
