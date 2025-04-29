@@ -66,12 +66,6 @@ Key Resources
    :caption: Core Concepts
 
    concepts/index
-   concepts/architecture_overview
-   concepts/pipeline
-   concepts/pipeline_factory
-   concepts/step
-   concepts/function_handling
-   concepts/directory_resolution
 
 .. toctree::
    :maxdepth: 2
