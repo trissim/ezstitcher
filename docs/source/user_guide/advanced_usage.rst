@@ -20,20 +20,42 @@ This page shows **three advanced skills** for users who need to go beyond pre-de
 3. Now you're ready for this advanced usage guide with the base Step class
 4. For integration with other tools, see :doc:`integration`
 
-.. note::
-   Steps like ``NormStep``, ``ZFlatStep``, ``CompositeStep``, and ``FocusStep`` are built on top of the base Step class.
-   This section explains how these steps are implemented and how to create your own custom steps.
-   See :doc:`../concepts/step` for detailed information about the base Step class.
-
 .. important::
    The interplay between ``group_by`` and ``variable_components`` controls **how your function loops**.
    See :doc:`../concepts/step` and :doc:`../concepts/function_handling` for detailed explanations.
+
+---------------------------------------------------------------------
+Understanding Pre-defined Steps
+---------------------------------------------------------------------
+
+Pre-defined steps are simply wrapped versions of the base Step class with pre-configured parameters.
+For example, when you use ``NormStep()``, you're actually using this under the hood:
+
+.. code-block:: python
+
+   # NormStep is equivalent to:
+   Step(
+       func=(IP.stack_percentile_normalize, {
+           'low_percentile': 0.1,
+           'high_percentile': 99.9
+       }),
+       name="Percentile Normalization"
+   )
+
+Similarly, ``ZFlatStep`` wraps ``IP.create_projection`` with ``variable_components=['z_index']``,
+and ``CompositeStep`` wraps ``IP.create_composite`` with ``variable_components=['channel']``.
+
+You can create your own custom steps by following the same pattern. For more details, see:
+- :doc:`../concepts/step` for step configuration
+- :doc:`../concepts/function_handling` for function patterns
+- :doc:`../api/steps` for API reference
 
 ---------------------------------------------------------------------
 1. Creating custom processing functions
 ---------------------------------------------------------------------
 
 Custom functions receive **a list of NumPy arrays** (images) and must return the *same‑length* list.
+For details on function patterns, see :doc:`../concepts/function_handling`.
 
 .. code-block:: python
 
@@ -48,6 +70,10 @@ Custom functions receive **a list of NumPy arrays** (images) and must return the
            mean    = blurred.mean()
            out.append(np.clip(mean + contrast * (blurred - mean), 0, 1))
        return out
+
+   # Use in a Step with any of the function patterns:
+   step = Step(func=custom_enhance)  # Basic usage
+   step = Step(func=(custom_enhance, {'sigma': 2.0, 'contrast': 1.8}))  # With arguments
 
 ---------------------------------------------------------------------
 2. Building an advanced custom pipeline
@@ -146,67 +172,7 @@ Threads are allocated **per well**; inside a well, steps run sequentially.
 Adjust `num_workers` to avoid memory exhaustion.
 
 ---------------------------------------------------------------------
-6. Advanced Functional Patterns
----------------------------------------------------------------------
-
-Create powerful processing pipelines without extending core classes:
-
-.. code-block:: python
-
-   from pathlib import Path
-   from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
-   from ezstitcher.core.pipeline import Pipeline
-   from ezstitcher.core.steps import Step, NormStep, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
-   from ezstitcher.core.image_processor import ImageProcessor as IP
-
-   # ---------- orchestrator ----------------------------------------
-   plate_path   = Path("~/data/PlateA").expanduser()
-   orchestrator = PipelineOrchestrator(plate_path)
-
-   # ---------- position pipeline ----------------------------------
-   pos_pipe = Pipeline(
-       input_dir=orchestrator.workspace_path,
-       steps=[
-           ZFlatStep(method="max"),  # Z-stack flattening
-           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
-           CompositeStep(),  # Channel compositing
-           Step(func=custom_enhance),  # Custom processing
-           PositionGenerationStep(),  # Position generation
-       ],
-       name="Position Generation",
-   )
-   positions_dir = pos_pipe.steps[-1].output_dir
-
-   # ---------- assembly pipeline ----------------------------------
-   asm_pipe = Pipeline(
-       input_dir=orchestrator.workspace_path,
-       steps=[
-           NormStep(),  # Normalization (replaces Step(func=IP.stack_percentile_normalize))
-           ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
-       ],
-       name="Assembly",
-   )
-
-   # ---------- analysis pipeline ---------------------------------
-   # Add a third pipeline for post-processing analysis
-   analysis_pipe = Pipeline(
-       input_dir=asm_pipe.output_dir,  # Use output from assembly
-       steps=[
-           Step(func=analyze_histograms),  # Custom analysis
-       ],
-       name="Analysis",
-   )
-
-   # ---------- run all pipelines ---------------------------------
-   orchestrator.run(pipelines=[pos_pipe, asm_pipe, analysis_pipe])
-
-   # ---------- analysis function ---------------------------------
-   def analyze_histograms(images):
-       from skimage.exposure import histogram
-       return [histogram(im)[0] for im in images]
-
----------------------------------------------------------------------
-7. Adding a new microscope handler
+6. Adding a new microscope handler
 ---------------------------------------------------------------------
 
 Implement :class:`~ezstitcher.core.microscope_handler.BaseMicroscopeHandler` and register it via ``register_handler``.
@@ -227,7 +193,7 @@ For more information on the three-tier approach and when to use each approach, s
 Next steps
 ~~~~~~~~~~
 
-* Read the :doc:`integration` guide for napari and CellProfiler hooks.
+* Read the :doc:`integration` guide for BaSiCPy and N2V2 (Careamics) integration examples.
 * Follow the "learning path" outline in :ref:`learning-path` to master EZStitcher.
 
 

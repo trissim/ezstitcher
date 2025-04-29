@@ -236,15 +236,9 @@ For custom workflows, create pipelines from scratch instead of modifying factory
         input_dir=orchestrator.workspace_path,
         steps=[
             # Step 1: Normalize images
-            Step(
-                name="Normalize Images",
-                func=IP.stack_percentile_normalize
-            ),
+            NormStep(),
 
-            # Step 2: Flatten Z-stacks (if needed)
-            ZFlatStep(method="max"),
-
-            # Step 3: Stitch images
+            # Step 2: Stitch images
             ImageStitchingStep()
         ],
         name="Custom Assembly Pipeline"

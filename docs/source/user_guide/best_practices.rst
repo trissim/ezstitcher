@@ -236,8 +236,8 @@ Example of a well-structured custom pipeline:
    pos_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        steps=[
-           ZFlatStep(method="max"),
-           Step(func=IP.stack_percentile_normalize),
+           ZFlatStep(),
+           NormStep(),
            CompositeStep(weights=[0.7, 0.3, 0]),
            PositionGenerationStep(),
        ],
@@ -250,8 +250,7 @@ Example of a well-structured custom pipeline:
        input_dir=orchestrator.workspace_path,
        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
        steps=[
-           Step(func=IP.stack_percentile_normalize),
-           ZFlatStep(method="max"),
+           NormStep(),
            ImageStitchingStep(positions_dir=positions_dir),
        ],
        name="Assembly",

@@ -9,17 +9,17 @@ EZStitcher is built around a flexible pipeline architecture that allows you to c
 
 .. note::
    The EZ module provides a simplified interface that wraps this architecture.
-   See :doc:`../user_guide/ez_module` for details.
+   See :doc:`../user_guide/basic_usage` for details.
 
 1. **PipelineOrchestrator**: Coordinates the execution of pipelines across wells
 2. **Pipeline**: A sequence of processing steps
 3. **Step**: A single processing operation
 
-For detailed information about each component:
+Key components:
 
-* :doc:`pipeline_orchestrator` - Details about the Orchestrator
-* :doc:`pipeline` - Details about Pipelines
-* :doc:`step` - Details about Steps
+* :doc:`pipeline_orchestrator`
+* :doc:`pipeline`
+* :doc:`step`
 
 This hierarchical design allows complex workflows to be built from simple, reusable components:
 
@@ -54,13 +54,12 @@ Core Components
 
 **Pipeline Factories:**
 
-* Pipeline factories provide a convenient way to create common pipeline configurations
-* For detailed information about pipeline factories, see :doc:`pipeline_factory`
+* :doc:`Pipeline factories <pipeline_factory>` provide a convenient way to create common pipeline configurations
 
 **Step Components:**
 
 * **Step**: A single processing operation that can be applied to images
-* **SpecializedSteps**: Provides optimized implementations for common operations
+* **Pre-defined Steps**: Provides optimized implementations for common operations (ZFlatStep, CompositeStep, etc.)
 * For detailed information about steps, see :doc:`step`
 
 **Image Processing:**
@@ -85,24 +84,22 @@ These components work together to process microscopy images in a flexible and ex
 Key Component Relationships
 ------------------------
 
-The relationship between the main components is hierarchical, with the PipelineOrchestrator at the top level, managing Pipelines, which in turn manage Steps:
+The relationship between the main components is hierarchical:
 
-- **PipelineOrchestrator**: Coordinates execution across wells and provides plate-specific services
-- **Pipeline**: Contains and manages a sequence of Steps
-- **Step**: Performs specific processing operations
-
-For detailed information about the PipelineOrchestrator, see :doc:`pipeline_orchestrator`.
+- :doc:`**PipelineOrchestrator** <pipeline_orchestrator>`: Coordinates execution across wells and provides plate-specific services
+- :doc:`**Pipeline** <pipeline>`: Contains and manages a sequence of Steps
+- :doc:`**Step** <step>`: Performs specific processing operations
 
 Workflow Composition and Modularity
 -----------------------------
 
-EZStitcher's architecture is designed around a modular, composable API that allows for flexible workflow creation. The interaction between components creates a powerful system for building custom image processing workflows:
+EZStitcher's architecture is designed around a modular, composable API that allows for flexible workflow creation:
 
 **Component Roles**
 
-- **Pipeline**: Serves as a container for a sequence of steps, managing their execution order and data flow. Pipelines can be composed, reused, and shared across different projects. For detailed information, see :doc:`pipeline`.
+- :doc:`**Pipeline** <pipeline>`: Serves as a container for a sequence of steps, managing their execution order and data flow. Pipelines can be composed, reused, and shared across different projects.
 
-- **Step**: Represents a single processing operation with well-defined inputs and outputs. Steps are highly configurable through parameters like `variable_components` and `group_by`, allowing for flexible function handling patterns. For detailed information, see :doc:`step`.
+- :doc:`**Step** <step>`: Represents a single processing operation with well-defined inputs and outputs. Steps are highly configurable through parameters like `variable_components` and `group_by`, allowing for flexible function handling patterns.
 
 **Step Types**: EZStitcher provides various step types for common tasks:
   - **PositionGenerationStep**: Analyzes images to generate position files describing how tiles fit together
@@ -127,54 +124,38 @@ This modular design allows you to:
 Typical Processing Flow
 --------------------
 
-For detailed API documentation, see:
+A typical workflow built from scratch:
 
-* :doc:`../api/pipeline_orchestrator`
-* :doc:`../api/pipeline`
-* :doc:`../api/steps`
+.. code-block:: python
 
-A typical image processing and stitching workflow includes:
+    from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    from ezstitcher.core.pipeline import Pipeline
+    from ezstitcher.core.steps import ZFlatStep, NormStep, CompositeStep, PositionGenerationStep, ImageStitchingStep
 
-1. **Load and organize images**:
+    # Setup orchestrator
+    orchestrator = PipelineOrchestrator(plate_path="path/to/plate")
 
-   .. code-block:: python
+    # Position generation pipeline
+    pos_pipe = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            ZFlatStep(),                # Flatten Z-stacks
+            NormStep(),                 # Normalize to enhance contrast
+            CompositeStep(),            # Create composite from channels
+            PositionGenerationStep()    # Generate positions
+        ],
+        name="Position Generation"
+    )
 
-       from ezstitcher.core import AutoPipelineFactory
-       from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
+    # Assembly pipeline
+    asm_pipe = Pipeline(
+        input_dir=orchestrator.workspace_path,
+        steps=[
+            NormStep(),                 # Normalize to enhance contrast
+            ImageStitchingStep()        # Stitch images
+        ],
+        name="Assembly"
+    )
 
-       orchestrator = PipelineOrchestrator(plate_path=plate_path)
-
-2. **Process reference images**:
-
-   .. code-block:: python
-
-       factory = AutoPipelineFactory(
-           input_dir=orchestrator.workspace_path,
-           output_dir="path/to/output",
-           normalize=True
-       )
-       pipelines = factory.create_pipelines()
-
-3. **Generate stitching positions**:
-
-   This is handled automatically by the pipeline factories.
-
-4. **Process final images**:
-
-   Channel-specific processing is available through:
-
-   .. code-block:: python
-
-       # Create a factory for multi-channel data
-       factory = AutoPipelineFactory(
-           input_dir=orchestrator.workspace_path,
-           output_dir="path/to/output",
-           channel_weights=[0.7, 0.3, 0]  # Use only first two channels for reference image
-       )
-       pipelines = factory.create_pipelines()
-
-5. **Stitch images**:
-
-   The final stitching step is handled automatically by all pipeline factories.
-
-A key advantage of EZStitcher's design is that these steps aren't hardcoded—they're composed through the API, allowing you to create custom workflows tailored to your specific microscopy needs. By combining regular processing Steps with specialized PositionGenerationStep and ImageStitchingStep, you can create seamless end-to-end workflows that handle everything from initial image processing to final stitched image assembly.
+    # Run pipelines
+    orchestrator.run(pipelines=[pos_pipe, asm_pipe])

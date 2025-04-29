@@ -48,8 +48,7 @@ For advanced users who need more control and flexibility:
     from pathlib import Path
     from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
     from ezstitcher.core.pipeline import Pipeline
-    from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
-    from ezstitcher.core.image_processor import ImageProcessor as IP
+    from ezstitcher.core.steps import Step, NormStep, PositionGenerationStep, ImageStitchingStep, ZFlatStep, CompositeStep
 
     # Path to your microscopy data
     plate_path = Path("path/to/your/microscopy/data")
@@ -61,8 +60,8 @@ For advanced users who need more control and flexibility:
     pos_pipe = Pipeline(
         input_dir=orchestrator.workspace_path,
         steps=[
-            ZFlatStep(method="max"),
-            Step(func=IP.stack_percentile_normalize),
+            ZFlatStep(),
+            NormStep(),
             CompositeStep(),
             PositionGenerationStep(),
         ],
@@ -75,7 +74,7 @@ For advanced users who need more control and flexibility:
         input_dir=orchestrator.workspace_path,
         output_dir=plate_path.parent / f"{plate_path.name}_stitched",
         steps=[
-            Step(func=IP.stack_percentile_normalize),
+            NormStep(),
             ImageStitchingStep(positions_dir=positions_dir),
         ],
         name="Assembly",

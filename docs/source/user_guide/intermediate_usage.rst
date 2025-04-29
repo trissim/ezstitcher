@@ -125,12 +125,11 @@ Here's how to process Z-stacks with custom pipelines:
    )
    positions_dir = pos_pipe.steps[-1].output_dir
 
-   # Assembly pipeline with Z-stack flattening
+   # Assembly pipeline
    asm_pipe = Pipeline(
        input_dir=orchestrator.workspace_path,
        output_dir=plate_path.parent / f"{plate_path.name}_stitched",
        steps=[
-           ZFlatStep(method="max"),  # Z-stack flattening
            NormStep(),  # Normalization
            ImageStitchingStep(positions_dir=positions_dir),  # Image stitching
        ],
