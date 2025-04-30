@@ -35,7 +35,6 @@ class AutoPipelineFactory:
         output_dir: Optional[Union[str, Path]] = None,
         normalize: bool = True,
         normalization_params: Optional[Dict[str, Any]] = None,
-        well_filter: Optional[List[str]] = None,
         flatten_z: bool = False,
         z_method: str = "max",
         channel_weights: Optional[Union[List[float], Dict[str, float]]] = None,

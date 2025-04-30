@@ -54,10 +54,6 @@ class Step(AbstractStep):
         func: The processing function(s) to apply
         variable_components: Components that vary across files (e.g., 'z_index', 'channel')
         group_by: How to group files for processing (e.g., 'channel', 'site')
-        input_dir: The input directory
-        output_dir: The output directory
-        well_filter: Wells to process
-        processing_args: Additional arguments to pass to the processing function
         name: Human-readable name for the step
     """
 
@@ -66,10 +62,8 @@ class Step(AbstractStep):
         func: ProcessingFunc,
         variable_components: VariableComponents = ['site'],
         group_by: GroupBy = None,
-        input_dir: str = None,
-        output_dir: str = None,
-        well_filter: WellFilter = None,
-        name: str = None
+        name: str = None,
+        **kwargs
     ):
         """
         Initialize a processing step.
@@ -82,17 +76,21 @@ class Step(AbstractStep):
                 - A dictionary mapping component values to functions or tuples
             variable_components: Components that vary across files
             group_by: How to group files for processing
-            input_dir: The input directory
-            output_dir: The output directory
-            well_filter: Wells to process
             name: Human-readable name for the step
+            **kwargs: Additional keyword arguments, including input_dir and output_dir
+                      which will be extracted by the Pipeline
         """
+        # Store input_dir and output_dir in a temporary attribute if present
+        self._ephemeral_init_kwargs = {}
+        if 'input_dir' in kwargs:
+            self._ephemeral_init_kwargs['input_dir'] = kwargs.pop('input_dir')
+        if 'output_dir' in kwargs:
+            self._ephemeral_init_kwargs['output_dir'] = kwargs.pop('output_dir')
+
+        # Initialize the step
         self.func = func
         self.variable_components = variable_components
         self.group_by = group_by
-        self._input_dir = input_dir
-        self._output_dir = output_dir
-        self.well_filter = well_filter
         self._name = name or self._generate_name()
 
     def _generate_name(self) -> str:
@@ -123,53 +121,24 @@ class Step(AbstractStep):
         # Single function or function tuple
         return f"Step({get_func_name(self.func)})"
 
-    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
+    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
         """
-        Process a group of images.
-
-        This implementation of the AbstractStep.process method adapts the Step class
-        to work with the AbstractStep interface. It processes a group of images
-        according to the step's configuration.
+        Process the step with the given context.
 
         Args:
-            group: Group of images to process
-            context: Pipeline context for sharing data between steps
+            context: The processing context containing pre-computed paths and other state
 
         Returns:
-            Processed result (typically an image or list of images)
-        """
-        # For backward compatibility, if this method is called directly with a ProcessingContext
-        # object as the first argument, treat it as the old-style process method
-        if hasattr(group, 'orchestrator') and context is None:
-            return self._process_with_context_object(group)
-
-        # Otherwise, process the group of images directly
-        return self._apply_processing(group)
-
-    def _process_with_context_object(self, context: 'ProcessingContext') -> 'ProcessingContext':
-        """
-        Process the step with the given context object (legacy method).
-
-        This method maintains backward compatibility with the old process method
-        that takes a ProcessingContext object.
-
-        Args:
-            context: The processing context
-
-        Returns:
-            The updated processing context
+            The updated processing context with processing results
         """
         logger.info("Processing step: %s", self.name)
 
-        # Get directories and microscope handler
-        input_dir = self.input_dir
-        output_dir = self.output_dir
-        well_filter = self.well_filter or context.well_filter
+        # Get directories and microscope handler from context
+        input_dir = context.get_step_input_dir(self)
+        output_dir = context.get_step_output_dir(self)
+        well_filter = context.well_filter
         orchestrator = context.orchestrator  # Required, will raise AttributeError if missing
         microscope_handler = orchestrator.microscope_handler
-
-        if not input_dir:
-            raise ValueError("Input directory must be specified")
 
         # Find the actual directory containing images
         # This works whether input_dir is a plate folder or a subfolder
@@ -220,7 +189,6 @@ class Step(AbstractStep):
                         continue  # Skip if no valid images found
 
                     # Process the images with component-specific args
-                    # Process the images
                     try:
                         images = self._apply_processing(images, func=component_func)
                     except Exception as e:
@@ -492,25 +460,7 @@ class Step(AbstractStep):
         """Set the name of this step."""
         self._name = value
 
-    @property
-    def input_dir(self) -> str:
-        """The input directory for this step."""
-        return self._input_dir
 
-    @input_dir.setter
-    def input_dir(self, value: str):
-        """Set the input directory for this step."""
-        self._input_dir = value
-
-    @property
-    def output_dir(self) -> str:
-        """The output directory for this step."""
-        return self._output_dir
-
-    @output_dir.setter
-    def output_dir(self, value: str):
-        """Set the output directory for this step."""
-        self._output_dir = value
 
     def __repr__(self) -> str:
         """
@@ -520,8 +470,7 @@ class Step(AbstractStep):
             A human-readable representation of the step
         """
         components = ", ".join(self.variable_components)
-        output_dir_str = f"→ {str(self.output_dir)}" if self.output_dir else ""
-        return f"{self.name} [components={components}, group_by={self.group_by}] {output_dir_str}"
+        return f"{self.name} [components={components}, group_by={self.group_by}]"
 
 
 
@@ -537,66 +486,44 @@ class PositionGenerationStep(Step):
     def __init__(
         self,
         name: str = "Position Generation",
-        input_dir: Optional[Path] = None,
-        output_dir: Optional[Path] = None  # Output directory for positions files
+        **kwargs
     ):
         """
         Initialize a position generation step.
 
         Args:
             name: Name of the step
-            input_dir: Input directory
-            output_dir: Output directory (for positions files)
+            **kwargs: Additional keyword arguments, including input_dir and output_dir
         """
         super().__init__(
             func=None,  # No processing function needed
             name=name,
-            input_dir=input_dir,
-            output_dir=output_dir
+            **kwargs
         )
 
-    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
+    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
         """
         Generate positions for stitching and store them in the context.
 
-        This implementation adapts the specialized step to the AbstractStep interface.
-
         Args:
-            group: Group of images to process (not used in this step)
-            context: Pipeline context for sharing data between steps
+            context: The processing context containing pre-computed paths and other state
 
         Returns:
-            The processed result
-        """
-        # For backward compatibility, if this method is called with a ProcessingContext
-        # object as the first argument, treat it as the old-style process method
-        if hasattr(group, 'orchestrator') and context is None:
-            return self._process_with_context_object(group)
-
-        # This step doesn't process images directly, so return the group unchanged
-        return group
-
-    def _process_with_context_object(self, context):
-        """
-        Legacy method for backward compatibility.
+            The updated processing context with positions information
         """
         logger.info("Processing step: %s", self.name)
-
-        if self.output_dir is self.input_dir:
-            self.output_dir = self.input_dir.parent / f"{self.input_dir.name}_positions"
-            logger.info(f"Input and output directories are the same, using default positions directory: {self.output_dir}")
 
         # Get required objects from context
         well = context.well_filter[0] if context.well_filter else None
         orchestrator = context.orchestrator  # Required, will raise AttributeError if missing
-        input_dir = self.input_dir or context.input_dir
-        positions_dir = self.output_dir or context.output_dir
+        input_dir = context.get_step_input_dir(self)
+        output_dir = context.get_step_output_dir(self)
 
         # Call the generate_positions method
-        positions_file, reference_pattern = orchestrator.generate_positions(well, input_dir, positions_dir)
+        positions_file, reference_pattern = orchestrator.generate_positions(well, input_dir, output_dir)
 
         # Store in context
-        context.positions_dir = positions_dir
+        context.positions_dir = output_dir
         context.reference_pattern = reference_pattern
         return context
 
@@ -605,68 +532,38 @@ class ImageStitchingStep(Step):
     """
     A step that stitches images using position files.
 
-    If input_dir is not specified, it will use the pipeline's input directory by default.
-    If positions_dir is not specified, it will try to find a directory with "positions" in its name.
+    This step uses the positions_path from the context to stitch images.
     """
 
-    def __init__(self, name=None, input_dir=None, positions_dir=None, output_dir=None, **kwargs):
+    def __init__(self, name=None, **kwargs):
         """
         Initialize an ImageStitchingStep.
 
         Args:
             name (str, optional): Name of the step
-            input_dir (str, optional): Directory containing images to stitch.
-                                       If not specified, uses the pipeline's input directory.
-            positions_dir (str, optional): Directory containing position files.
-                                           If not specified, tries to find a directory with "positions" in its name.
-            output_dir (str, optional): Directory to save stitched images
             **kwargs: Additional arguments for the step
         """
         super().__init__(
             func=None,  # ImageStitchingStep doesn't use the standard func mechanism
             name=name or "Image Stitching",
-            input_dir=input_dir,
-            output_dir=output_dir,
             variable_components=[],  # Empty list for variable_components
             **kwargs
         )
-        self.positions_dir = positions_dir
 
-    def process(self, group: List[Any], context: Optional[Dict[str, Any]] = None) -> Any:
+    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
         """
         Stitch images using the positions file.
 
-        This implementation adapts the specialized step to the AbstractStep interface.
-
         Args:
-            group: Group of images to process (not used in this step)
-            context: Pipeline context for sharing data between steps
+            context: The processing context containing pre-computed paths and other state
 
         Returns:
-            The processed result
-        """
-        # For backward compatibility, if this method is called with a ProcessingContext
-        # object as the first argument, treat it as the old-style process method
-        if hasattr(group, 'orchestrator') and context is None:
-            return self._process_with_context_object(group)
-
-        # This step doesn't process images directly, so return the group unchanged
-        return group
-
-    def _process_with_context_object(self, context):
-        """
-        Legacy method for backward compatibility.
-
-        Args:
-            context: Processing context containing orchestrator and other metadata
-
-        Returns:
-            Updated context
+            The updated processing context
         """
         logger.info("Processing step: %s", self.name)
 
         # Get orchestrator from context
-        orchestrator = getattr(context, 'orchestrator', None)
+        orchestrator = context.orchestrator
         if not orchestrator:
             raise ValueError("ImageStitchingStep requires an orchestrator in the context")
 
@@ -675,33 +572,35 @@ class ImageStitchingStep(Step):
         if not well:
             raise ValueError("ImageStitchingStep requires a well filter in the context")
 
-        # If positions_dir is not specified, try to get it from context or find it
-        if not self.positions_dir:
-            # First try to get from context (set by PositionGenerationStep)
-            self.positions_dir = getattr(context, 'positions_dir', None)
+        # Get directories from context
+        input_dir = context.get_step_input_dir(self)
+        output_dir = context.get_step_output_dir(self)
 
-            # If still not found, try to find at parent level of plate
-            if not self.positions_dir and orchestrator:
-                plate_name = orchestrator.plate_path.name
-                parent_positions_dir = orchestrator.plate_path.parent / f"{plate_name}_positions"
-                if parent_positions_dir.exists():
-                    self.positions_dir = parent_positions_dir
-                    logger.info(f"Using positions directory at parent level: {self.positions_dir}")
-                else:
-                    # Fallback to existing logic if no positions directory is found
-                    self.positions_dir = FileSystemManager.find_directory_substring_recursive(
-                        Path(self.input_dir).parent, "positions")
+        # Get positions directory from context or find it
+        positions_dir = getattr(context, 'positions_dir', None)
+
+        # If not found in context, try to find at parent level of plate
+        if not positions_dir and orchestrator:
+            plate_name = orchestrator.plate_path.name
+            parent_positions_dir = orchestrator.plate_path.parent / f"{plate_name}_positions"
+            if parent_positions_dir.exists():
+                positions_dir = parent_positions_dir
+                logger.info(f"Using positions directory at parent level: {positions_dir}")
+            else:
+                # Fallback to existing logic if no positions directory is found
+                positions_dir = FileSystemManager.find_directory_substring_recursive(
+                    Path(input_dir).parent, "positions")
 
         # If still not found, raise an error
-        if not self.positions_dir:
+        if not positions_dir:
             raise ValueError(f"No positions directory found for well {well}")
 
         # Call the stitch_images method
         orchestrator.stitch_images(
             well=well,
-            input_dir=self.input_dir,
-            output_dir=self.output_dir or context.output_dir,
-            positions_file=Path(self.positions_dir) / f"{well}.csv"
+            input_dir=input_dir,
+            output_dir=output_dir,
+            positions_file=Path(positions_dir) / f"{well}.csv"
         )
 
         return context
@@ -748,6 +647,9 @@ class ZFlatStep(Step):
     def __init__(
         self,
         method: str = "max",
+        variable_components: VariableComponents = ['z_index'],
+        group_by: GroupBy = None,
+        name: str = None,
         **kwargs
     ):
         """
@@ -755,10 +657,10 @@ class ZFlatStep(Step):
 
         Args:
             method: Projection method. Options: "max", "mean", "median", "min", "std", "sum"
-            **kwargs: Additional arguments passed to the parent Step class:
-                input_dir: Input directory
-                output_dir: Output directory
-                well_filter: Wells to process
+            variable_components: Components that vary across files (default: ['z_index'])
+            group_by: How to group files for processing (default: None)
+            name: Human-readable name for the step
+            **kwargs: Additional keyword arguments, including input_dir and output_dir
         """
         # Validate method
         if method not in self.PROJECTION_METHODS and method not in self.PROJECTION_METHODS.values():
@@ -772,9 +674,9 @@ class ZFlatStep(Step):
         # Initialize the Step with pre-configured parameters
         super().__init__(
             func=(IP.create_projection, {'method': full_method}),
-            variable_components=['z_index'],
-            group_by=None,
-            name=f"{method.capitalize()} Projection",
+            variable_components=variable_components,
+            group_by=group_by,
+            name=name or f"{method.capitalize()} Projection",
             **kwargs
         )
 
@@ -790,6 +692,9 @@ class FocusStep(Step):
     def __init__(
         self,
         focus_options: Optional[Dict[str, Any]] = None,
+        variable_components: VariableComponents = ['z_index'],
+        group_by: GroupBy = None,
+        name: str = None,
         **kwargs
     ):
         """
@@ -799,10 +704,10 @@ class FocusStep(Step):
             focus_options: Dictionary of focus analyzer options:
                 - metric: Focus metric. Options: "combined", "normalized_variance",
                          "laplacian", "tenengrad", "fft" (default: "combined")
-            **kwargs: Additional arguments passed to the parent Step class:
-                input_dir: Input directory
-                output_dir: Output directory
-                well_filter: Wells to process
+            variable_components: Components that vary across files (default: ['z_index'])
+            group_by: How to group files for processing (default: None)
+            name: Human-readable name for the step
+            **kwargs: Additional keyword arguments, including input_dir and output_dir
         """
         # Initialize focus options
         focus_options = focus_options or {'metric': 'combined'}
@@ -815,9 +720,9 @@ class FocusStep(Step):
         # Initialize the Step with pre-configured parameters
         super().__init__(
             func=(process_func, {}),
-            variable_components=['z_index'],
-            group_by=None,
-            name=f"Best Focus ({metric})",
+            variable_components=variable_components,
+            group_by=group_by,
+            name=name or f"Best Focus ({metric})",
             **kwargs
         )
 
@@ -833,6 +738,9 @@ class CompositeStep(Step):
     def __init__(
         self,
         weights: Optional[List[float]] = None,
+        variable_components: VariableComponents = ['channel'],
+        group_by: GroupBy = None,
+        name: str = "Channel Composite",
         **kwargs
     ):
         """
@@ -840,17 +748,17 @@ class CompositeStep(Step):
 
         Args:
             weights: List of weights for each channel. If None, equal weights are used.
-            **kwargs: Additional arguments passed to the parent Step class:
-                input_dir: Input directory
-                output_dir: Output directory
-                well_filter: Wells to process
+            variable_components: Components that vary across files (default: ['channel'])
+            group_by: How to group files for processing (default: None)
+            name: Human-readable name for the step
+            **kwargs: Additional keyword arguments, including input_dir and output_dir
         """
         # Initialize the Step with pre-configured parameters
         super().__init__(
             func=(IP.create_composite, {'weights': weights}),
-            variable_components=['channel'],
-            group_by=None,
-            name="Channel Composite",
+            variable_components=variable_components,
+            group_by=group_by,
+            name=name,
             **kwargs
         )
 
@@ -867,6 +775,9 @@ class NormStep(Step):
         self,
         low_percentile: float = 0.1,
         high_percentile: float = 99.9,
+        variable_components: VariableComponents = ['site'],
+        group_by: GroupBy = None,
+        name: str = "Percentile Normalization",
         **kwargs
     ):
         """
@@ -875,12 +786,10 @@ class NormStep(Step):
         Args:
             low_percentile: Low percentile for normalization (0-100)
             high_percentile: High percentile for normalization (0-100)
-            **kwargs: Additional arguments passed to the parent Step class:
-                input_dir: Input directory
-                output_dir: Output directory
-                well_filter: Wells to process
-                variable_components: Components that vary across files (default: ['site'])
-                group_by: How to group files for processing (default: None)
+            variable_components: Components that vary across files (default: ['site'])
+            group_by: How to group files for processing (default: None)
+            name: Human-readable name for the step
+            **kwargs: Additional keyword arguments, including input_dir and output_dir
         """
         # Initialize the Step with pre-configured parameters
         super().__init__(
@@ -888,6 +797,8 @@ class NormStep(Step):
                 'low_percentile': low_percentile,
                 'high_percentile': high_percentile
             }),
-            name="Percentile Normalization",
+            variable_components=variable_components,
+            group_by=group_by,
+            name=name,
             **kwargs
         )

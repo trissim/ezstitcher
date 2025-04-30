@@ -15,7 +15,7 @@ from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.config import PipelineConfig
 
 # Import the pipeline architecture
-from ezstitcher.core.pipeline import Step, Pipeline
+from ezstitcher.core.pipeline import Step, Pipeline, StepExecutionPlan
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +178,127 @@ class PipelineOrchestrator:
         logger.info("Found %d wells in %.2f seconds", len(wells_to_process), time.time() - start_time)
         return wells_to_process
 
+    def prepare_pipeline_paths(self, pipeline, path_overrides=None):
+        """
+        Compute input/output directories for all steps in the pipeline.
+
+        This method centralizes all path resolution logic. It applies the following rules:
+        1. First step uses workspace_path as input_dir
+        2. Subsequent steps use previous step's output_dir as input_dir
+        3. Special steps (PositionGenerationStep, ImageStitchingStep) get special output directories
+        4. Path overrides take precedence over default rules
+
+        Args:
+            pipeline: The pipeline to prepare paths for
+            path_overrides: Optional dictionary of path overrides with keys like:
+                            "{step_id}_input_dir" or "{step_id}_output_dir"
+
+        Returns:
+            dict: Dictionary mapping step IDs to StepExecutionPlan objects
+        """
+        from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
+
+        path_overrides = path_overrides or {}
+        step_plans = {}
+        prev_output_dir = None
+
+        for i, step in enumerate(pipeline.steps):
+            step_id = id(step)
+            step_name = step.name
+            step_type = type(step).__name__
+
+            # Apply input directory rules
+            if i == 0:
+                # First step's input_dir is workspace_path
+                input_dir = self.workspace_path
+            else:
+                # Subsequent steps use previous step's output_dir
+                input_dir = prev_output_dir
+
+            # Apply output directory rules based on step type
+            if isinstance(step, PositionGenerationStep):
+                # Position generation step
+                plate_name = self.plate_path.name
+                output_dir = self.plate_path.parent / f"{plate_name}{self.config.positions_dir_suffix}"
+            elif isinstance(step, ImageStitchingStep):
+                # Image stitching step
+                plate_name = self.plate_path.name
+                output_dir = self.plate_path.parent / f"{plate_name}{self.config.stitched_dir_suffix}"
+            else:
+                # Normal step
+                if i == 0:
+                    # First step gets a unique output directory
+                    plate_name = self.plate_path.name
+                    output_dir = self.plate_path.parent / f"{plate_name}{self.config.out_dir_suffix}"
+                else:
+                    # Subsequent normal steps use in-place processing by default
+                    output_dir = input_dir
+
+            # Note: Inline attribute overrides have been removed as part of the refactoring
+            # to use StepExecutionPlan and context.get_step_input_dir()/context.get_step_output_dir()
+
+            # Apply final overrides (highest priority)
+            input_override_key = f"{step_id}_input_dir"
+            output_override_key = f"{step_id}_output_dir"
+
+            if input_override_key in path_overrides:
+                input_dir = path_overrides[input_override_key]
+
+            if output_override_key in path_overrides:
+                output_dir = path_overrides[output_override_key]
+
+            # Create execution plan
+            plan = StepExecutionPlan(
+                step_id=step_id,
+                step_name=step_name,
+                step_type=step_type,
+                input_dir=input_dir,
+                output_dir=output_dir
+            )
+
+            # Store the plan
+            step_plans[step_id] = plan
+
+            # Update for next iteration
+            prev_output_dir = output_dir
+
+        return step_plans
+
+    def create_context(self, pipeline, well_filter=None, path_overrides=None):
+        """
+        Create a processing context for a pipeline with pre-computed paths.
+
+        This method creates an immutable context with all paths resolved.
+        Once created, the context's paths cannot be modified.
+
+        Args:
+            pipeline: The pipeline to create context for
+            well_filter: Optional well filter
+            path_overrides: Optional dictionary of path overrides
+
+        Returns:
+            ProcessingContext: The initialized context with immutable paths
+        """
+        from ezstitcher.core.pipeline import ProcessingContext
+
+        # Compute paths for all steps
+        step_plans = self.prepare_pipeline_paths(pipeline, path_overrides)
+
+        # Create a fresh context
+        context = ProcessingContext(
+            well_filter=well_filter or self.config.well_filter,
+            config=self.config,
+            orchestrator=self
+        )
+
+        # Add execution plans to context
+        for step in pipeline.steps:
+            plan = step_plans.get(id(step))
+            if plan:
+                context.add_step_plan(step, plan)
+
+        return context
+
     def process_well(self, well, pipelines=None):
         """
         Process a single well through the pipeline.
@@ -204,12 +325,15 @@ class PipelineOrchestrator:
                 logger.info("Running pipeline %d/%d for well %s: %s",
                            i+1, len(pipelines), well, pipeline.name)
 
-                # Orchestrator is passed, allowing pipelines/steps to call
-                # orchestrator.get_stitcher() if they need one.
-                pipeline.run(
+                # Create context with pre-computed paths and path overrides
+                context = self.create_context(
+                    pipeline,
                     well_filter=[well],
-                    orchestrator=self
+                    path_overrides=getattr(pipeline, 'path_overrides', None)
                 )
+
+                # Run the pipeline with the context
+                pipeline.run(context)
 
             logger.info("All pipelines completed for well %s", well)
         else:

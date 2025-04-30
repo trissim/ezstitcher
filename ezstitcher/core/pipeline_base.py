@@ -19,8 +19,6 @@ class StepInterface(ABC):
     def __init__(
         self,
         name: Optional[str] = None,
-        input_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
         variable_components: Optional[List[str]] = None
     ) -> None:
         """
@@ -28,8 +26,6 @@ class StepInterface(ABC):
 
         Args:
             name: Human-readable name for the step
-            input_dir: Input directory for this step
-            output_dir: Output directory for this step
             variable_components: List of components that vary in processing
         """
         pass
@@ -54,8 +50,6 @@ class PipelineInterface(ABC):
     def __init__(
         self,
         steps: Optional[List[StepInterface]] = None,
-        input_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
         name: Optional[str] = None,
         well_filter: Optional[List[str]] = None
     ) -> None:
@@ -64,8 +58,6 @@ class PipelineInterface(ABC):
 
         Args:
             steps: List of processing steps
-            input_dir: Pipeline input directory
-            output_dir: Pipeline output directory
             name: Human-readable name
             well_filter: List of wells to process
         """
@@ -87,22 +79,16 @@ class PipelineInterface(ABC):
     @abstractmethod
     def run(
         self,
-        orchestrator: Optional[Any] = None,
-        input_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
-        well_filter: Optional[List[str]] = None
+        context: 'ProcessingContext'
     ) -> 'ProcessingContext':
         """
         Execute the pipeline.
 
         Args:
-            orchestrator: Pipeline orchestrator instance
-            input_dir: Override input directory
-            output_dir: Override output directory
-            well_filter: Override well filter
+            context: The processing context containing pre-computed paths and other state
 
         Returns:
-            Processing results in context
+            The updated processing context with all results
         """
         pass
 
@@ -112,23 +98,21 @@ class PipelineFactoryInterface(ABC):
     @abstractmethod
     def __init__(
         self,
-        input_dir: Union[str, Path],
-        output_dir: Optional[Union[str, Path]] = None,
         normalize: bool = True,
         normalization_params: Optional[Dict[str, Any]] = None,
         preprocessing_steps: Optional[List[StepInterface]] = None,
-        well_filter: Optional[List[str]] = None
+        well_filter: Optional[List[str]] = None,
+        path_overrides: Optional[Dict[str, Union[str, Path]]] = None
     ) -> None:
         """
         Initialize a pipeline factory.
 
         Args:
-            input_dir: Input directory for created pipelines
-            output_dir: Output directory for created pipelines
             normalize: Whether to apply normalization
             normalization_params: Parameters for normalization
             preprocessing_steps: Steps to add before main processing
             well_filter: Wells to process
+            path_overrides: Optional dictionary of path overrides
         """
         pass
 
