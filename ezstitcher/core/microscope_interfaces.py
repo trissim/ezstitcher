@@ -14,7 +14,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Type, Mapping
+from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Type, Mapping, Set
 
 # Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager
@@ -61,8 +61,14 @@ class MicroscopeHandler(ABC):
 
         self.file_manager = file_manager
         self.plate_folder: Optional[Path] = None # Store workspace path if needed by methods
+    
+    @property
+    @abstractmethod
+    def common_dirs(self) -> str:
+        """Unique identifier for this microscope handler."""
+        pass
 
-    def post_workspace(self, workspace_path: Path, fm=FileManager(backend='disk') ) -> Path:
+    def post_workspace(self, workspace_path: Path, fm=FileManager(backend='disk'), width=3 ) -> Path:
         """
         Hook called after workspace symlink creation.
         Applies normalization logic followed by consistent filename padding.
@@ -72,16 +78,71 @@ class MicroscopeHandler(ABC):
         """
         image_dir = self._normalize_workspace(workspace_path, fm = fm)
 
-        fm.rename_files_with_consistent_padding(
-            directory=image_dir,
-            parser=self.parser,
-            width=3,
-            force_suffixes=True
-        )
+        # Check if any subdirectory matches or contains common_dirs as substring
+        for item in workspace_path.iterdir():
+            if item.is_dir():
+                if self.common_dirs in item.name:
+                    # Process this directory
+                    logger.info(f"Found directory matching '{self.common_dirs}': {item}")
+                    # Add your processing logic here
+                    image_dir = item
+                    break
+
+        # Ensure parser is provided
+        parser = self.parser
+
+        # Map original filenames to reconstructed filenames
+        rename_map = {}
+        for file_path in fm.list_image_files(image_dir):
+            original_name = file_path.name
+
+            # Parse the filename components
+            metadata = parser.parse_filename(original_name)
+            if not metadata:
+                raise ValueError(f"Could not parse filename: {original_name}")
+
+            # Reconstruct the filename with proper padding
+            # If force_suffixes is True, add default values for missing components
+            #if force_suffixes:
+            # Default values for missing components
+            site = metadata['site'] or 1
+            channel = metadata['channel'] or 1
+            z_index = metadata['z_index'] or 1
+            #else:
+            #    # Use existing values or None
+            #    site = metadata.get('site')
+            #    channel = metadata.get('channel')
+            #    z_index = metadata.get('z_index')
+
+            # Reconstruct the filename with proper padding
+            new_name = parser.construct_filename(
+                well=metadata['well'],
+                site=site,
+                channel=channel,
+                z_index=z_index,
+                extension=metadata['extension'],
+                site_padding=width,
+                z_padding=width
+            )
+
+            # Add to rename map if different
+            if original_name != new_name:
+                rename_map[original_name] = new_name
+
+        # Perform the renaming
+        for original_name, new_name in rename_map.items():
+            original_path = image_dir / original_name
+            new_path = image_dir / new_name
+
+            try:
+                original_path.rename(new_path)
+                logger.debug(f"Renamed {original_path} to {new_path}")
+            except Exception as e:
+                logger.error(f"Error renaming {original_path} to {new_path}: {e}")
 
         return image_dir
 
-
+    @abstractmethod
     def _normalize_workspace(self, workspace_path: Path, fm = FileManager(backend='disk')) -> Path:
         """
         Microscope-specific normalization logic before consistent renaming.
@@ -93,7 +154,7 @@ class MicroscopeHandler(ABC):
         Returns:
             Path to the image directory (flattened and ready for renaming)
         """
-        return fm.find_image_directory(workspace_path)
+        pass
 
 
     # Delegate methods to parser
@@ -212,12 +273,9 @@ def _auto_detect_microscope_type(plate_folder: Path, file_manager: FileManager) 
             logger.info("Auto-detected Opera Phenix microscope type.")
             return 'operaphenix'
 
-        if file_manager.find_file_recursive(plate_folder, "Index.xml"):
-            logger.info("Auto-detected Opera Phenix microscope type.")
-            return 'operaphenix'
         # Check for ImageXpress (.htd files)
         if file_manager.list_files(
-            plate_folder, extensions={'.htd'}, recursive=True
+            plate_folder, extensions={'.htd','.HTD'}, recursive=True
         ):
             logger.info("Auto-detected ImageXpress microscope type.")
             return 'imagexpress'

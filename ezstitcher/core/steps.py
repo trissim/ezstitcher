@@ -162,17 +162,10 @@ class Step(AbstractStep):
 
         # --- Core Processing Logic ---
         logger.debug(f"Step '{self.name}': Input='{input_dir}', Output='{output_dir}'")
-        try:
-            # Find the actual directory containing images using FileManager
-            actual_input_dir = file_manager.find_image_directory(Path(input_dir))
-            logger.debug(f"Using actual image directory: {actual_input_dir}")
-        except Exception as e:
-            logger.error(f"Failed to find image directory for {input_dir}: {e}")
-            raise RuntimeError(f"Cannot proceed: Image directory not found for {input_dir}") from e
 
         # Get patterns with variable components
         patterns_by_well = microscope_handler.auto_detect_patterns(
-            actual_input_dir,
+            input_dir,
             well_filter=well_filter,
             variable_components=self.variable_components
         )
@@ -200,10 +193,10 @@ class Step(AbstractStep):
                 # Process each pattern
                 for pattern in component_patterns:
                     # Find matching files
-                    matching_files = microscope_handler.parser.path_list_from_pattern(actual_input_dir, pattern)
+                    matching_files = microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
 
                     # Load images using FileManager
-                    image_paths_to_load = [Path(actual_input_dir) / filename for filename in matching_files]
+                    image_paths_to_load = [Path(input_dir) / filename for filename in matching_files]
                     try:
                         # Use file_manager instance from context
                         images = [file_manager.load_image(p) for p in image_paths_to_load]

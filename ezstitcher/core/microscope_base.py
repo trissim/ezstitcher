@@ -237,7 +237,7 @@ class FilenameParser(ABC):
         # Find all image files
         folder_path = Path(folder_path)
         extensions = extensions or ['.tif', '.TIF', '.tiff', '.TIFF']
-        image_dir = fm.find_image_directory(folder_path)
+        image_dir = folder_path 
         logger.info("Using image directory: %s", image_dir)
 
         image_paths = fm.list_image_files(image_dir, extensions, recursive=True)

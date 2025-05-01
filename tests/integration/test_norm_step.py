@@ -16,7 +16,6 @@ from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, ZFlatStep, FocusStep, CompositeStep, NormStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
-from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import stack
 
 # Import fixtures from test_pipeline_orchestrator.py

@@ -38,6 +38,11 @@ class OperaPhenixHandler(MicroscopeHandler):
             metadata_handler=OperaPhenixMetadataHandler()
         )
 
+    @property
+    def common_dirs(self) -> str:
+        """Subdirectory names commonly used by Opera Phenix."""
+        return 'Image'
+
     def _normalize_workspace(self, workspace_path: Path, fm=None) -> Path:
         """
         Renames Opera Phenix images to follow a consistent field order

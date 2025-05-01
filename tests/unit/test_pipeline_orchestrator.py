@@ -231,43 +231,7 @@ def test_get_wells_to_process_calls_fm_list_files(mock_file_manager: MagicMock, 
     assert mock_microscope_handler.parse_filename.call_count == 3
 
 
-def test_prepare_images_calls_fm_methods(mock_file_manager: MagicMock, mock_microscope_handler: MagicMock, patch_internal_deps):
-    """Verify prepare_images calls the correct FileManager methods."""
-    plate_p = Path("dummy/plate")
-    image_dir = plate_p / "Images"
-    mock_file_manager.find_image_directory.return_value = image_dir
-    mock_file_manager.detect_zstack_folders.return_value = (True, [image_dir / "Z01"]) # Simulate Z-stacks
-
-    patch_internal_deps["CreateHandler"].return_value = mock_microscope_handler
-
-    orchestrator = PipelineOrchestrator(plate_path=plate_p, file_manager=mock_file_manager)
-
-    # Reset mocks called during init before calling prepare_images directly if needed,
-    # or verify calls made during init first.
-    # For this test, let's assume init completed and we call prepare_images again (though usually called internally)
-    mock_file_manager.reset_mock() # Reset mocks for clarity
-    mock_file_manager.find_image_directory.return_value = image_dir
-    mock_file_manager.detect_zstack_folders.return_value = (True, [image_dir / "Z01"])
-
-    result_dir = orchestrator.prepare_images(plate_p)
-
-    assert result_dir == image_dir
-    # The actual call might not include the extensions parameter explicitly
-    mock_file_manager.find_image_directory.assert_called_once_with(plate_p)
-    mock_file_manager.rename_files_with_consistent_padding.assert_called_once_with(
-        directory=image_dir,
-        parser=mock_microscope_handler,
-        width=pytest.approx(3), # Use approx for default value check
-        force_suffixes=True
-    )
-    # The actual call might not include the pattern parameter explicitly
-    mock_file_manager.detect_zstack_folders.assert_called_once_with(image_dir)
-    mock_file_manager.organize_zstack_folders.assert_called_once_with(
-        plate_folder=image_dir,
-        filename_parser=mock_microscope_handler
-    )
-
-
+# Removed outdated test for prepare_images method which no longer exists on orchestrator
 def test_stitch_images_calls_fm_ensure_directory(mock_file_manager: MagicMock, mock_stitcher: MagicMock, mock_microscope_handler: MagicMock, mock_config: MagicMock, patch_internal_deps):
     """Verify stitch_images uses FileManager to ensure output directory."""
     plate_p = Path("dummy/plate")

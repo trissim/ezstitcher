@@ -12,9 +12,10 @@ import numpy as np # Needed for type hints here
 import os
 import shutil
 from glob import glob
-from ezstitcher.core.file_system_manager import FileSystemManager # Existing static manager
+# REMOVED: from ezstitcher.core.file_system_manager import FileSystemManager # Existing static manager
 import fnmatch # For pattern matching in list_files
 import copy # For simulating read/write isolation
+import tifffile # ADDED: For native TIFF I/O
 
 
 logger = logging.getLogger(__name__)
@@ -205,11 +206,8 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
     """
     Storage backend that uses the local disk.
 
-    **Transitional Implementation:** This backend currently delegates heavily
-    to the static `ezstitcher.core.file_system_manager.FileSystemManager`.
-    Future work involves replacing these delegations with direct Python
-    file system operations (os, pathlib, shutil) to fully decouple from
-    FileSystemManager.
+    This backend implements storage operations using direct Python
+    file system operations (os, pathlib, shutil, tifffile).
     """
 
     # --- BasicStorageBackend Methods ---
@@ -446,36 +444,41 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
     # --- MicroscopyStorageBackend Methods (Delegated) ---
 
     def load_image(self, file_path: Union[str, Path]) -> Optional[ImageArray]:
-        """Load an image from disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.load_image with native image loading (e.g., tifffile, imageio)
-        logger.debug(f"Delegating load_image for {file_path} to FileSystemManager")
+        """Load an image from disk using tifffile."""
+        # NATIVE IMPLEMENTATION
+        file_path = Path(file_path)
+        logger.debug(f"DiskStorageBackend: Loading image from {file_path}")
         try:
-            # Ensure FileSystemManager is available and has the method
-            if hasattr(FileSystemManager, 'load_image'):
-                 return FileSystemManager.load_image(file_path)
-            else:
-                 logger.error("FileSystemManager.load_image not found!")
-                 return None
+            if not file_path.exists():
+                logger.error(f"Image file not found: {file_path}")
+                return None
+            # Use tifffile to read the image
+            with tifffile.TiffFile(file_path) as tif:
+                image = tif.asarray()
+            logger.debug(f"Successfully loaded image from {file_path}")
+            return image
         except Exception as e:
-            logger.error(f"Error during FileSystemManager.load_image for {file_path}: {e}")
+            logger.error(f"Error loading image {file_path}: {e}", exc_info=True)
             return None
 
 
     def save_image(self, image: ImageArray, output_path: Union[str, Path], metadata: Optional[Dict] = None) -> bool:
-        """Save an image to disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.save_image with native image saving (e.g., tifffile, imageio)
-        #       Handle metadata if the chosen library supports it.
-        logger.debug(f"Delegating save_image for {output_path} to FileSystemManager")
+        """Save an image to disk using tifffile."""
+        # NATIVE IMPLEMENTATION
+        output_path = Path(output_path)
+        logger.debug(f"DiskStorageBackend: Saving image to {output_path}")
         try:
-             # Note: FileSystemManager.save_image signature might be (path, image)
-             if hasattr(FileSystemManager, 'save_image'):
-                 # FileSystemManager might not handle metadata, pass only required args
-                 return FileSystemManager.save_image(image, output_path)
-             else:
-                 logger.error("FileSystemManager.save_image not found!")
-                 return False
+            # Ensure the output directory exists
+            self.ensure_directory(output_path.parent)
+
+            # Use tifffile to save the image
+            # Metadata handling might need refinement based on tifffile capabilities and desired metadata structure
+            tifffile.imwrite(output_path, image, metadata=metadata) # Pass metadata if tifffile supports it this way
+
+            logger.debug(f"Successfully saved image to {output_path}")
+            return True
         except Exception as e:
-            logger.error(f"Error during FileSystemManager.save_image for {output_path}: {e}")
+            logger.error(f"Error saving image {output_path}: {e}", exc_info=True)
             return False
 
 
@@ -499,23 +502,55 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
 
 
     def find_image_directory(self, plate_folder: Union[str, Path], extensions: Optional[Set[str]] = None) -> Path:
-        """Find the image directory on disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.find_image_directory with native logic
-        #       (e.g., search common subdirs like 'Images', 'Data', or check root)
-        #       using self.list_files and provided/default extensions.
-        logger.debug(f"Delegating find_image_directory for {plate_folder} to FileSystemManager")
+        """
+        Find the primary directory containing image files within a plate folder using native methods.
+
+        Searches common directory names first, then checks immediate subdirectories.
+
+        Args:
+            plate_folder: Base directory to search (e.g., the plate folder).
+            extensions: Set of file extensions to look for (e.g., {'.tif', '.png'}).
+                        If None, uses DEFAULT_IMAGE_EXTENSIONS from ezstitcher.io.constants.
+
+        Returns:
+            Path to the directory containing the images.
+
+        Raises:
+            FileNotFoundError: If no suitable image directory is found.
+        """
+        # NATIVE IMPLEMENTATION
+        plate_folder = Path(plate_folder).resolve()
+        if not plate_folder.is_dir():
+             raise FileNotFoundError(f"Plate folder not found or not a directory: {plate_folder}")
+
         effective_extensions = extensions if extensions is not None else DEFAULT_IMAGE_EXTENSIONS
+        logger.debug(f"Searching for image directory in {plate_folder} with extensions {effective_extensions}")
+
+        # 1. Check common directory names
+        common_dirs = ["Images", "images", "Data", "data"]
+        for common_dir_name in common_dirs:
+            potential_dir = plate_folder / common_dir_name
+            if potential_dir.is_dir():
+                 # Check if it actually contains image files (non-recursively)
+                 if self.list_files(potential_dir, extensions=effective_extensions, recursive=False):
+                     logger.info(f"Found image directory in common location: {potential_dir}")
+                     return potential_dir
+
+        # 2. Check immediate subdirectories if not found in common locations
+        logger.debug(f"Image directory not in common locations, checking immediate subdirectories of {plate_folder}")
         try:
-            if hasattr(FileSystemManager, 'find_image_directory'):
-                # FileSystemManager might expect a List, not Set
-                return FileSystemManager.find_image_directory(plate_folder, list(effective_extensions))
-            else:
-                 logger.error("FileSystemManager.find_image_directory not found!")
-                 # Need to return a Path or raise error. Raising is safer.
-                 raise FileNotFoundError("FileSystemManager.find_image_directory not available")
+            for item in plate_folder.iterdir():
+                if item.is_dir():
+                    # Check if this subdirectory contains image files (recursively)
+                    if self.list_files(item, extensions=effective_extensions, recursive=True):
+                        logger.info(f"Found image directory in subdirectory: {item}")
+                        return item
         except Exception as e:
-            logger.error(f"Error during FileSystemManager.find_image_directory for {plate_folder}: {e}")
-            raise FileNotFoundError(f"Could not find image directory in {plate_folder} via FileSystemManager") from e
+             logger.warning(f"Error iterating through subdirectories of {plate_folder}: {e}")
+             # Continue to raise FileNotFoundError below
+
+        # 3. If still not found, raise error
+        raise FileNotFoundError(f"Could not find suitable image directory with extensions {effective_extensions} within {plate_folder}")
 
 
     def rename_files_with_consistent_padding(self, directory: Union[str, Path], parser: Any, width: int = 3, force_suffixes: bool = False) -> Dict[Path, Path]:

@@ -104,36 +104,6 @@ class Pipeline(PipelineInterface):
                 if step is not None:  # Skip None values in steps list
                     self.add_step(step)
 
-        # Apply input_dir to first step and output_dir to last step if they don't have overrides
-        if steps and (input_dir is not None or output_dir is not None):
-            # Apply input_dir to first step if it doesn't have an override
-            if input_dir is not None and self.steps:
-                first_step = self.steps[0]
-                first_step_id = id(first_step)
-                input_key = f"{first_step_id}_input_dir"
-
-                # Convert to Path if it's a string
-                if isinstance(input_dir, str):
-                    input_dir = Path(input_dir)
-
-                # Apply only if the step doesn't already have an input_dir override
-                if input_key not in self.path_overrides:
-                    self.path_overrides[input_key] = input_dir
-
-            # Apply output_dir to last step if it doesn't have an override
-            if output_dir is not None and self.steps:
-                last_step = self.steps[-1]
-                last_step_id = id(last_step)
-                output_key = f"{last_step_id}_output_dir"
-
-                # Convert to Path if it's a string
-                if isinstance(output_dir, str):
-                    output_dir = Path(output_dir)
-
-                # Apply only if the step doesn't already have an output_dir override
-                if output_key not in self.path_overrides:
-                    self.path_overrides[output_key] = output_dir
-
 
     def add_step(self, step: Step) -> 'Pipeline':
         """
@@ -209,45 +179,6 @@ class Pipeline(PipelineInterface):
 
         logger.info("Pipeline completed: %s", self.name)
         return context
-
-
-
-    def collect_unique_dirs(self) -> set:
-        """
-        Collects all unique directory paths from all steps in the pipeline.
-
-        Iterates through each step's attributes and collects values for attributes
-        with "dir" in their name. Also includes paths from path_overrides.
-
-        Returns:
-            A set of unique directory paths.
-        """
-        unique_dirs = set()
-
-        # Collect paths from step attributes (legacy support)
-        for step in self.steps:
-            for attr_name, attr_value in step.__dict__.items():
-                if "dir" in attr_name.lower() and attr_value:
-                    unique_dirs.add(attr_value)
-
-        # Collect paths from path_overrides
-        for key, value in self.path_overrides.items():
-            if "dir" in key.lower() and value:
-                unique_dirs.add(value)
-
-        return unique_dirs
-
-    def __repr__(self) -> str:
-        """
-        String representation of the pipeline.
-
-        Returns:
-            A human-readable representation of the pipeline
-        """
-        steps_repr = "\n  ".join(repr(step) for step in self.steps)
-        return (f"{self.name}\n"
-                f"  Steps:\n  {steps_repr}")
-
 
 class ProcessingContext:
     """
@@ -332,27 +263,3 @@ class ProcessingContext:
         if plan:
             return plan.output_dir
         return None
-
-
-
-
-
-
-
-def group_patterns_by(patterns, component, microscope_handler=None):
-    """
-    Group patterns by the specified component.
-
-    Args:
-        patterns (list): Patterns to group
-    Returns:
-        dict: Dictionary mapping component values to lists of patterns
-    """
-    grouped_patterns = {}
-    for pattern in patterns:
-        # Extract the component value from the pattern
-        component_value = microscope_handler.parser.parse_filename(pattern)[component]
-        if component_value not in grouped_patterns:
-            grouped_patterns[component_value] = []
-        grouped_patterns[component_value].append(pattern)
-    return grouped_patterns

@@ -35,61 +35,82 @@ class ImageXpressHandler(MicroscopeHandler):
             metadata_handler=ImageXpressMetadataHandler()
         )
 
+    @property
+    def common_dirs(self) -> str:
+        """Subdirectory names commonly used by ImageXpress"""
+        return 'TimePoint'
+
     def _normalize_workspace(self, workspace_path: Path, fm=FileManager(backend='disk')) -> Path:
         """
         Flattens the Z-step folder structure and renames image files for
         consistent padding and Z-plane resolution.
 
-        ImageXpress exports often omit Z suffixes and store images in
-        subdirectories named like ZStep_1, ZStep_2, etc. This method
-        flattens those folders and embeds the Z index into filenames.
-
         Args:
             workspace_path: Path to the symlinked workspace
-            fm: Optional FileManager instance. If None, uses self.file_manager
+            fm: FileManager instance for file operations
 
         Returns:
             Path to the flattened image directory.
         """
-        # Use the provided file manager or fall back to the instance's file manager
-        image_dir = fm.find_image_directory(workspace_path)
+        # Find all subdirectories in workspace
+        subdirs = [d for d in workspace_path.iterdir() if d.is_dir()]
+        
+        # Check if any subdirectory contains common_dirs string
+        common_dir_found = False
+        for subdir in subdirs:
+            if self.common_dirs in subdir.name:
+                # Found a matching directory, process it
+                self._flatten_zsteps(subdir, fm)
+                common_dir_found = True
+        
+        # If no common directory found, process the workspace directly
+        if not common_dir_found:
+            self._flatten_zsteps(workspace_path, fm)
+        
+        # Return the image directory
+        return workspace_path
 
-        # First check if there are any Z step folders before proceeding
+    def _flatten_zsteps(self, directory: Path, fm: FileManager):
+        """
+        Process Z-step folders in the given directory.
+        
+        Args:
+            directory: Directory that might contain Z-step folders
+            fm: FileManager instance for file operations
+        """
+        # Check for Z step folders
         zstep_pattern = re.compile(r"ZStep[_-]?(\d+)", re.IGNORECASE)
-
-        # Check for Z step folders before proceeding
+        
         potential_z_folders = [
-            d for d in image_dir.iterdir()
+            d for d in directory.iterdir()
             if d.is_dir() and zstep_pattern.search(d.name)
         ]
-
+        
         if not potential_z_folders:
-            logger.info(f"No Z step folders found in {image_dir}. Skipping flattening.")
-            return image_dir  # No Z folders — nothing to flatten
-
+            logger.info(f"No Z step folders found in {directory}. Skipping flattening.")
+            return
+        
         # Sort Z folders by index
         z_folders = sorted([
             (int(zstep_pattern.search(d.name).group(1)), d)
             for d in potential_z_folders
         ], key=lambda x: x[0])
-
+        
         # Process each Z folder
         for z_index, z_dir in z_folders:
             for img_file in z_dir.glob("*"):
                 if not img_file.is_file():
                     continue
-
+                
                 # Parse the original filename to extract components
                 components = self.parser.parse_filename(img_file.name)
-
+                
                 if not components:
-                    # Skip files that can't be parsed
-                    logger.warning(f"Skipping file {img_file.name} - cannot be parsed by the filename parser")
                     continue
-
+                
                 # Update the z_index in the components
                 components['z_index'] = z_index
-
+                
                 # Use the parser to construct a new filename with the updated z_index
                 new_name = self.parser.construct_filename(
                     well=components['well'],
@@ -98,27 +119,23 @@ class ImageXpressHandler(MicroscopeHandler):
                     z_index=z_index,
                     extension=components['extension']
                 )
-
-                # Copy directly to the parent directory (image_dir)
-                new_path = image_dir / new_name
-
+                
+                # Move to the parent directory
+                new_path = directory / new_name
+                
                 try:
-                    fm.copy_file(img_file, new_path)
-                    logger.debug(f"Copied {img_file} to {new_path}")
+                    fm.rename(img_file, new_path)
+                    logger.debug(f"Moved {img_file} to {new_path}")
                 except Exception as e:
-                    logger.warning(f"Failed to copy {img_file} to {new_path}: {e}")
-
-        # Remove Z folders after all files have been copied
+                    logger.warning(f"Failed to move {img_file} to {new_path}: {e}")
+        
+        # Remove Z folders after all files have been moved
         for _, z_dir in z_folders:
             try:
-                # Use the new remove_directory method in FileManager
                 fm.remove_directory(z_dir)
                 logger.debug(f"Removed Z-step folder: {z_dir}")
             except Exception as e:
                 logger.warning(f"Failed to remove Z-step folder {z_dir}: {e}")
-                # Continue even if we can't remove the Z folder
-
-        return image_dir
 
 
 class ImageXpressFilenameParser(FilenameParser):

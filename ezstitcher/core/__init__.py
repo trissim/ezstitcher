@@ -21,7 +21,6 @@ __all__ = [
     'ImageProcessor',
     'FocusAnalyzer',
     'Stitcher',
-    # Removed: 'FileSystemManager',
     'PipelineOrchestrator',
     'StitcherConfig',
     'PipelineConfig',

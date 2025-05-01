@@ -141,7 +141,7 @@ class FileManager:
 
     # --- File/Directory Utility Methods ---
 
-    def list_image_files(self, directory: Union[str, Path], extensions: Optional[Set[str]] = None, recursive: bool = True) -> List[Path]:
+    def list_image_files(self, directory: Union[str, Path], extensions: Optional[Set[str]] = DEFAULT_IMAGE_EXTENSIONS, recursive: bool = True) -> List[Path]:
         """
         List image files in a directory via the backend.
 

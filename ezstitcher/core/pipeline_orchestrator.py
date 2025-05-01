@@ -158,7 +158,7 @@ class PipelineOrchestrator:
                 self.config.pixel_size = self.config.stitcher.pixel_size
             logger.info("Pixel size: %s", self.config.pixel_size)
 
-            self.microscope_handler.post_workspace(self.workspace_path)
+            self.input_dir = self.microscope_handler.post_workspace(self.workspace_path)
             # Directory setup is handled within pipelines now.
 
             # Get wells to process
@@ -301,7 +301,7 @@ class PipelineOrchestrator:
             # Apply input directory rules
             if i == 0:
                 # First step's input_dir is workspace_path
-                input_dir = self.workspace_path
+                input_dir = self.input_dir
             else:
                 # Subsequent steps use previous step's output_dir
                 input_dir = prev_output_dir
@@ -533,24 +533,21 @@ class PipelineOrchestrator:
         output_dir = Path(output_dir)
         input_dir = Path(input_dir)
 
-        # Find the actual image directory using file_manager
-        actual_input_dir = self.file_manager.find_image_directory(input_dir)
-        logger.info("Using actual image directory: %s", actual_input_dir)
 
         # Ensure output directory exists using file_manager
         self.file_manager.ensure_directory(output_dir)
         logger.info("Ensured output directory exists: %s", output_dir)
 
         # Get patterns for this well
-        all_patterns = get_patterns_for_well(well, actual_input_dir, self.microscope_handler)
+        all_patterns = get_patterns_for_well(well, input_dir, self.microscope_handler)
         if not all_patterns:
-            raise ValueError(f"No patterns found for well {well} in {actual_input_dir}")
+            raise ValueError(f"No patterns found for well {well} in {input_dir}")
 
         # Process each pattern
         for pattern in all_patterns:
             # Find all matching files and skip if none found
             matching_files = self.microscope_handler.parser.path_list_from_pattern(
-                actual_input_dir, pattern)
+                input_dir, pattern)
             if not matching_files:
                 logger.warning("No files found for pattern %s, skipping", pattern)
                 continue
@@ -562,7 +559,7 @@ class PipelineOrchestrator:
             # Assemble the stitched image
             stitcher_to_use.assemble_image(
                 positions_path=positions_file,
-                images_dir=actual_input_dir,
+                images_dir=input_dir,
                 output_path=output_path,
-                override_names=[str(actual_input_dir / f) for f in matching_files]
+                override_names=[str(input_dir / f) for f in matching_files]
             )

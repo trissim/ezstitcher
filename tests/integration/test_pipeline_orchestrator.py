@@ -10,8 +10,9 @@ from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, NormStep, CompositeStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
-from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import stack
+from ezstitcher.io.filemanager import FileManager
+from ezstitcher.io.constants import DEFAULT_IMAGE_EXTENSIONS # Import constant explicitly
 
 
 
@@ -29,12 +30,12 @@ def find_image_files(directory: Union[str, Path], pattern: str = "*", recursive:
         List of Path objects for image files
     """
     directory = Path(directory)
-    image_files = []
+    image_files = FileManager(backend='disk').list_image_files(directory, recursive=recursive)
 
     # Use rglob for recursive search or glob for non-recursive
     glob_func = directory.rglob if recursive else directory.glob
 
-    for ext in FileSystemManager.default_extensions:
+    for ext in DEFAULT_IMAGE_EXTENSIONS:
         image_files.extend(list(glob_func(f"**/{pattern}{ext}" if recursive else f"{pattern}{ext}")))
 
     return sorted(image_files)
@@ -454,66 +455,3 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
     success = orchestrator.run(pipelines=pipelines)
     assert success, "Pipeline execution failed"
     print_thread_activity_report()
-
-#def test_minimal_pipeline_with_defaults(flat_plate_dir, base_pipeline_config, thread_tracker):
-#    """
-#    Test a minimal pipeline that only defines input directory and handles processing,
-#    position generation, and stitching in one go using defaults.
-#
-#    This test verifies that:
-#    1. A pipeline can be created with minimal configuration
-#    2. ImageStitchingStep correctly uses the pipeline's input directory by default
-#    3. The entire workflow (processing, position generation, stitching) works with defaults
-#    """
-#    # Set up the orchestrator
-#    config = base_pipeline_config
-#    orchestrator = PipelineOrchestrator(config=config, plate_path=flat_plate_dir)
-#
-#    # Set up directories
-#    #dirs = setup_directories(orchestratorn.workspace_path, orchestrator.input_dir)
-#
-#    # Create a single all-in-one pipeline that does everything with absolute minimal configuration
-#    # Only defining the input directory - everything else should be handled automatically
-#    all_in_one_pipeline = Pipeline(
-#        input_dir=orchestrator.workspace_path,
-#        # No output_dir defined - should be handled automatically
-#        steps=[
-#            # Step 1: Basic image processing
-#            # The output of NormStep will be workspace_path / "NormStep" by default
-#            NormStep(), # Explicitly name for clarity in path construction
-#
-#            PositionGenerationStep(), # Uses output of NormStep
-#
-#            # ImageStitchingStep needs the *normalized images* from NormStep's output directory
-#            ImageStitchingStep(
-#                #image_source_dir=orchestrator.workspace_path / "NormStep"
-#            )
-#        ],
-#        name="Absolute Minimal Pipeline"
-#    )
-#
-#    # Run the pipeline
-#    success = orchestrator.run(pipelines=[all_in_one_pipeline])
-#    assert success, "Minimal pipeline execution failed"
-#
-#    # Since we didn't specify an output directory, we need to find where the images were saved
-#    # They should be in a directory with 'stitched' in the name
-#    workspace_parent = orchestrator.workspace_path.parent
-#    stitched_dir = None
-#
-#    # Look for directories with 'stitched' in the name
-#    for path in workspace_parent.glob("*stitched*"):
-#        if path.is_dir():
-#            stitched_dir = path
-#            break
-#
-#    assert stitched_dir is not None, "Could not find stitched images directory"
-#    print(f"Found stitched images directory: {stitched_dir}")
-#
-#    # Verify that stitched images were created
-#    stitched_files = find_image_files(stitched_dir)
-#    assert len(stitched_files) > 0, "No stitched images were created"
-#
-#    print(f"Successfully created {len(stitched_files)} stitched images")
-#    print("Using absolute minimal pipeline configuration with defaults")
-#    print_thread_activity_report()
