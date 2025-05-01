@@ -16,9 +16,12 @@ import pandas as pd
 from ashlar import fileseries, reg
 
 from ezstitcher.core.config import StitcherConfig
-from ezstitcher.core.file_system_manager import FileSystemManager
+# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.io.filemanager import FileManager # Added
 from ezstitcher.core.image_processor import create_linear_weight_mask
-from ezstitcher.core.microscope_interfaces import FilenameParser
+#from ezstitcher.core.microscope_interfaces import FilenameParser
+from ezstitcher.core.microscope_base import FilenameParser, MetadataHandler
+
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +34,27 @@ class Stitcher:
     Class for handling image stitching operations.
     """
 
-    def __init__(self, config: Optional[StitcherConfig] = None, filename_parser: Optional[FilenameParser] = None):
+    def __init__(self,
+                 config: Optional[StitcherConfig] = None, # Use forward reference if needed
+                 filename_parser: Optional[FilenameParser] = None, # Use forward reference if needed
+                 file_manager: Optional[FileManager] = None): # Accept FileManager via constructor
         """
         Initialize the Stitcher.
 
         Args:
-            config (StitcherConfig): Configuration for stitching
-            filename_parser (FilenameParser): Parser for microscopy filenames
+            config: Configuration for stitching.
+            filename_parser: Parser for microscopy filenames.
+            file_manager: FileManager instance for all file operations.
+                          **Must be provided.**
         """
-        self.config = config or StitcherConfig()
-        self.fs_manager = FileSystemManager()
+        self.config = config or StitcherConfig() # Assuming StitcherConfig is the correct default
         self.filename_parser = filename_parser
+
+        if file_manager is None:
+            raise ValueError("FileManager must be provided to Stitcher. Default fallback has been removed.")
+
+        self.file_manager = file_manager
+        logger.info(f"Stitcher initialized with FileManager backend: {type(self.file_manager.backend).__name__}")
 
     def generate_positions_df(self, image_dir, image_pattern, positions, grid_size_x, grid_size_y):
         """
@@ -283,7 +296,8 @@ class Stitcher:
             # Ensure output directory exists
             output_path = Path(output_path)
             output_dir = output_path.parent
-            self.fs_manager.ensure_directory(output_dir)
+            # Use injected file_manager
+            self.file_manager.ensure_directory(output_dir)
             logger.info("Ensured output directory exists: %s", output_dir)
 
             # Parse CSV file
@@ -306,8 +320,8 @@ class Stitcher:
                     logger.error("Missing image: %s in %s", fname, images_dir)
                     return False
 
-            # Read the first tile to get shape, dtype
-            first_tile = self.fs_manager.load_image(images_dir / pos_entries[0][0])
+            # Read the first tile to get shape, dtype using file_manager
+            first_tile = self.file_manager.load_image(images_dir / pos_entries[0][0])
             if first_tile is None:
                 logger.error("Failed to load first tile: %s", pos_entries[0][0])
                 return False
@@ -340,8 +354,8 @@ class Stitcher:
             for i, (fname, x_f, y_f) in enumerate(pos_entries):
                 logger.info("Placing tile %d/%d: %s at (%.2f, %.2f)", i+1, len(pos_entries), fname, x_f, y_f)
 
-                # Load tile
-                tile_img = self.fs_manager.load_image(images_dir / fname)
+                # Load tile using file_manager
+                tile_img = self.file_manager.load_image(images_dir / fname)
                 if tile_img is None:
                     logger.error("Failed to load tile: %s", fname)
                     continue
@@ -406,9 +420,9 @@ class Stitcher:
 
             blended = np.clip(blended, 0, max_val).astype(dtype)
 
-            # Save stitched image
+            # Save stitched image using file_manager
             logger.info("Saving stitched image to %s", output_path)
-            self.fs_manager.save_image(output_path, blended)
+            self.file_manager.save_image(blended, output_path)
 
             return True
 

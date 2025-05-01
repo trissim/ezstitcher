@@ -37,3 +37,6 @@ class PipelineConfig:
 
     # Stitching configuration
     stitcher: StitcherConfig = field(default_factory=StitcherConfig)
+
+    # Microscope configuration
+    force_parser: Optional[str] = None  # Force a specific parser type (e.g., "OperaPhenix")

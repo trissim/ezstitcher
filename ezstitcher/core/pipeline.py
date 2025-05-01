@@ -134,69 +134,6 @@ class Pipeline(PipelineInterface):
                 if output_key not in self.path_overrides:
                     self.path_overrides[output_key] = output_dir
 
-   # def add_step(self, step: Step) -> 'Pipeline':
-   #     """
-   #     Add a step to the pipeline.
-
-   #     If the step has _ephemeral_init_kwargs containing input_dir or output_dir,
-   #     they will be extracted and stored in the pipeline's path_overrides dictionary,
-   #     then removed from the step instance to avoid polluting it.
-
-   #     Args:
-   #         step: Step to add
-
-   #     Returns:
-   #         Self for method chaining
-   #     """
-   #     # Check for _ephemeral_init_kwargs attribute
-   #     ephemeral_kwargs = getattr(step, "_ephemeral_init_kwargs", None)
-   #     if ephemeral_kwargs:
-   #         # Extract input_dir if present
-   #         if 'input_dir' in ephemeral_kwargs:
-   #             input_dir = ephemeral_kwargs['input_dir']
-   #             # Convert to Path if it's a string
-   #             if isinstance(input_dir, str):
-   #                 input_dir = Path(input_dir)
-   #             # Store in path_overrides
-   #             self.path_overrides[f"{id(step)}_input_dir"] = input_dir
-
-   #         # Extract output_dir if present
-   #         if 'output_dir' in ephemeral_kwargs:
-   #             output_dir = ephemeral_kwargs['output_dir']
-   #             # Convert to Path if it's a string
-   #             if isinstance(output_dir, str):
-   #                 output_dir = Path(output_dir)
-   #             # Store in path_overrides
-   #             self.path_overrides[f"{id(step)}_output_dir"] = output_dir
-
-   #         # Remove the ephemeral kwargs attribute
-   #         delattr(step, "_ephemeral_init_kwargs")
-
-   #     # Also check for direct attributes for backward compatibility
-   #     # Check for input_dir attribute using getattr
-   #     input_dir = getattr(step, "input_dir", None)
-   #     if input_dir is not None:
-   #         # Convert to Path if it's a string
-   #         if isinstance(input_dir, str):
-   #             input_dir = Path(input_dir)
-   #         # Store in path_overrides
-   #         self.path_overrides[f"{id(step)}_input_dir"] = input_dir
-   #         # Remove the attribute from the step
-   #         delattr(step, "input_dir")
-
-   #     # Check for output_dir attribute using getattr
-   #     output_dir = getattr(step, "output_dir", None)
-   #     if output_dir is not None:
-   #         # Convert to Path if it's a string
-   #         if isinstance(output_dir, str):
-   #             output_dir = Path(output_dir)
-   #         # Store in path_overrides
-   #         self.path_overrides[f"{id(step)}_output_dir"] = output_dir
-   #         # Remove the attribute from the step
-   #         delattr(step, "output_dir")
-
-   #     self.steps.append(step)
-   #     return self
 
     def add_step(self, step: Step) -> 'Pipeline':
         """

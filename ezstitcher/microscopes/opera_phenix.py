@@ -11,11 +11,100 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union, Any, Tuple
 
-from ezstitcher.core.microscope_interfaces import FilenameParser, MetadataHandler
+#from ezstitcher.core.microscope_interfaces import FilenameParser, MetadataHandler
+from ezstitcher.core.microscope_base import FilenameParser, MetadataHandler
+from ezstitcher.core.microscope_interfaces import MicroscopeHandler
+
 from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
-from ezstitcher.core.file_system_manager import FileSystemManager
+# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.io.filemanager import FileManager # Added
 
 logger = logging.getLogger(__name__)
+
+
+class OperaPhenixHandler(MicroscopeHandler):
+    """
+    MicroscopeHandler implementation for Opera Phenix systems.
+
+    This handler combines the OperaPhenix filename parser with its
+    corresponding metadata handler. It guarantees aligned behavior
+    for plate structure parsing, metadata extraction, and any optional
+    post-processing steps required after workspace setup.
+    """
+
+    def __init__(self):
+        super().__init__(
+            parser=OperaPhenixFilenameParser(),
+            metadata_handler=OperaPhenixMetadataHandler()
+        )
+
+    def _normalize_workspace(self, workspace_path: Path, fm=None) -> Path:
+        """
+        Renames Opera Phenix images to follow a consistent field order
+        based on spatial layout extracted from Index.xml. Uses remapped
+        filenames and replaces the directory in-place.
+
+        Args:
+            workspace_path: Path to the symlinked workspace
+            fm: Optional FileManager instance. If None, uses self.file_manager
+
+        Returns:
+            Path to the normalized image directory.
+        """
+        # Use the provided file manager or fall back to the instance's file manager
+        fm = fm or self.file_manager
+        image_dir = fm.find_image_directory(workspace_path)
+
+        # Locate Index.xml and load mapping
+        index_xml = self.file_manager.find_file_recursive(workspace_path, "Index.xml")
+        if not index_xml:
+            raise ValueError(f"Index.xml not found in workspace: {workspace_path}")
+
+        xml_parser = OperaPhenixXmlParser(index_xml)
+        field_mapping = xml_parser.get_field_id_mapping()
+
+        temp_dir = image_dir / "__renamed"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        for file in image_dir.glob("*.tif*"):
+            if not file.is_file():
+                continue
+
+            # Parse file metadata
+            metadata = self.parser.parse_filename(file.name)
+            if not metadata or 'site' not in metadata or metadata['site'] is None:
+                continue
+
+            # Remap the field ID using the spatial layout
+            original_field_id = metadata['site']
+            new_field_id = field_mapping.get(original_field_id, original_field_id)
+
+            new_name = self.parser.construct_filename(
+                well=metadata['well'],
+                site=new_field_id,
+                channel=metadata['channel'],
+                z_index=metadata['z_index'],
+                extension=metadata['extension'],
+                site_padding=3,
+                z_padding=3
+            )
+
+            new_path = temp_dir / new_name
+            fm.copy_file(file, new_path)
+
+        # Clean up and replace old dir
+        for file in image_dir.glob("*.tif*"):
+            fm.delete_file(file)
+
+        for file in temp_dir.iterdir():
+            # Use copy and delete since FileManager doesn't have a move_file method
+            fm.copy_file(file, image_dir / file.name)
+            fm.delete_file(file)
+
+        # Remove the temp directory (use Path.rmdir() since FileManager doesn't have a remove_directory method)
+        temp_dir.rmdir()
+
+        return image_dir
 
 
 class OperaPhenixFilenameParser(FilenameParser):
@@ -60,10 +149,12 @@ class OperaPhenixFilenameParser(FilenameParser):
             dict or None: Dictionary with extracted components or None if parsing fails.
         """
         basename = os.path.basename(filename)
+        logger.debug(f"OperaPhenixFilenameParser attempting to parse basename: '{basename}'") # Add logging
 
         # Try parsing using the Opera Phenix pattern
         match = self._pattern.match(basename)
         if match:
+            logger.debug(f"Regex match successful for '{basename}'") # Add logging
             row, col, site_str, z_str, channel_str, ext = match.groups()
 
             # Helper function to parse component strings
@@ -87,6 +178,7 @@ class OperaPhenixFilenameParser(FilenameParser):
             }
             return result
 
+        logger.warning(f"Regex match failed for basename: '{basename}'") # Add logging
         return None
 
     def construct_filename(self, well: str, site: Optional[Union[int, str]] = None, channel: Optional[int] = None,
@@ -181,17 +273,29 @@ class OperaPhenixMetadataHandler(MetadataHandler):
     Handles finding and parsing Index.xml files for Opera Phenix microscopes.
     """
 
-    def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
+    def __init__(self, file_manager: Optional[FileManager] = None):
         """
-        Find the Index.xml file for an Opera Phenix plate.
+        Initialize the metadata handler.
 
         Args:
-            plate_path: Path to the plate folder
-
-        Returns:
-            Path to the Index.xml file, or None if not found
+            file_manager: FileManager instance. If None, a disk-based FileManager is created.
         """
-        return FileSystemManager.find_file_recursive(plate_path, "Index.xml")
+        if file_manager is None:
+            file_manager = FileManager(backend='disk')
+            logger.debug("Created default disk-based FileManager for OperaPhenixMetadataHandler")
+
+        self.file_manager = file_manager
+
+    def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
+        """Finds the Index.xml file using file_manager.find_file_recursive."""
+        # TRANSITIONAL: Assumes Index.xml exists on a file system accessible
+        # by the backend used by file_manager (likely disk).
+        try:
+            # Use injected file_manager
+            return self.file_manager.find_file_recursive(plate_path, "Index.xml")
+        except Exception as e:
+            logger.error(f"Error finding Index.xml in {plate_path}: {e}")
+            return None
 
     def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
         """
@@ -202,26 +306,29 @@ class OperaPhenixMetadataHandler(MetadataHandler):
 
         Returns:
             (grid_size_x, grid_size_y)
+
+        Raises:
+            ValueError: If grid dimensions cannot be determined from metadata
         """
         index_xml = self.find_metadata_file(plate_path)
+        if not index_xml:
+            raise ValueError(f"Cannot find Index.xml in {plate_path}. Grid dimensions cannot be determined.")
 
-        if index_xml:
-            try:
-                # Use the OperaPhenixXmlParser to get the grid size
-                xml_parser = self.create_xml_parser(index_xml)
-                grid_size = xml_parser.get_grid_size()
+        try:
+            # Use the OperaPhenixXmlParser to get the grid size
+            xml_parser = self.create_xml_parser(index_xml)
+            grid_size = xml_parser.get_grid_size()
 
-                if grid_size[0] > 0 and grid_size[1] > 0:
-                    logger.info("Determined grid size from Opera Phenix Index.xml: %dx%d", grid_size[0], grid_size[1])
-                    return grid_size
-            except Exception as e:
-                logger.error("Error parsing Opera Phenix Index.xml: %s", e)
+            if grid_size[0] > 0 and grid_size[1] > 0:
+                logger.info("Determined grid size from Opera Phenix Index.xml: %dx%d", grid_size[0], grid_size[1])
+                return grid_size
+            else:
+                raise ValueError(f"Invalid grid dimensions (0x0) found in Index.xml")
+        except Exception as e:
+            logger.error("Error parsing Opera Phenix Index.xml: %s", e)
+            raise ValueError(f"Failed to extract grid dimensions from Index.xml: {e}") from e
 
-        # Default grid dimensions
-        logger.warning("Using default grid dimensions: 2x2")
-        return 2, 2
-
-    def get_pixel_size(self, plate_path: Union[str, Path]) -> Optional[float]:
+    def get_pixel_size(self, plate_path: Union[str, Path]) -> float:
         """
         Get the pixel size from Index.xml file.
 
@@ -229,25 +336,28 @@ class OperaPhenixMetadataHandler(MetadataHandler):
             plate_path: Path to the plate folder
 
         Returns:
-            Pixel size in micrometers, or None if not available
+            Pixel size in micrometers
+
+        Raises:
+            ValueError: If pixel size cannot be determined from metadata
         """
         index_xml = self.find_metadata_file(plate_path)
+        if not index_xml:
+            raise ValueError(f"Cannot find Index.xml in {plate_path}. Pixel size cannot be determined.")
 
-        if index_xml:
-            try:
-                # Use the OperaPhenixXmlParser to get the pixel size
-                xml_parser = self.create_xml_parser(index_xml)
-                pixel_size = xml_parser.get_pixel_size()
+        try:
+            # Use the OperaPhenixXmlParser to get the pixel size
+            xml_parser = self.create_xml_parser(index_xml)
+            pixel_size = xml_parser.get_pixel_size()
 
-                if pixel_size > 0:
-                    logger.info("Determined pixel size from Opera Phenix Index.xml: %.4f μm", pixel_size)
-                    return pixel_size
-            except Exception as e:
-                logger.error("Error getting pixel size from Opera Phenix Index.xml: %s", e)
-
-        # Default value
-        logger.warning("Using default pixel size: 0.65 μm")
-        return 0.65  # Default value in micrometers
+            if pixel_size > 0:
+                logger.info("Determined pixel size from Opera Phenix Index.xml: %.4f μm", pixel_size)
+                return pixel_size
+            else:
+                raise ValueError(f"Invalid pixel size (0 or negative) found in Index.xml")
+        except Exception as e:
+            logger.error("Error getting pixel size from Opera Phenix Index.xml: %s", e)
+            raise ValueError(f"Failed to extract pixel size from Index.xml: {e}") from e
 
     def create_xml_parser(self, xml_path: Union[str, Path]):
         """

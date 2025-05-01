@@ -109,7 +109,7 @@ class FileSystemManager:
             return None
 
     @staticmethod
-    def save_image(file_path: Union[str, Path], image: np.ndarray,
+    def save_image(image: np.ndarray, file_path: Union[str, Path],
                   compression: Optional[str] = None) -> bool:
         """
         Save an image to disk.

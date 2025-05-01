@@ -38,6 +38,7 @@ class AutoPipelineFactory:
         flatten_z: bool = False,
         z_method: str = "max",
         channel_weights: Optional[Union[List[float], Dict[str, float]]] = None,
+        well_filter: Optional[List[str]] = None,
     ):
         """
         Initialize with pipeline parameters.
@@ -98,12 +99,12 @@ class AutoPipelineFactory:
                 # Always include position generation
                 PositionGenerationStep()
             ],
-            well_filter=self.well_filter,
             name="Position Generation Pipeline"
         )
 
-        # Get the position generation step's output directory
-        positions_dir = pos_pipeline.steps[-1].output_dir
+        # In the new architecture, steps don't have output_dir attributes
+        # Instead, we need to define a positions directory for the ImageStitchingStep
+        positions_dir = Path(self.input_dir).parent / f"{Path(self.input_dir).name}_positions"
 
         # Create assembly pipeline
         assembly_pipeline = Pipeline(
@@ -124,7 +125,6 @@ class AutoPipelineFactory:
                 # Always include image stitching with explicit positions directory
                 ImageStitchingStep(positions_dir=positions_dir)
             ],
-            well_filter=self.well_filter,
             name="Image Assembly Pipeline"
         )
 

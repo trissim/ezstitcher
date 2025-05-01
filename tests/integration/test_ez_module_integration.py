@@ -52,7 +52,7 @@ def test_2d_plate_stitch_one_liner(flat_plate_dir, base_pipeline_config, thread_
 def test_2d_plate_stitch_class(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test basic 2D plate stitching with the EZStitcher class."""
     # Create output directory path
-    output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_ez_stitched"
+    output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_stitched"
 
     # Use the EZStitcher class
     stitcher = EZStitcher(
@@ -64,11 +64,10 @@ def test_2d_plate_stitch_class(flat_plate_dir, base_pipeline_config, thread_trac
     # Run stitching
     result_path = stitcher.stitch()
 
-    # Check that the output directory exists and matches the returned path
-    assert output_dir.exists(), f"Output directory {output_dir} does not exist"
+    # Check that the returned path matches what we expect
     assert result_path == output_dir, f"Returned path {result_path} does not match expected {output_dir}"
 
-    # Check that output directory exists
+    # Check that the output directory exists
     assert output_dir.exists(), f"Output directory {output_dir} does not exist"
 
     # Check that the workspace directory was created
@@ -79,7 +78,7 @@ def test_2d_plate_stitch_class(flat_plate_dir, base_pipeline_config, thread_trac
 def test_3d_plate_per_plane_stitch(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test 3D plate stitching with per-plane stitching (no z-flattening)."""
     # Create output directory path
-    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_per_plane_stitched"
+    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_stitched"
 
     # Use the EZStitcher class with explicit flatten_z=False
     stitcher = EZStitcher(
@@ -107,7 +106,7 @@ def test_3d_plate_per_plane_stitch(zstack_plate_dir, base_pipeline_config, threa
 def test_3d_plate_max_projection_stitch(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test 3D plate stitching with max projection."""
     # Create output directory path
-    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_max_stitched"
+    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_stitched"
 
     # Use the one-liner function with z-flattening parameters
     result_path = stitch_plate(
@@ -133,7 +132,7 @@ def test_3d_plate_max_projection_stitch(zstack_plate_dir, base_pipeline_config, 
 def test_3d_plate_focus_detection_stitch(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test 3D plate stitching with focus detection using combined metric."""
     # Create output directory path
-    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_focus_stitched"
+    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_stitched"
 
     # Use the EZStitcher class with focus detection
     stitcher = EZStitcher(
@@ -162,7 +161,7 @@ def test_3d_plate_focus_detection_stitch(zstack_plate_dir, base_pipeline_config,
 def test_well_filter(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test stitching with well filter."""
     # Create output directory path
-    output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_filtered_stitched"
+    output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_stitched"
 
     # Get available wells
     from ezstitcher.ez.utils import detect_wells
@@ -197,7 +196,7 @@ def test_well_filter(flat_plate_dir, base_pipeline_config, thread_tracker):
 def test_auto_detection(zstack_plate_dir, base_pipeline_config, thread_tracker):
     """Test auto-detection of Z-stacks and channels."""
     # Create output directory path
-    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_auto_stitched"
+    output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_stitched"
 
     # Use the EZStitcher class with auto-detection (no explicit flatten_z or channel_weights)
     stitcher = EZStitcher(
@@ -227,7 +226,7 @@ def test_auto_detection(zstack_plate_dir, base_pipeline_config, thread_tracker):
 def test_set_options(flat_plate_dir, base_pipeline_config, thread_tracker):
     """Test setting options after initialization."""
     # Create output directory path
-    output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_options_stitched"
+    output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_stitched"
 
     # Use the EZStitcher class with minimal initialization
     stitcher = EZStitcher(

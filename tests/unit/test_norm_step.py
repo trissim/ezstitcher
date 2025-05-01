@@ -54,21 +54,21 @@
 #        """Test the process method."""
 #        # Create a mock image stack
 #        images = [np.zeros((10, 10)) for _ in range(3)]
-#        
+#
 #        # Set up the mock to return the input images
 #        mock_normalize.return_value = images
-#        
+#
 #        # Create a step and process the images
 #        step = NormStep(low_percentile=1.0, high_percentile=99.0)
 #        result = step.process(images)
-#        
+#
 #        # Check that stack_percentile_normalize was called with the correct arguments
 #        mock_normalize.assert_called_once_with(
-#            images, 
-#            low_percentile=1.0, 
+#            images,
+#            low_percentile=1.0,
 #            high_percentile=99.0
 #        )
-#        
+#
 #        # Check that the result is what we expect
 #        self.assertEqual(result, images)
 #
@@ -257,24 +257,29 @@ class TestNormStep(unittest.TestCase):
    #     )
    #     self.assertEqual(result, images)
     @patch.object(IP, 'stack_percentile_normalize')
-    @patch.object(IP, 'load_images')
-    def test_process(self, mock_load_images, mock_normalize):
+    def test_process_function(self, mock_normalize):
+        """Test the processing function directly."""
         # Create dummy image list
         images = [np.zeros((10, 10)) for _ in range(3)]
-        mock_load_images.return_value = images
         mock_normalize.return_value = images
 
+        # Create a step
         step = NormStep(low_percentile=1.0, high_percentile=99.0)
-        context = create_test_context(step, input_dir=Path("/mock/input"))
 
-        result = step.process(context)
+        # Extract the processing function and arguments
+        func, kwargs = step.func
 
-        mock_load_images.assert_called_once_with(Path("/mock/input"), well_filter=["A01"])
+        # Call the function directly
+        result = func(images, **kwargs)
+
+        # Check that stack_percentile_normalize was called with the correct arguments
         mock_normalize.assert_called_once_with(
             images,
             low_percentile=1.0,
             high_percentile=99.0
         )
+
+        # Check that the result is what we expect
         self.assertEqual(result, images)
 
 

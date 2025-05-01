@@ -18,7 +18,8 @@ from pathlib import Path
 import numpy as np
 
 # Import core components
-from ezstitcher.core.file_system_manager import FileSystemManager
+# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
+from ezstitcher.io.filemanager import FileManager # Added
 from ezstitcher.core.utils import prepare_patterns_and_functions
 from ezstitcher.core.abstract_step import AbstractStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
@@ -61,7 +62,8 @@ class Step(AbstractStep):
         self,
         func: ProcessingFunc,
         variable_components: VariableComponents = ['site'],
-        group_by: GroupBy = None,
+        #group_by: GroupBy = None,
+        group_by: GroupBy = 'channel',
         name: str = None,
         **kwargs
     ):
@@ -133,17 +135,40 @@ class Step(AbstractStep):
         """
         logger.info("Processing step: %s", self.name)
 
-        # Get directories and microscope handler from context
+        # Get directories and components from context
         input_dir = context.get_step_input_dir(self)
         output_dir = context.get_step_output_dir(self)
-        well_filter = context.well_filter
-        orchestrator = context.orchestrator  # Required, will raise AttributeError if missing
-        microscope_handler = orchestrator.microscope_handler
+        in_place = input_dir == output_dir
+        if in_place:
+            logger.warning(f"Input and output directories are the same for step {self.name}. Working in-place.")
 
-        # Find the actual directory containing images
-        # This works whether input_dir is a plate folder or a subfolder
-        actual_input_dir = FileSystemManager.find_image_directory(Path(input_dir))
-        logger.debug("Using actual image directory: %s", actual_input_dir)
+        well_filter = context.well_filter
+        try:
+            orchestrator = context.orchestrator
+            if not orchestrator:
+                raise ValueError("Orchestrator missing from context.")
+            # Access FileManager via the orchestrator in the context
+            file_manager = orchestrator.file_manager
+            microscope_handler = orchestrator.microscope_handler
+            if not microscope_handler:
+                 raise ValueError("Microscope handler missing from orchestrator.")
+            if not well_filter:
+                logger.warning("No wells specified in context's well_filter. Skipping step.")
+                return context
+
+        except (AttributeError, ValueError) as e:
+            logger.error(f"Context validation failed for step {self.name}: {e}")
+            raise RuntimeError(f"Invalid context for step {self.name}") from e
+
+        # --- Core Processing Logic ---
+        logger.debug(f"Step '{self.name}': Input='{input_dir}', Output='{output_dir}'")
+        try:
+            # Find the actual directory containing images using FileManager
+            actual_input_dir = file_manager.find_image_directory(Path(input_dir))
+            logger.debug(f"Using actual image directory: {actual_input_dir}")
+        except Exception as e:
+            logger.error(f"Failed to find image directory for {input_dir}: {e}")
+            raise RuntimeError(f"Cannot proceed: Image directory not found for {input_dir}") from e
 
         # Get patterns with variable components
         patterns_by_well = microscope_handler.auto_detect_patterns(
@@ -177,26 +202,46 @@ class Step(AbstractStep):
                     # Find matching files
                     matching_files = microscope_handler.parser.path_list_from_pattern(actual_input_dir, pattern)
 
-                    # Load images
+                    # Load images using FileManager
+                    image_paths_to_load = [Path(actual_input_dir) / filename for filename in matching_files]
                     try:
-                        images = [FileSystemManager.load_image(str(Path(actual_input_dir) / filename)) for filename in matching_files]
-                        images = [img for img in images if img is not None]
+                        # Use file_manager instance from context
+                        images = [file_manager.load_image(p) for p in image_paths_to_load]
+                        # Filter out None results (failed loads)
+                        loaded_images = [img for img in images if img is not None]
                     except Exception as e:
-                        logger.error("Error loading images: %s", str(e))
-                        images = []
+                        logger.error(f"Error loading images for pattern '{pattern}': {e}", exc_info=True)
+                        loaded_images = [] # Ensure it's empty on error
 
-                    if not images:
+                    if not loaded_images:
+                        logger.warning(f"No images successfully loaded for pattern '{pattern}'. Skipping.")
                         continue  # Skip if no valid images found
+                    if len(loaded_images) != len(matching_files):
+                         logger.warning(f"Loaded {len(loaded_images)} out of {len(matching_files)} files for pattern '{pattern}'.")
 
-                    # Process the images with component-specific args
+                    if in_place:
+                        for p in image_paths_to_load:
+                            if file_manager.exists(p):
+                                file_manager.remove(p)
+
+                    # Process the loaded images with component-specific args
                     try:
-                        images = self._apply_processing(images, func=component_func)
+                        processed_images = self._apply_processing(loaded_images, func=component_func)
+                        if not processed_images: # Check if processing failed or returned empty
+                             logger.warning(f"Processing returned no images for pattern '{pattern}'. Skipping save.")
+                             continue
                     except Exception as e:
-                        logger.error("Error applying processing function: %s", str(e))
-                        continue
+                        logger.error(f"Error applying processing function for pattern '{pattern}': {e}", exc_info=True)
+                        continue # Skip saving if processing failed
 
                     # Save images and get output files
-                    pattern_files = self._save_images(actual_input_dir, output_dir, images, matching_files)
+                    # Pass only the original filenames corresponding to successfully loaded images
+                    original_filenames_loaded = [mf for img, mf in zip(images, matching_files) if img is not None]
+                    pattern_files = self._save_images(
+                        Path(input_dir), Path(output_dir), # Pass logical step dirs
+                        processed_images, original_filenames_loaded,
+                        file_manager # Pass the file manager instance
+                    )
                     if pattern_files:
                         output_files.extend(pattern_files)
 
@@ -405,50 +450,59 @@ class Step(AbstractStep):
             logger.exception("Error applying processing function %s: %s", func_name, e)
             return images
 
-    def _save_images(self, input_dir, output_dir, images, filenames):
-        """Save processed images.
+    def _save_images(
+        self,
+        input_dir: Path, # Keep for potential future use, though output_dir is primary
+        output_dir: Path,
+        images: List[np.ndarray],
+        filenames: List[str],
+        file_manager: FileManager
+    ) -> List[str]:
+        """
+        Save processed images using the FileManager.
 
         Args:
-            input_dir: Input directory
-            output_dir: Output directory
-            images: Images to save
-            filenames: Filenames to use
+            input_dir: The logical input directory of the step (unused here but kept for signature consistency).
+            output_dir: The directory where images should be saved.
+            images: List of processed images (numpy arrays).
+            filenames: List of original filenames corresponding to the images.
+            file_manager: The FileManager instance to use for saving.
 
         Returns:
-            list: Paths to saved images
+            List of absolute paths to the saved files.
         """
-        if not output_dir or not images or not filenames:
-            return []
-
+        saved_files = []
+#        if len(images) != len(filenames):
+#            logger.error(f"Mismatch between number of images ({len(images)}) and filenames ({len(filenames)}) during save.")
+#            # Decide how to handle: return empty, raise error, or try to save matching pairs?
+#            # For now, returning empty to prevent partial saves with wrong names.
+#            return []
+#
+        # Ensure output directory exists
         try:
-            # Ensure output directory exists
-            FileSystemManager.ensure_directory(output_dir)
-
-            # Clean up old files if working in place
-            if input_dir == output_dir:
-                for filename in filenames:
-                    FileSystemManager.delete_file(Path(output_dir) / filename)
-
-            # Initialize output files list
-            output_files = []
-
-            # Convert to list if it's a single image
-            if isinstance(images, np.ndarray):
-                images = [images]
-                filenames = [filenames[0]]
-
-            # Save each image
-            for i, img in enumerate(images):
-                if i < len(filenames):
-                    output_path = Path(output_dir) / filenames[i]
-                    FileSystemManager.save_image(str(output_path), img)
-                    output_files.append(str(output_path))
-
-            return output_files
-
+            file_manager.ensure_directory(output_dir)
         except Exception as e:
-            logger.error("Error saving images: %s", str(e))
-            return []
+            logger.error(f"Failed to ensure output directory {output_dir}: {e}")
+            return [] # Cannot save if directory cannot be created
+
+        for img, fname in zip(images, filenames):
+            # Construct the full output path
+            output_path = output_dir / fname
+            try:
+                # Use file_manager to save the image
+                if file_manager.save_image(img, output_path):
+                    # Store the absolute path as a string
+                    saved_files.append(str(output_path.resolve()))
+                else:
+                    logger.warning(f"Failed to save image to {output_path} via file manager.")
+            except Exception as e:
+                logger.error(f"Error saving image {output_path}: {e}", exc_info=True)
+
+        return saved_files
+    # This method seems to be duplicated or incorrectly placed after the previous diff application.
+    # Removing the duplicate/old version. The correct version using FileManager should remain above.
+    # If the version above is incorrect, this diff needs adjustment.
+    # Assuming the version starting at line 444 is the intended one.
 
     @property
     def name(self) -> str:
@@ -535,14 +589,19 @@ class ImageStitchingStep(Step):
     This step uses the positions_path from the context to stitch images.
     """
 
-    def __init__(self, name=None, **kwargs):
+    def __init__(self, name=None, image_source_dir: Optional[Union[str, Path]] = None, **kwargs):
         """
         Initialize an ImageStitchingStep.
 
         Args:
             name (str, optional): Name of the step
-            **kwargs: Additional arguments for the step
+            image_source_dir (Union[str, Path], optional): Explicit directory containing images to stitch.
+                                                        If None, defaults will be attempted later.
+            **kwargs: Additional arguments for the step, including input_dir/output_dir overrides.
         """
+        # Store image_source_dir before calling super().__init__ which might pop kwargs
+        self.image_source_dir = Path(image_source_dir) if image_source_dir else None
+
         super().__init__(
             func=None,  # ImageStitchingStep doesn't use the standard func mechanism
             name=name or "Image Stitching",
@@ -573,32 +632,58 @@ class ImageStitchingStep(Step):
             raise ValueError("ImageStitchingStep requires a well filter in the context")
 
         # Get directories from context
-        input_dir = context.get_step_input_dir(self)
+        # input_dir here usually refers to the output of the previous step (e.g., PositionGenerationStep)
+        default_input_dir = context.get_step_input_dir(self)
         output_dir = context.get_step_output_dir(self)
+
+        # Determine the directory containing the actual images to stitch
+        # Use the explicitly provided image_source_dir if available, otherwise use the default step input
+        images_to_stitch_dir = self.image_source_dir if self.image_source_dir else default_input_dir
+        logger.info(f"ImageStitchingStep will use images from: {images_to_stitch_dir}")
 
         # Get positions directory from context or find it
         positions_dir = getattr(context, 'positions_dir', None)
 
         # If not found in context, try to find at parent level of plate
         if not positions_dir and orchestrator:
+            # Access FileManager via orchestrator in context
+            file_manager = orchestrator.file_manager
             plate_name = orchestrator.plate_path.name
             parent_positions_dir = orchestrator.plate_path.parent / f"{plate_name}_positions"
-            if parent_positions_dir.exists():
+            # Use file_manager.exists for consistency and testability
+            if file_manager.exists(parent_positions_dir):
                 positions_dir = parent_positions_dir
                 logger.info(f"Using positions directory at parent level: {positions_dir}")
             else:
-                # Fallback to existing logic if no positions directory is found
-                positions_dir = FileSystemManager.find_directory_substring_recursive(
-                    Path(input_dir).parent, "positions")
+                # Fallback: Search recursively for a directory containing "positions"
+                # using the FileManager instance from the context.
+                # Use default_input_dir here
+                logger.warning(f"Positions directory not found relative to plate path. Searching recursively from {Path(default_input_dir).parent}...")
+                try:
+                    # Access FileManager via orchestrator in context
+                    file_manager = orchestrator.file_manager
+                    # List all directories recursively
+                    # Use default_input_dir here
+                    all_items = file_manager.list_files(Path(default_input_dir).parent, recursive=True)
+                    # Filter for directories containing "positions" (case-insensitive)
+                    possible_dirs = [p for p in all_items if p.is_dir() and "positions" in p.name.lower()]
+                    if possible_dirs:
+                        positions_dir = possible_dirs[0] # Take the first match
+                        logger.info(f"Found positions directory via recursive search: {positions_dir}")
+                    else:
+                        positions_dir = None # Explicitly set to None if not found
+                except Exception as find_err:
+                     logger.error(f"Error during recursive search for positions directory: {find_err}")
+                     positions_dir = None
 
         # If still not found, raise an error
         if not positions_dir:
             raise ValueError(f"No positions directory found for well {well}")
 
-        # Call the stitch_images method
+        # Call the stitch_images method, passing the correct directory for the images
         orchestrator.stitch_images(
             well=well,
-            input_dir=input_dir,
+            input_dir=images_to_stitch_dir, # Use the determined image source directory
             output_dir=output_dir,
             positions_file=Path(positions_dir) / f"{well}.csv"
         )
