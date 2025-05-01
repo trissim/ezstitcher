@@ -99,9 +99,9 @@ class PipelineOrchestrator:
 
                 # 3. Initialize microscope handler using workspace
                 logger.info("Initializing microscope handler using workspace...")
-                microscope_type = self._detect_microscope_handler(self.workspace_path)
+                #microscope_type = self._detect_microscope_handler(self.workspace_path)
                 self.microscope_handler = create_microscope_handler(
-                    microscope_type=microscope_type,
+                    microscope_type='auto',
                     plate_folder=self.workspace_path,
                     file_manager=self.file_manager
                 )
@@ -109,8 +109,6 @@ class PipelineOrchestrator:
                 logger.info("Using microscope handler: %s", type(self.microscope_handler).__name__)
 
 
-                # 3. Post-workspace setup (e.g., renaming, flattenign)
-                self.microscope_handler.post_workspace(self.workspace_path)
 
                 # 5. Initialize stitcher
                 self.stitcher = Stitcher(
@@ -131,255 +129,6 @@ class PipelineOrchestrator:
 
         logger.info("PipelineOrchestrator initialized.")
 
-    # <<< New Workspace Creation Methods Start >>>
-
-    def create_workspace(self) -> None:
-        """
-        Initializes the processing workspace. Creates symlinks from the input_dir
-        to the workspace_path and performs necessary file remapping based on microscope type.
-
-        This method always uses a disk-backed FileManager for workspace operations,
-        regardless of the orchestrator's main FileManager backend type.
-        """
-        if not self.workspace_path or not self.input_dir or not self.microscope_handler:
-            logger.error("Cannot create workspace: workspace_path, input_dir, or microscope_handler not set.")
-            return
-
-        logger.info("Creating workspace at: %s from input: %s", self.workspace_path, self.input_dir)
-        start_time = time.time()
-
-        # Create a dedicated disk-backed FileManager for workspace operations
-        # Use the same root_dir as the main FileManager for consistency
-        workspace_fm = FileManager(root_dir=self.file_manager.root_dir, backend="disk")
-        logger.info("Created disk-backed FileManager for workspace operations")
-
-        # 1. List initial files from the prepared input directory
-        try:
-            # List files from the potentially processed input_dir using the main FileManager
-            # (this operation doesn't require disk-specific operations)
-            raw_files = self.file_manager.list_files(self.input_dir, recursive=True)
-            logger.info("Found %d files in input directory for workspace creation.", len(raw_files))
-            if not raw_files:
-                logger.warning("No files found in input directory. Workspace will be empty.")
-                # Decide if this is an error or just an empty workspace
-                return
-        except Exception as e:
-            logger.error("Failed to list files from input directory %s: %s", self.input_dir, e)
-            raise RuntimeError(f"Failed to list input files for workspace creation: {e}") from e
-
-        # 2. Create initial symlinks using the disk-backed FileManager
-        try:
-            # Pass the workspace_fm to the helper method
-            initial_symlinks = self._create_initial_symlinks(raw_files, workspace_fm)
-            logger.info("Created %d initial symlinks.", len(initial_symlinks))
-        except Exception as e:
-            logger.error("Failed during initial symlink creation: %s", e)
-            raise RuntimeError(f"Failed to create initial symlinks: {e}") from e
-
-        # 3. Handle Field Remapping (if required)
-        final_symlink_paths = list(initial_symlinks.values()) # Default to initial if no remapping
-        if self.microscope_handler.requires_field_remapping:
-            logger.info("Field remapping required by handler, processing symlinks...")
-            try:
-                # Pass the workspace_fm to the helper method
-                final_symlink_paths = self._remap_symlinks_using_metadata(initial_symlinks, workspace_fm)
-                logger.info("Field remapping completed.")
-            except Exception as e:
-                logger.error("Failed during symlink remapping: %s. Workspace may have inconsistent names.", e)
-                # Decide if this is fatal. For now, continue with potentially unmapped names.
-                # Consider adding a config flag to control strictness.
-        else:
-            logger.info("Field remapping not required by handler.")
-
-        # 4. Finalize (e.g., update context if needed, though context is created later)
-        self._finalize_symlinks(final_symlink_paths)
-
-        logger.info("Workspace created successfully in %.2f seconds.", time.time() - start_time)
-
-
-    def _create_initial_symlinks(self, source_files: List[Union[str, Path]], file_manager: FileManager) -> Dict[str, Path]:
-        """
-        Creates the initial set of symlinks in the workspace_path directory, preserving the original directory structure.
-
-        Args:
-            source_files: List of source files to create symlinks for
-            file_manager: FileManager instance to use for file operations (should be disk-backed)
-
-        Returns:
-            Dictionary mapping original filenames to symlink paths
-        """
-        if not self.workspace_path or not self.input_dir:
-            raise ValueError("_create_initial_symlinks requires workspace_path and input_dir to be set.")
-
-        symlink_map = {}
-        logger.info("Creating symlinks in workspace: %s", self.workspace_path)
-
-        # Ensure the workspace directory exists
-        file_manager.ensure_directory(self.workspace_path)
-
-        # Get the input directory as a Path object
-        input_dir_path = Path(self.input_dir)
-
-        # Log the input directory structure for debugging
-        logger.debug("Input directory structure: %s", input_dir_path)
-
-        # Check if the input directory exists
-        if not input_dir_path.exists():
-            logger.error("Input directory does not exist: %s", input_dir_path)
-            return {}
-
-        for file_path_str in source_files:
-            try:
-                source_path = Path(file_path_str)
-
-                # Calculate relative path from the input_dir base
-                try:
-                    # Make sure we're using absolute paths for comparison
-                    abs_source_path = source_path.absolute()
-                    abs_input_dir = input_dir_path.absolute()
-
-                    # Calculate the relative path
-                    relative_path = abs_source_path.relative_to(abs_input_dir)
-                    logger.debug("Relative path: %s (from %s to %s)",
-                                relative_path, abs_source_path, abs_input_dir)
-
-                    # Create the symlink path in the workspace, preserving the directory structure
-                    symlink_path = self.workspace_path / relative_path
-
-                    # Ensure parent directory exists within the workspace
-                    file_manager.ensure_directory(symlink_path.parent)
-
-                    # Create the symlink using the provided FileManager
-                    file_manager.create_symlink(abs_source_path, symlink_path)
-
-                    # Store original filename -> symlink path mapping
-                    symlink_map[source_path.name] = symlink_path
-                    logger.debug("Created symlink: %s -> %s", abs_source_path, symlink_path)
-                except ValueError as e:
-                    # This happens if source_path is not relative to input_dir
-                    logger.warning("Source path %s is not relative to input_dir %s: %s. Skipping.",
-                                  source_path, self.input_dir, e)
-                    continue
-            except Exception as e:
-                logger.warning("Failed to create symlink for %s: %s. Skipping.", file_path_str, e)
-                # Continue creating other symlinks
-
-        logger.info("Created %d symlinks in workspace", len(symlink_map))
-        return symlink_map
-
-
-    def _remap_symlinks_using_metadata(self, initial_symlinks: Dict[str, Path], file_manager: FileManager) -> List[Path]:
-        """
-        Renames symlinks based on microscope metadata (specifically for Opera Phenix).
-
-        Args:
-            initial_symlinks: Dictionary mapping original filenames to symlink paths
-            file_manager: FileManager instance to use for file operations (should be disk-backed)
-
-        Returns:
-            List of final symlink paths after remapping
-        """
-        if not self.input_dir:
-            raise ValueError("_remap_symlinks_using_metadata requires input_dir to be set.")
-
-        logger.info("Remapping symlinks using metadata...")
-        final_symlink_paths = []
-
-        # 1. Find the metadata file (e.g., Index.xml) in the original input directory
-        metadata_file = self._find_metadata_file(self.input_dir)
-        if not metadata_file:
-            logger.warning("Could not find metadata file (e.g., Index.xml) in %s for remapping. Using original symlink names.", self.input_dir)
-            return list(initial_symlinks.values()) # Return original paths
-
-        # 2. Create the specific metadata parser (OperaPhenixXmlParser)
-        try:
-            # Assuming OperaPhenixXMLParser is the relevant class
-            # Use the imported OperaPhenixXmlParser class
-            logger.debug("Creating OperaPhenixXmlParser for: %s", metadata_file)
-            xml_parser = OperaPhenixXmlParser(metadata_file)
-            # Check if parser has the necessary remapping method (belt-and-suspenders)
-            if not hasattr(self.microscope_handler.parser, 'remap_field_in_filename'):
-                logger.error("Handler's parser is missing 'remap_field_in_filename' method needed for remapping.")
-                return list(initial_symlinks.values()) # Cannot remap
-
-        except ImportError:
-            logger.error("Failed to import OperaPhenixXmlParser. Cannot perform remapping.")
-            return list(initial_symlinks.values())
-        except Exception as e:
-            logger.error("Failed to create or use metadata parser for %s: %s", metadata_file, e)
-            return list(initial_symlinks.values()) # Cannot remap if parser fails
-
-        # 3. Iterate through initial symlinks and rename based on metadata
-        rename_count = 0
-        remap_start_time = time.time()
-        for original_filename, symlink_path in initial_symlinks.items():
-            try:
-                # Calculate the new filename using the parser's remapping logic
-                new_filename = self.microscope_handler.parser.remap_field_in_filename(original_filename, xml_parser)
-
-                if new_filename and new_filename != original_filename:
-                    new_symlink_path = symlink_path.with_name(new_filename)
-                    logger.debug("Renaming symlink: %s -> %s", symlink_path, new_symlink_path)
-                    # Use the provided FileManager to rename
-                    file_manager.rename(symlink_path, new_symlink_path)
-                    final_symlink_paths.append(new_symlink_path)
-                    rename_count += 1
-                else:
-                    # Keep original if no remapping needed or failed for this file
-                    final_symlink_paths.append(symlink_path)
-
-            except Exception as e:
-                logger.warning("Error remapping/renaming symlink for %s: %s. Keeping original.", original_filename, e)
-                final_symlink_paths.append(symlink_path) # Keep original on error
-
-        logger.info("Symlink remapping completed in %.2f seconds. Renamed %d symlinks.", time.time() - remap_start_time, rename_count)
-        return final_symlink_paths
-
-
-    def _find_metadata_file(self, search_dir: Path) -> Optional[Path]:
-        """Finds the relevant metadata file (e.g., Index.xml) using FileManager."""
-        # Logic to search for known metadata file patterns, specific to Opera Phenix here
-        try:
-            # Use file_manager to search recursively in the source directory
-            metadata_file = self.file_manager.find_file_recursive(search_dir, "Index.xml")
-            if metadata_file:
-                logger.info("Found metadata file: %s", metadata_file)
-                return Path(metadata_file) # Ensure it's a Path object
-
-            logger.warning("Metadata file (Index.xml) not found in %s", search_dir)
-            return None
-        except Exception as e:
-            logger.error("Error searching for metadata file in %s: %s", search_dir, e)
-            return None
-
-
-    def _calculate_remapped_name(self, original_filename: str, xml_parser: OperaPhenixXmlParser) -> Optional[str]:
-        """Calculates the new filename based on metadata using the handler's parser."""
-        # This helper is now effectively replaced by calling the parser method directly
-        # in _remap_symlinks_using_metadata. Keeping as placeholder in case needed later.
-        # try:
-        #     if hasattr(self.handler.parser, 'remap_field_in_filename'):
-        #         return self.handler.parser.remap_field_in_filename(original_filename, xml_parser)
-        #     else:
-        #         logger.warning("Parser lacks 'remap_field_in_filename' method.")
-        #         return original_filename
-        # except Exception as e:
-        #     logger.warning("Error calculating remapped name for %s: %s", original_filename, e)
-        #     return original_filename
-        # No longer directly used, logic moved into _remap_symlinks_using_metadata
-        return None
-
-
-    def _finalize_symlinks(self, final_symlink_paths: List[Path]) -> None:
-        """Perform any final actions after symlinks are created/renamed."""
-        # This might involve updating internal state or context if needed later.
-        # For now, just log completion.
-        logger.info("Finalized %d symlinks in workspace.", len(final_symlink_paths))
-        # Example: self.context.update_file_list(final_symlink_paths) # If context needs updating
-
-
-    # <<< New Workspace Creation Methods End >>>
-
 
     def run(self,pipelines=None):
         """
@@ -394,12 +143,6 @@ class PipelineOrchestrator:
         """
         try:
             # Setup
-            # Workspace creation is now handled in __init__ after dependencies are ready.
-            # Grid size and pixel size should be determined from the original plate_path or input_dir,
-            # not the workspace_path which might contain remapped/symlinked data.
-            # Let's assume these are needed *before* workspace creation or use input_dir.
-            # If they rely on workspace structure, this needs rethinking.
-            # For now, assume they use plate_path or input_dir.
             source_path_for_metadata = self.input_dir or self.plate_path
             if not source_path_for_metadata:
                  raise ValueError("Cannot determine grid size or pixel size without plate_path or input_dir.")
@@ -415,6 +158,7 @@ class PipelineOrchestrator:
                 self.config.pixel_size = self.config.stitcher.pixel_size
             logger.info("Pixel size: %s", self.config.pixel_size)
 
+            self.microscope_handler.post_workspace(self.workspace_path)
             # Directory setup is handled within pipelines now.
 
             # Get wells to process
@@ -705,145 +449,6 @@ class PipelineOrchestrator:
             file_manager=self.file_manager
         )
 
-    def prepare_images(self, plate_path: Path) -> Optional[Path]:
-        """
-        Prepares images using FileManager for operations like finding directories,
-        renaming, and organizing Z-stacks.
-        Orchestrator logic: Defines the sequence of preparation steps.
-        FileManager role: Executes the individual file/directory operations.
-        """
-        logger.info("Preparing images for plate: %s", plate_path)
-        start_time = time.time()
-
-        if not self.microscope_handler:
-            logger.error("Microscope handler not initialized, cannot prepare images.")
-            return None
-
-        try:
-            # Find the image directory using FileManager
-            image_dir = self.file_manager.find_image_directory(plate_path)
-            logger.info("Found image directory: %s", image_dir)
-
-            # Rename files using FileManager
-            logger.info("Renaming files with consistent padding...")
-            rename_start = time.time()
-            # Ensure parser is correctly passed (might be self.microscope_handler itself)
-            self.file_manager.rename_files_with_consistent_padding(
-                directory=image_dir,
-                parser=self.microscope_handler, # Assuming handler acts as parser
-                width=DEFAULT_PADDING,
-                force_suffixes=True
-            )
-            logger.info("Renamed files in %.2fs", time.time() - rename_start)
-
-            # Detect and organize Z-stacks using FileManager
-            zstack_start = time.time()
-            has_zstack, z_folders = self.file_manager.detect_zstack_folders(image_dir)
-            if has_zstack:
-                logger.info("Found %d Z-stack folders. Organizing...", len(z_folders))
-                # Ensure filename_parser is correctly passed
-                self.file_manager.organize_zstack_folders(
-                    plate_folder=image_dir,
-                    filename_parser=self.microscope_handler # Assuming handler acts as parser
-                )
-                logger.info("Organized Z-stack folders in %.2fs", time.time() - zstack_start)
-            else:
-                logger.info("No Z-stack folders detected or organization not needed.")
-
-            logger.info("Prepared images in %.2fs", time.time() - start_time)
-            # Return the potentially modified image_dir
-            # Re-finding might be necessary if organize_zstack changes structure significantly,
-            # but for now, assume image_dir remains the primary input root.
-            # return self.file_manager.find_image_directory(plate_path)
-            return image_dir
-
-        except Exception as e:
-            logger.error("Error preparing images for %s: %s", plate_path, e)
-            return None # Return None on error
-
-    def _detect_microscope_handler(self, plate_path: Path) -> str:
-        """
-        Auto-detect the microscope type by testing parsers against sample files.
-
-        Args:
-            plate_path: Path to the plate directory
-
-        Returns:
-            str: The detected microscope type identifier
-
-        Raises:
-            ValueError: If no suitable parser can be found
-        """
-        logger.info("Detecting microscope type...")
-
-        # Check if a specific parser is forced in the configuration
-        if self.config.force_parser:
-            forced_parser = self.config.force_parser
-            logger.info("Using forced parser from configuration: %s", forced_parser)
-            return forced_parser.lower()  # Normalize to lowercase for consistency
-
-        # First try to detect based on characteristic files
-        try:
-            if self.file_manager.find_file_recursive(plate_path, "Index.xml"):
-                logger.info("Auto-detected Opera Phenix microscope type based on Index.xml file.")
-                return 'operaphenix'
-
-            if self.file_manager.list_image_files(plate_path, extensions={'.htd'}, recursive=False):
-                logger.info("Auto-detected ImageXpress microscope type based on HTD file.")
-                return 'imagexpress'
-        except Exception as e:
-            logger.warning("Error during file-based detection: %s. Falling back to filename-based detection.", e)
-
-        # If no characteristic files found, try filename-based detection
-        try:
-            # Get sample files using FileManager
-            sample_files = self.file_manager.list_image_files(plate_path, recursive=True)
-
-            # Limit to a reasonable sample size
-            max_sample_size = 50
-            if len(sample_files) > max_sample_size:
-                sample_files = random.sample(sample_files, max_sample_size)
-
-            if not sample_files:
-                logger.error("No image files found in %s", plate_path)
-                raise ValueError(f"No image files found in {plate_path}")
-
-            # Discover all available handlers
-            handlers = MicroscopeHandler._discover_handlers()
-
-            # Test each parser against the sample files
-            matches = {}
-            for name, (parser_class, _) in handlers.items():
-                matches[name] = 0
-                for f in sample_files:
-                    if parser_class.can_parse(f.name):
-                        matches[name] += 1
-
-            # Log the match counts for each parser
-            for name, count in matches.items():
-                match_percent = count / len(sample_files) * 100
-                logger.info("Parser '%s' matched %d/%d files (%.1f%%)",
-                           name, count, len(sample_files), match_percent)
-
-            # Find the best match
-            if not matches:
-                logger.error("No parsers available")
-                raise ValueError("No parsers available")
-
-            best_match = max(matches.items(), key=lambda x: x[1])
-
-            # Only accept if we have at least one match
-            if best_match[1] > 0:
-                logger.info("Selected parser '%s' with %d/%d matches",
-                           best_match[0], best_match[1], len(sample_files))
-                return best_match[0]
-
-            logger.error("No parser could match any of the %d sample files", len(sample_files))
-            raise ValueError(f"No parser could match any of the {len(sample_files)} sample files")
-
-        except Exception as e:
-            logger.error("Error during microscope type detection: %s", e)
-            raise ValueError(f"Failed to detect microscope type: {e}") from e
 
     def _get_reference_pattern(self, well, sample_pattern):
         """

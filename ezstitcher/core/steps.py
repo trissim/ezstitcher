@@ -256,26 +256,6 @@ class Step(AbstractStep):
         context.results = results
         return context
 
-
-
-    def _ensure_2d(self, img):
-        """Ensure an image is 2D by reducing dimensions if needed."""
-        if not isinstance(img, np.ndarray) or img.ndim <= 2:
-            return img
-
-        # Try to squeeze out singleton dimensions first
-        squeezed = np.squeeze(img)
-        if squeezed.ndim <= 2:
-            return squeezed
-
-        # If still not 2D, take first slice until it is
-        result = img
-        while result.ndim > 2:
-            result = result[0]
-
-        logger.warning("Reduced image dimensions from %dD to 2D", img.ndim)
-        return result
-
     def _extract_function_and_args(
         self,
         func_item: FunctionWithArgs
@@ -472,12 +452,7 @@ class Step(AbstractStep):
             List of absolute paths to the saved files.
         """
         saved_files = []
-#        if len(images) != len(filenames):
-#            logger.error(f"Mismatch between number of images ({len(images)}) and filenames ({len(filenames)}) during save.")
-#            # Decide how to handle: return empty, raise error, or try to save matching pairs?
-#            # For now, returning empty to prevent partial saves with wrong names.
-#            return []
-#
+
         # Ensure output directory exists
         try:
             file_manager.ensure_directory(output_dir)
@@ -499,10 +474,6 @@ class Step(AbstractStep):
                 logger.error(f"Error saving image {output_path}: {e}", exc_info=True)
 
         return saved_files
-    # This method seems to be duplicated or incorrectly placed after the previous diff application.
-    # Removing the duplicate/old version. The correct version using FileManager should remain above.
-    # If the version above is incorrect, this diff needs adjustment.
-    # Assuming the version starting at line 444 is the intended one.
 
     @property
     def name(self) -> str:
@@ -689,27 +660,6 @@ class ImageStitchingStep(Step):
         )
 
         return context
-
-
-
-
-def group_patterns_by(patterns, component, microscope_handler=None):
-    """
-    Group patterns by the specified component.
-
-    Args:
-        patterns (list): Patterns to group
-    Returns:
-        dict: Dictionary mapping component values to lists of patterns
-    """
-    grouped_patterns = {}
-    for pattern in patterns:
-        # Extract the component value from the pattern
-        component_value = microscope_handler.parser.parse_filename(pattern)[component]
-        if component_value not in grouped_patterns:
-            grouped_patterns[component_value] = []
-        grouped_patterns[component_value].append(pattern)
-    return grouped_patterns
 
 
 class ZFlatStep(Step):

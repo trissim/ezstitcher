@@ -38,8 +38,20 @@ class BasicStorageBackend(ABC):
         pass
 
     @abstractmethod
-    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, recursive: bool = False) -> List[Path]:
-        """List files in a directory, optionally matching a pattern."""
+    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, extensions: Optional[Set[str]] = None, recursive: bool = False) -> List[Path]:
+        """
+        List files in a directory, optionally filtering by pattern and extensions.
+
+        Args:
+            directory: Directory to search.
+            pattern: Optional glob pattern to match filenames.
+            extensions: Optional set of file extensions to filter by (e.g., {'.tif', '.png'}).
+                        Extensions should include the dot and are case-insensitive.
+            recursive: Whether to search recursively.
+
+        Returns:
+            List of paths to matching files.
+        """
         pass
 
     @abstractmethod
@@ -229,9 +241,20 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
         raise NotImplementedError(f"Generic save not implemented for type {type(data)}")
 
 
-    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, recursive: bool = False) -> List[Path]:
-        """List files on disk."""
-        # NATIVE IMPLEMENTATION (No TODO needed unless refinement desired)
+    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, extensions: Optional[Set[str]] = None, recursive: bool = False) -> List[Path]:
+        """
+        List files on disk, optionally filtering by pattern and extensions.
+
+        Args:
+            directory: Directory to search.
+            pattern: Optional glob pattern to match filenames.
+            extensions: Optional set of file extensions to filter by (e.g., {'.tif', '.png'}).
+                        Extensions should include the dot and are case-insensitive.
+            recursive: Whether to search recursively.
+
+        Returns:
+            List of paths to matching files.
+        """
         directory = Path(directory)
         if not directory.is_dir():
             return []
@@ -242,6 +265,13 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
             else:
                 glob_pattern = pattern if pattern else "*"
                 files = [p for p in directory.glob(glob_pattern) if p.is_file()]
+
+            # Filter by extensions if provided
+            if extensions:
+                # Convert extensions to lowercase for case-insensitive comparison
+                lowercase_extensions = {ext.lower() for ext in extensions}
+                files = [f for f in files if f.suffix.lower() in lowercase_extensions]
+
             return files
         except Exception as e:
             logger.error(f"Error listing files in {directory} with pattern '{pattern}': {e}")
@@ -450,25 +480,22 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
 
 
     def list_image_files(self, directory: Union[str, Path], extensions: Optional[Set[str]] = None, recursive: bool = True) -> List[Path]:
-        """List image files on disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.list_image_files with native implementation
-        #       using self.list_files and filtering by provided/default extensions.
-        #       Example native approach:
-        #       effective_extensions = extensions if extensions is not None else DEFAULT_IMAGE_EXTENSIONS
-        #       all_files = self.list_files(directory, pattern=None, recursive=recursive)
-        #       return [f for f in all_files if f.suffix.lower() in effective_extensions]
-        logger.debug(f"Delegating list_image_files for {directory} to FileSystemManager")
+        """
+        List image files in a directory, filtering by specific extensions.
+
+        Args:
+            directory: Directory to search.
+            extensions: Set of file extensions (e.g., {'.tif', '.png'}).
+                        If None, uses DEFAULT_IMAGE_EXTENSIONS from ezstitcher.io.constants.
+            recursive: Whether to search recursively.
+
+        Returns:
+            List of paths to image files.
+        """
+        logger.debug(f"Listing image files in {directory}")
         effective_extensions = extensions if extensions is not None else DEFAULT_IMAGE_EXTENSIONS
-        try:
-            if hasattr(FileSystemManager, 'list_image_files'):
-                # FileSystemManager might expect a List, not Set
-                return FileSystemManager.list_image_files(directory, list(effective_extensions), recursive)
-            else:
-                logger.error("FileSystemManager.list_image_files not found!")
-                return []
-        except Exception as e:
-            logger.error(f"Error during FileSystemManager.list_image_files for {directory}: {e}")
-            return []
+        # Use our native list_files implementation with extension filtering
+        return self.list_files(directory, pattern=None, extensions=effective_extensions, recursive=recursive)
 
 
     def find_image_directory(self, plate_folder: Union[str, Path], extensions: Optional[Set[str]] = None) -> Path:
@@ -632,9 +659,22 @@ class FakeStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
         logger.debug(f"FakeStorageBackend: Saved data to {path}")
         return True
 
-    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, recursive: bool = False) -> List[Path]:
+    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, extensions: Optional[Set[str]] = None, recursive: bool = False ) -> List[Path]:
+        """
+        List files in the fake storage system, optionally filtering by pattern and extensions.
+
+        Args:
+            directory: Directory to search.
+            pattern: Optional glob pattern to match filenames.
+            extensions: Optional set of file extensions to filter by (e.g., {'.tif', '.png'}).
+                        Extensions should include the dot and are case-insensitive.
+            recursive: Whether to search recursively.
+
+        Returns:
+            List of paths to matching files.
+        """
         dir_path = self._normalize_path(directory)
-        logger.debug(f"FakeStorageBackend: Listing files in {dir_path} (pattern='{pattern}', recursive={recursive})")
+        logger.debug(f"FakeStorageBackend: Listing files in {dir_path} (pattern='{pattern}', extensions={extensions}, recursive={recursive})")
 
         # Check if directory exists explicitly or implicitly via a file within it
         dir_exists = dir_path in self._directories or any(f.parent == dir_path for f in self._files)
@@ -651,9 +691,11 @@ class FakeStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
             is_in_subdir = dir_path in file_path.parents
 
             if (recursive and (is_in_dir or is_in_subdir)) or (not recursive and is_in_dir):
-                 # Apply pattern matching using fnmatch (Unix shell-style)
+                # Apply pattern matching using fnmatch (Unix shell-style)
                 if pattern is None or fnmatch.fnmatch(file_path.name, pattern):
-                     results.append(file_path)
+                    # Apply extension filtering if provided
+                    if extensions is None or file_path.suffix.lower() in {ext.lower() for ext in extensions}:
+                        results.append(file_path)
 
         logger.debug(f"FakeStorageBackend: Found {len(results)} files matching criteria in {dir_path}")
         return results
@@ -826,14 +868,23 @@ class FakeStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
         return self.save(image, output_path)
 
     def list_image_files(self, directory: Union[str, Path], extensions: Optional[Set[str]] = None, recursive: bool = True) -> List[Path]:
+        """
+        List image files in a directory, filtering by specific extensions.
+
+        Args:
+            directory: Directory to search.
+            extensions: Set of file extensions (e.g., {'.tif', '.png'}).
+                        If None, uses DEFAULT_IMAGE_EXTENSIONS from ezstitcher.io.constants.
+            recursive: Whether to search recursively.
+
+        Returns:
+            List of paths to image files.
+        """
         dir_path = self._normalize_path(directory)
         logger.debug(f"FakeStorageBackend: Listing image files in {dir_path} (extensions={extensions}, recursive={recursive})")
         effective_extensions = extensions if extensions is not None else DEFAULT_IMAGE_EXTENSIONS
-        # Use basic list_files and filter
-        all_files = self.list_files(directory=dir_path, pattern=None, recursive=recursive) # Get all first
-        image_files = [f for f in all_files if f.suffix.lower() in effective_extensions]
-        logger.debug(f"FakeStorageBackend: Found {len(image_files)} image files in {dir_path}")
-        return image_files
+        # Use our list_files implementation with extension filtering directly
+        return self.list_files(directory=dir_path, pattern=None, extensions=effective_extensions, recursive=recursive)
 
     def find_image_directory(self, plate_folder: Union[str, Path], extensions: Optional[Set[str]] = None) -> Path:
         pf_path = self._normalize_path(plate_folder)

@@ -40,52 +40,6 @@ class MicroscopeHandler(ABC):
     DEFAULT_MICROSCOPE = 'ImageXpress'
     _handlers_cache = None
 
-    @classmethod
-    def _discover_handlers(cls):
-        """Discover all microscope handlers from the microscopes subpackage."""
-        if cls._handlers_cache:
-            return cls._handlers_cache
-
-        import importlib, inspect, pkgutil
-        from ezstitcher.microscopes import __path__ as microscopes_path
-
-        handlers = {}
-
-        # Find all modules in the microscopes package
-        for _, module_name, _ in pkgutil.iter_modules(microscopes_path, 'ezstitcher.microscopes.'):
-            try:
-                module = importlib.import_module(module_name)
-
-                # Find FilenameParser implementations in the module
-                for name, obj in inspect.getmembers(module, inspect.isclass):
-                    if obj.__module__ != module.__name__ or not issubclass(obj, FilenameParser) or obj == FilenameParser:
-                        continue
-
-                    # Extract microscope type from class name
-                    microscope_type = name.replace('FilenameParser', '')
-
-                    # Look for matching MetadataHandler
-                    handler_name = f"{microscope_type}MetadataHandler"
-                    handler_class = getattr(module, handler_name, None)
-
-                    if handler_class and issubclass(handler_class, MetadataHandler):
-                        # Use lowercase key for consistency and normalize underscores
-                        # This ensures 'opera_phenix' and 'operaphenix' are treated the same
-                        key = microscope_type.lower()
-                        # Store both with and without underscores for backward compatibility
-                        handlers[key] = (obj, handler_class)
-                        # Also store with underscores if it contains any
-                        if '_' in key:
-                            handlers[key.replace('_', '')] = (obj, handler_class)
-                        # Also store without underscores if it doesn't contain any
-                        elif key == 'operaphenix':
-                            handlers['opera_phenix'] = (obj, handler_class)
-            except Exception as e:
-                logger.debug(f"Error inspecting module {module_name}: {e}")
-
-        cls._handlers_cache = handlers
-        return handlers
-
     # Updated __init__ signature
     def __init__(self, parser: FilenameParser,
                  metadata_handler: MetadataHandler,
@@ -141,53 +95,6 @@ class MicroscopeHandler(ABC):
         """
         return fm.find_image_directory(workspace_path)
 
-
-    def _detect_microscope_type(self, microscope_type, fm=FileManager(backend='disk')):
-        """Detect microscope type from files or use specified type."""
-        if microscope_type.lower() != 'auto' or not self.plate_folder:
-            return microscope_type if microscope_type.lower() != 'auto' else self.DEFAULT_MICROSCOPE
-
-        try:
-            sample_files = diskfm.list_image_files(self.plate_folder)[:10] # TEMPORARY
-
-            if not sample_files:
-                return self.DEFAULT_MICROSCOPE
-
-            matches =  {}
-            for name, (parser_class, _) in self._discover_handlers().items():
-                matches[name] = 0
-                for f in sample_files:
-                    if parser_class.can_parse(f.name):
-                        matches[name] += 1
-
-
-            best_match = max(matches.items(), key=lambda x: x[1]) if matches else (self.DEFAULT_MICROSCOPE, 0)
-            if best_match[1] > 0:
-                logger.info(f"Auto-detected {best_match[0]} format ({best_match[1]}/{len(sample_files)} files matched)")
-                return best_match[0]
-
-            return self.DEFAULT_MICROSCOPE
-        except Exception as e:
-            logger.error(f"Error during auto-detection: {e}")
-            return self.DEFAULT_MICROSCOPE
-
-    def _create_handlers(self, microscope_type, parser=None, metadata_handler=None):
-        """Create parser and metadata handler for the specified microscope type."""
-        handlers = self._discover_handlers()
-        parser_class, handler_class = handlers.get(microscope_type, handlers.get(self.DEFAULT_MICROSCOPE, (None, None)))
-
-        if parser_class is None or handler_class is None:
-            raise ValueError(f"No handlers found for microscope type: {microscope_type}")
-
-        # Instantiate parser and handler, passing FileManager if needed (check constructor)
-        # This assumes handlers might need FileManager, adjust if not
-        final_parser = parser or parser_class()
-        # Pass file_manager to metadata handler constructor
-        # Ensure self.file_manager is initialized before calling this if default is used
-        fm_to_use = getattr(self, 'file_manager', None) or FileManager() # Use initialized or default
-        final_metadata_handler = metadata_handler or handler_class(file_manager=fm_to_use)
-
-        return final_parser, final_metadata_handler
 
     # Delegate methods to parser
     def parse_filename(self, filename: str) -> Optional[Dict[str, Any]]:
@@ -305,9 +212,12 @@ def _auto_detect_microscope_type(plate_folder: Path, file_manager: FileManager) 
             logger.info("Auto-detected Opera Phenix microscope type.")
             return 'operaphenix'
 
+        if file_manager.find_file_recursive(plate_folder, "Index.xml"):
+            logger.info("Auto-detected Opera Phenix microscope type.")
+            return 'operaphenix'
         # Check for ImageXpress (.htd files)
-        if file_manager.list_image_files(
-            plate_folder, extensions={'.htd'}, recursive=False
+        if file_manager.list_files(
+            plate_folder, extensions={'.htd'}, recursive=True
         ):
             logger.info("Auto-detected ImageXpress microscope type.")
             return 'imagexpress'

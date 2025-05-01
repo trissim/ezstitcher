@@ -166,22 +166,31 @@ class TestDiskStorageBackend:
         img_data = np.zeros((3,3))
         result = disk_backend.save_image(img_data, img_path)
         # Check that FSM was called correctly (might depend on FSM signature)
-        mock_fsm_save.assert_called_once_with(img_path, img_data)
+        mock_fsm_save.assert_called_once_with(img_data, img_path)  # Note: order is image, path
         assert result is True
 
-    @patch.object(FileSystemManager, 'list_image_files', return_value=[Path("img1.tif"), Path("img2.png")])
-    def test_list_image_files_delegated(self, mock_fsm_list, disk_backend):
-        dir_path = "some/dir"
-        # Test with default extensions
-        files = disk_backend.list_image_files(dir_path)
-        mock_fsm_list.assert_called_once_with(dir_path, list(DEFAULT_IMAGE_EXTENSIONS), True)
-        assert files == [Path("img1.tif"), Path("img2.png")]
+    # We're now using our own implementation instead of delegating to FileSystemManager
+    def test_list_image_files_native(self, disk_backend, tmp_path):
+        # Setup
+        (tmp_path / "file1.tif").touch()
+        (tmp_path / "file2.png").touch()
+        (tmp_path / "file3.txt").touch()  # Non-image file
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "file4.tif").touch()
+
+        # Test with default extensions (recursive by default)
+        files = disk_backend.list_image_files(tmp_path)
+        assert set(files) == {tmp_path / "file1.tif", tmp_path / "file2.png", subdir / "file4.tif"}
 
         # Test with specific extensions
-        mock_fsm_list.reset_mock()
-        custom_ext = {".tiff"}
-        disk_backend.list_image_files(dir_path, extensions=custom_ext, recursive=False)
-        mock_fsm_list.assert_called_once_with(dir_path, list(custom_ext), False)
+        custom_ext = {".tif"}
+        files = disk_backend.list_image_files(tmp_path, extensions=custom_ext)
+        assert set(files) == {tmp_path / "file1.tif", subdir / "file4.tif"}
+
+        # Test with non-recursive
+        files = disk_backend.list_image_files(tmp_path, recursive=False)
+        assert set(files) == {tmp_path / "file1.tif", tmp_path / "file2.png"}
 
 
     # ... more tests for other delegated methods (find_image_dir, rename, zstack etc.) ...

@@ -160,9 +160,9 @@ class FileManager:
         # and applying the default extensions logic when `extensions` is None.
         logger.debug(f"FileManager delegating list_image_files for {directory} (recursive={recursive}, extensions={extensions})")
         # Pass extensions directly; backend handles None case
-        return self.backend.list_image_files(directory, extensions=extensions, recursive=recursive)
+        return self.backend.list_files(directory, extensions=extensions, recursive=recursive)
 
-    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, recursive: bool = False) -> List[Path]:
+    def list_files(self, directory: Union[str, Path], pattern: Optional[str] = None, extensions: Optional[Set[str]] = None, recursive: bool = False) -> List[Path]:
         """
         List all files in a directory via the backend.
 
@@ -175,7 +175,7 @@ class FileManager:
             List of paths to files found by the backend.
         """
         logger.debug(f"FileManager delegating list_files for {directory} (recursive={recursive}, pattern={pattern})")
-        return self.backend.list_files(directory, pattern=pattern, recursive=recursive)
+        return self.backend.list_files(directory, pattern=pattern, recursive=recursive, extensions=extensions)
 
     def ensure_directory(self, directory: Union[str, Path]) -> Path:
         """

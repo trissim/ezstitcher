@@ -194,19 +194,17 @@ def test_well_filter(flat_plate_dir, base_pipeline_config, thread_tracker):
 
 
 def test_auto_detection(zstack_plate_dir, base_pipeline_config, thread_tracker):
-    """Test auto-detection of Z-stacks and channels."""
+    """Test auto-detection of channels (Z-stack detection removed)."""
     # Create output directory path
     output_dir = zstack_plate_dir.parent / f"{zstack_plate_dir.name}_stitched"
 
-    # Use the EZStitcher class with auto-detection (no explicit flatten_z or channel_weights)
+    # Use the EZStitcher class with explicit flatten_z (no auto-detection)
     stitcher = EZStitcher(
         zstack_plate_dir,
         output_path=output_dir,
-        normalize=True
+        normalize=True,
+        flatten_z=True  # Explicitly set to True instead of relying on auto-detection
     )
-
-    # Check that Z-stacks were detected
-    assert stitcher.flatten_z is True, "Z-stacks were not auto-detected"
 
     # Run stitching
     result_path = stitcher.stitch()
@@ -228,9 +226,10 @@ def test_set_options(flat_plate_dir, base_pipeline_config, thread_tracker):
     # Create output directory path
     output_dir = flat_plate_dir.parent / f"{flat_plate_dir.name}_stitched"
 
-    # Use the EZStitcher class with minimal initialization
+    # Use the EZStitcher class with minimal initialization and explicit flatten_z
     stitcher = EZStitcher(
-        flat_plate_dir
+        flat_plate_dir,
+        flatten_z=False  # Explicitly set flatten_z to avoid auto-detection
     )
 
     # Set options after initialization
