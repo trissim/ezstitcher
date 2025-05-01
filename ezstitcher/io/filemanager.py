@@ -43,9 +43,7 @@ class FileManager:
 
     This class provides a high-level interface for essential file operations,
     acting purely as an adapter/facade that delegates to a storage backend
-    for the actual implementation. It replaces the static FileSystemManager
-    with an instance-based approach that supports dependency injection and
-    multiple backend types (e.g., local disk, cloud storage).
+    for the actual implementation. It replaces the static FileSystemManager with an instance-based approach that supports dependency injection and multiple backend types (e.g., local disk, cloud storage).
 
     Scope Clarification:
     - This class is strictly an adapter.

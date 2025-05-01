@@ -16,7 +16,6 @@ from ezstitcher.core.microscope_base import FilenameParser, MetadataHandler
 from ezstitcher.core.microscope_interfaces import MicroscopeHandler
 
 from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager # Added
 
 logger = logging.getLogger(__name__)
@@ -32,26 +31,29 @@ class OperaPhenixHandler(MicroscopeHandler):
     post-processing steps required after workspace setup.
     """
 
-    def __init__(self):
-        super().__init__(
-            parser=OperaPhenixFilenameParser(),
-            metadata_handler=OperaPhenixMetadataHandler()
-        )
+    def __init__(self, file_manager: FileManager):
+        self.file_manager = file_manager
+        self.parser = OperaPhenixFilenameParser(file_manager)
+        self.metadata_handler = OperaPhenixMetadataHandler()
+        super().__init__(parser=self.parser, metadata_handler=self.metadata_handler)
 
     @property
     def common_dirs(self) -> str:
         """Subdirectory names commonly used by Opera Phenix."""
         return 'Image'
 
-    def _normalize_workspace(self, workspace_path: Path, fm=None) -> Path:
+    def _normalize_workspace(self, workspace_path: Path, fm=None, context=None) -> Path:
         """
         Renames Opera Phenix images to follow a consistent field order
         based on spatial layout extracted from Index.xml. Uses remapped
         filenames and replaces the directory in-place.
 
+        In non-legacy modes, uses a default field mapping.
+
         Args:
             workspace_path: Path to the symlinked workspace
             fm: Optional FileManager instance. If None, uses self.file_manager
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             Path to the normalized image directory.
@@ -60,13 +62,28 @@ class OperaPhenixHandler(MicroscopeHandler):
         fm = fm or self.file_manager
         image_dir = fm.find_image_directory(workspace_path)
 
-        # Locate Index.xml and load mapping
-        index_xml = self.file_manager.find_file_recursive(workspace_path, "Index.xml")
-        if not index_xml:
-            raise ValueError(f"Index.xml not found in workspace: {workspace_path}")
+        # Check if we should skip disk access for Index.xml
+        is_legacy = True
+        if context and hasattr(context, 'is_legacy_mode'):
+            is_legacy = context.is_legacy_mode()
 
-        xml_parser = OperaPhenixXmlParser(index_xml)
-        field_mapping = xml_parser.get_field_id_mapping()
+        field_mapping = {}
+
+        if is_legacy:
+            # Locate Index.xml and load mapping
+            try:
+                index_xml = self.file_manager.find_file_recursive(workspace_path, "Index.xml")
+                if index_xml:
+                    xml_parser = OperaPhenixXmlParser(index_xml)
+                    field_mapping = xml_parser.get_field_id_mapping()
+                    logger.debug("Loaded field mapping from Index.xml: %s", field_mapping)
+                else:
+                    logger.warning("Index.xml not found in workspace: %s. Using default field mapping.", workspace_path)
+            except Exception as e:
+                logger.error("Error loading Index.xml: %s", e)
+                logger.warning("Using default field mapping due to error.")
+        else:
+            logger.debug("Skipping Index.xml lookup in non-legacy mode. Using default field mapping.")
 
         temp_dir = image_dir / "__renamed"
         temp_dir.mkdir(parents=True, exist_ok=True)
@@ -285,16 +302,27 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         Args:
             file_manager: FileManager instance. If None, a disk-based FileManager is created.
         """
-        if file_manager is None:
-            file_manager = FileManager(backend='disk')
-            logger.debug("Created default disk-based FileManager for OperaPhenixMetadataHandler")
+        super().__init__(file_manager=file_manager)
 
-        self.file_manager = file_manager
+    def find_metadata_file(self, plate_path: Union[str, Path],
+                          context: Optional['ProcessingContext'] = None) -> Optional[Path]:
+        """
+        Find the Index.xml file using file_manager.find_file_recursive.
 
-    def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
-        """Finds the Index.xml file using file_manager.find_file_recursive."""
-        # TRANSITIONAL: Assumes Index.xml exists on a file system accessible
-        # by the backend used by file_manager (likely disk).
+        In non-legacy modes, skips disk access and returns None.
+
+        Args:
+            plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
+
+        Returns:
+            Path to the metadata file, or None if not found
+        """
+        # Check if we should skip disk access
+        if not self.is_legacy_mode(context):
+            logger.debug("Skipping Index.xml lookup in non-legacy mode")
+            return None
+
         try:
             # Use injected file_manager
             return self.file_manager.find_file_recursive(plate_path, "Index.xml")
@@ -302,12 +330,16 @@ class OperaPhenixMetadataHandler(MetadataHandler):
             logger.error(f"Error finding Index.xml in {plate_path}: {e}")
             return None
 
-    def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
+    def get_grid_dimensions(self, plate_path: Union[str, Path],
+                           context: Optional['ProcessingContext'] = None) -> Tuple[int, int]:
         """
         Get grid dimensions for stitching from Index.xml file.
 
+        In non-legacy modes, returns default dimensions.
+
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             (grid_size_x, grid_size_y)
@@ -315,9 +347,15 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         Raises:
             ValueError: If grid dimensions cannot be determined from metadata
         """
-        index_xml = self.find_metadata_file(plate_path)
+        # Check if we should skip disk access
+        if not self.is_legacy_mode(context):
+            logger.debug("Using default grid dimensions (4x4) in non-legacy mode")
+            return (4, 4)  # Default dimensions
+
+        index_xml = self.find_metadata_file(plate_path, context)
         if not index_xml:
-            raise ValueError(f"Cannot find Index.xml in {plate_path}. Grid dimensions cannot be determined.")
+            logger.warning("Cannot find Index.xml in %s. Using default grid dimensions.", plate_path)
+            return (4, 4)  # Default dimensions
 
         try:
             # Use the OperaPhenixXmlParser to get the grid size
@@ -327,18 +365,24 @@ class OperaPhenixMetadataHandler(MetadataHandler):
             if grid_size[0] > 0 and grid_size[1] > 0:
                 logger.info("Determined grid size from Opera Phenix Index.xml: %dx%d", grid_size[0], grid_size[1])
                 return grid_size
-            else:
-                raise ValueError(f"Invalid grid dimensions (0x0) found in Index.xml")
+
+            logger.warning("Invalid grid dimensions (0x0) found in Index.xml. Using default dimensions.")
+            return (4, 4)  # Default dimensions
         except Exception as e:
             logger.error("Error parsing Opera Phenix Index.xml: %s", e)
-            raise ValueError(f"Failed to extract grid dimensions from Index.xml: {e}") from e
+            logger.warning("Using default grid dimensions due to error.")
+            return (4, 4)  # Default dimensions
 
-    def get_pixel_size(self, plate_path: Union[str, Path]) -> float:
+    def get_pixel_size(self, plate_path: Union[str, Path],
+                      context: Optional['ProcessingContext'] = None) -> float:
         """
         Get the pixel size from Index.xml file.
 
+        In non-legacy modes, returns default pixel size.
+
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             Pixel size in micrometers
@@ -346,9 +390,18 @@ class OperaPhenixMetadataHandler(MetadataHandler):
         Raises:
             ValueError: If pixel size cannot be determined from metadata
         """
-        index_xml = self.find_metadata_file(plate_path)
+        # Default pixel size for Opera Phenix (in micrometers)
+        DEFAULT_PIXEL_SIZE = 0.65
+
+        # Check if we should skip disk access
+        if not self.is_legacy_mode(context):
+            logger.debug("Using default pixel size (%.2f μm) in non-legacy mode", DEFAULT_PIXEL_SIZE)
+            return DEFAULT_PIXEL_SIZE
+
+        index_xml = self.find_metadata_file(plate_path, context)
         if not index_xml:
-            raise ValueError(f"Cannot find Index.xml in {plate_path}. Pixel size cannot be determined.")
+            logger.warning("Cannot find Index.xml in %s. Using default pixel size.", plate_path)
+            return DEFAULT_PIXEL_SIZE
 
         try:
             # Use the OperaPhenixXmlParser to get the pixel size
@@ -358,11 +411,13 @@ class OperaPhenixMetadataHandler(MetadataHandler):
             if pixel_size > 0:
                 logger.info("Determined pixel size from Opera Phenix Index.xml: %.4f μm", pixel_size)
                 return pixel_size
-            else:
-                raise ValueError(f"Invalid pixel size (0 or negative) found in Index.xml")
+
+            logger.warning("Invalid pixel size (0 or negative) found in Index.xml. Using default.")
+            return DEFAULT_PIXEL_SIZE
         except Exception as e:
             logger.error("Error getting pixel size from Opera Phenix Index.xml: %s", e)
-            raise ValueError(f"Failed to extract pixel size from Index.xml: {e}") from e
+            logger.warning("Using default pixel size due to error.")
+            return DEFAULT_PIXEL_SIZE
 
     def create_xml_parser(self, xml_path: Union[str, Path]):
         """

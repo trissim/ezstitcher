@@ -12,7 +12,6 @@ import numpy as np # Needed for type hints here
 import os
 import shutil
 from glob import glob
-# REMOVED: from ezstitcher.core.file_system_manager import FileSystemManager # Existing static manager
 import fnmatch # For pattern matching in list_files
 import copy # For simulating read/write isolation
 import tifffile # ADDED: For native TIFF I/O
@@ -213,10 +212,8 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
     # --- BasicStorageBackend Methods ---
 
     def load(self, file_path: Union[str, Path], **kwargs) -> Any:
-        """Load data from disk. Currently specialized for images via FileSystemManager."""
-        # TODO: Replace FileSystemManager.load_image with generic load logic
-        #       based on file type or kwargs. For now, assumes image loading.
-        #       Requires understanding how non-image data might be loaded.
+        """Load data from disk. Delegates to load_image for known image types."""
+        # Assumes image loading based on extension or kwargs.
         if 'image' in kwargs or str(file_path).endswith(tuple(DEFAULT_IMAGE_EXTENSIONS)):
              # Delegate to the specific image loader for now
              return self.load_image(file_path)
@@ -226,10 +223,8 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
 
 
     def save(self, data: Any, output_path: Union[str, Path], **kwargs) -> bool:
-        """Save data to disk. Currently specialized for images via FileSystemManager."""
-        # TODO: Replace FileSystemManager.save_image with generic save logic
-        #       based on data type or kwargs. For now, assumes image saving.
-        #       Requires understanding how non-image data might be saved.
+        """Save data to disk. Delegates to save_image for numpy arrays."""
+        # Assumes image saving for numpy arrays.
         if isinstance(data, np.ndarray): # Assuming ImageArray is np.ndarray
             metadata = kwargs.get('metadata') # Check if metadata kwarg exists
             # Delegate to the specific image saver for now
@@ -554,53 +549,35 @@ class DiskStorageBackend(MicroscopyStorageBackend): # Implement the most specifi
 
 
     def rename_files_with_consistent_padding(self, directory: Union[str, Path], parser: Any, width: int = 3, force_suffixes: bool = False) -> Dict[Path, Path]:
-        """Rename files on disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.rename_files_with_consistent_padding with native logic
-        #       involving listing files, parsing names, generating new names, and renaming.
-        logger.debug(f"Delegating rename_files_with_consistent_padding for {directory} to FileSystemManager")
-        try:
-            if hasattr(FileSystemManager, 'rename_files_with_consistent_padding'):
-                # Assuming the return type of FSM is Dict[str, str], convert to Path
-                result_str_dict = FileSystemManager.rename_files_with_consistent_padding(directory, parser, width, force_suffixes)
-                return {Path(k): Path(v) for k, v in result_str_dict.items()}
-            else:
-                logger.error("FileSystemManager.rename_files_with_consistent_padding not found!")
-                return {}
-        except Exception as e:
-            logger.error(f"Error during FileSystemManager.rename_files_with_consistent_padding for {directory}: {e}")
-            return {}
+        """Rename microscopy image files for consistent numerical padding."""
+        # NATIVE IMPLEMENTATION REQUIRED
+        # This method needs a native implementation using self.list_files, parser, and self.rename.
+        logger.warning(f"Native implementation for rename_files_with_consistent_padding in DiskStorageBackend is required. Path: {directory}")
+        # Raise NotImplementedError until implemented
+        raise NotImplementedError("rename_files_with_consistent_padding needs native implementation in DiskStorageBackend")
+        # return {} # Placeholder return
 
 
     def detect_zstack_folders(self, plate_folder: Union[str, Path], pattern: Optional[str] = None) -> Tuple[bool, List[Path]]:
-        """Detect Z-stack folders on disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.detect_zstack_folders with native logic
-        #       (e.g., list directories matching a pattern like 'Z[0-9]+').
-        logger.debug(f"Delegating detect_zstack_folders for {plate_folder} to FileSystemManager")
-        try:
-            if hasattr(FileSystemManager, 'detect_zstack_folders'):
-                return FileSystemManager.detect_zstack_folders(plate_folder, pattern)
-            else:
-                logger.error("FileSystemManager.detect_zstack_folders not found!")
-                return False, []
-        except Exception as e:
-            logger.error(f"Error during FileSystemManager.detect_zstack_folders for {plate_folder}: {e}")
-            return False, []
+        """Detect folders likely containing Z-stack data."""
+        # NATIVE IMPLEMENTATION REQUIRED
+        # This method needs a native implementation, likely involving listing directories
+        # and matching against a pattern (e.g., 'Z[0-9]+').
+        logger.warning(f"Native implementation for detect_zstack_folders in DiskStorageBackend is required. Path: {plate_folder}")
+        # Raise NotImplementedError until implemented
+        raise NotImplementedError("detect_zstack_folders needs native implementation in DiskStorageBackend")
+        # return False, [] # Placeholder return
 
 
     def organize_zstack_folders(self, plate_folder: Union[str, Path], filename_parser: Any) -> bool:
-        """Organize Z-stack folders on disk using FileSystemManager."""
-        # TODO: Replace FileSystemManager.organize_zstack_folders with native logic
-        #       involving listing files, parsing, creating directories, and moving files.
-        logger.debug(f"Delegating organize_zstack_folders for {plate_folder} to FileSystemManager")
-        try:
-            if hasattr(FileSystemManager, 'organize_zstack_folders'):
-                return FileSystemManager.organize_zstack_folders(plate_folder, filename_parser)
-            else:
-                logger.error("FileSystemManager.organize_zstack_folders not found!")
-                return False
-        except Exception as e:
-            logger.error(f"Error during FileSystemManager.organize_zstack_folders for {plate_folder}: {e}")
-            return False
+        """Organize files within Z-stack folders based on a parser."""
+        # NATIVE IMPLEMENTATION REQUIRED
+        # This method needs a native implementation using self.list_files, filename_parser,
+        # self.ensure_directory, and self.rename.
+        logger.warning(f"Native implementation for organize_zstack_folders in DiskStorageBackend is required. Path: {plate_folder}")
+        # Raise NotImplementedError until implemented
+        raise NotImplementedError("organize_zstack_folders needs native implementation in DiskStorageBackend")
+        # return False # Placeholder return
 
     def mirror_directory_with_symlinks(self, source_dir: Union[str, Path], target_dir: Union[str, Path],
                                       recursive: bool = True, overwrite: bool = True) -> int:

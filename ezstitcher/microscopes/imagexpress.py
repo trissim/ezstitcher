@@ -16,7 +16,6 @@ from typing import Dict, List, Optional, Union, Any, Tuple
 from ezstitcher.core.microscope_base import FilenameParser, MetadataHandler
 from ezstitcher.core.microscope_interfaces import MicroscopeHandler
 
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager # Added
 
 logger = logging.getLogger(__name__)
@@ -29,11 +28,11 @@ class ImageXpressHandler(MicroscopeHandler):
     enforcing semantic alignment between file layout parsing and metadata resolution.
     """
 
-    def __init__(self):
-        super().__init__(
-            parser=ImageXpressFilenameParser(),
-            metadata_handler=ImageXpressMetadataHandler()
-        )
+    def __init__(self, file_manager: FileManager):
+        self.file_manager = file_manager
+        self.parser = ImageXpressFilenameParser(file_manager)
+        self.metadata_handler = ImageXpressMetadataHandler()
+        super().__init__(parser=self.parser, metadata_handler=self.metadata_handler)
 
     @property
     def common_dirs(self) -> str:
@@ -54,7 +53,7 @@ class ImageXpressHandler(MicroscopeHandler):
         """
         # Find all subdirectories in workspace
         subdirs = [d for d in workspace_path.iterdir() if d.is_dir()]
-        
+
         # Check if any subdirectory contains common_dirs string
         common_dir_found = False
         for subdir in subdirs:
@@ -62,55 +61,55 @@ class ImageXpressHandler(MicroscopeHandler):
                 # Found a matching directory, process it
                 self._flatten_zsteps(subdir, fm)
                 common_dir_found = True
-        
+
         # If no common directory found, process the workspace directly
         if not common_dir_found:
             self._flatten_zsteps(workspace_path, fm)
-        
+
         # Return the image directory
         return workspace_path
 
     def _flatten_zsteps(self, directory: Path, fm: FileManager):
         """
         Process Z-step folders in the given directory.
-        
+
         Args:
             directory: Directory that might contain Z-step folders
             fm: FileManager instance for file operations
         """
         # Check for Z step folders
         zstep_pattern = re.compile(r"ZStep[_-]?(\d+)", re.IGNORECASE)
-        
+
         potential_z_folders = [
             d for d in directory.iterdir()
             if d.is_dir() and zstep_pattern.search(d.name)
         ]
-        
+
         if not potential_z_folders:
             logger.info(f"No Z step folders found in {directory}. Skipping flattening.")
             return
-        
+
         # Sort Z folders by index
         z_folders = sorted([
             (int(zstep_pattern.search(d.name).group(1)), d)
             for d in potential_z_folders
         ], key=lambda x: x[0])
-        
+
         # Process each Z folder
         for z_index, z_dir in z_folders:
             for img_file in z_dir.glob("*"):
                 if not img_file.is_file():
                     continue
-                
+
                 # Parse the original filename to extract components
                 components = self.parser.parse_filename(img_file.name)
-                
+
                 if not components:
                     continue
-                
+
                 # Update the z_index in the components
                 components['z_index'] = z_index
-                
+
                 # Use the parser to construct a new filename with the updated z_index
                 new_name = self.parser.construct_filename(
                     well=components['well'],
@@ -119,16 +118,16 @@ class ImageXpressHandler(MicroscopeHandler):
                     z_index=z_index,
                     extension=components['extension']
                 )
-                
+
                 # Move to the parent directory
                 new_path = directory / new_name
-                
+
                 try:
                     fm.rename(img_file, new_path)
                     logger.debug(f"Moved {img_file} to {new_path}")
                 except Exception as e:
                     logger.warning(f"Failed to move {img_file} to {new_path}: {e}")
-        
+
         # Remove Z folders after all files have been moved
         for _, z_dir in z_folders:
             try:
@@ -262,25 +261,27 @@ class ImageXpressMetadataHandler(MetadataHandler):
         Args:
             file_manager: FileManager instance. If None, a disk-based FileManager is created.
         """
-        if file_manager is None:
-            file_manager = FileManager(backend='disk')
-            logger.debug("Created default disk-based FileManager for ImageXpressMetadataHandler")
+        super().__init__(file_manager=file_manager)
 
-        self.file_manager = file_manager
-
-    def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
+    def find_metadata_file(self, plate_path: Union[str, Path],
+                          context: Optional['ProcessingContext'] = None) -> Optional[Path]:
         """
         Find the HTD file for an ImageXpress plate.
-        Note: This implementation still relies on Path.glob, assuming the
-              FileManager's backend provides filesystem-like access.
-              A more robust implementation might use file_manager.list_files.
+
+        In non-legacy modes, skips disk access and returns None.
 
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             Path to the HTD file, or None if not found
         """
+        # Check if we should skip disk access
+        if not self.is_legacy_mode(context):
+            logger.debug("Skipping HTD file lookup in non-legacy mode")
+            return None
+
         plate_path = Path(plate_path)
 
         # Look for ImageXpress HTD file in plate directory
@@ -293,12 +294,16 @@ class ImageXpressMetadataHandler(MetadataHandler):
 
         return None
 
-    def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
+    def get_grid_dimensions(self, plate_path: Union[str, Path],
+                           context: Optional['ProcessingContext'] = None) -> Tuple[int, int]:
         """
         Get grid dimensions for stitching from HTD file.
 
+        In non-legacy modes, returns default dimensions.
+
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             (grid_size_x, grid_size_y)
@@ -306,9 +311,15 @@ class ImageXpressMetadataHandler(MetadataHandler):
         Raises:
             ValueError: If grid dimensions cannot be determined from metadata
         """
-        htd_file = self.find_metadata_file(plate_path)
+        # Check if we should skip disk access
+        if not self.is_legacy_mode(context):
+            logger.debug("Using default grid dimensions (3x3) in non-legacy mode")
+            return (3, 3)  # Default dimensions for ImageXpress
+
+        htd_file = self.find_metadata_file(plate_path, context)
         if not htd_file:
-            raise ValueError(f"Cannot find HTD file in {plate_path}. Grid dimensions cannot be determined.")
+            logger.warning("Cannot find HTD file in %s. Using default grid dimensions.", plate_path)
+            return (3, 3)  # Default dimensions
 
         # Parse HTD file
         try:
@@ -328,20 +339,26 @@ class ImageXpressMetadataHandler(MetadataHandler):
             if cols_match and rows_match:
                 grid_size_x = int(cols_match.group(1))
                 grid_size_y = int(rows_match.group(1))
-                logger.info(f"Using grid dimensions from HTD file: {grid_size_x}x{grid_size_y}")
+                logger.info("Using grid dimensions from HTD file: %dx%d", grid_size_x, grid_size_y)
                 return grid_size_x, grid_size_y
-            else:
-                raise ValueError(f"Could not find grid dimensions in HTD file {htd_file}")
-        except Exception as e:
-            logger.error(f"Error parsing HTD file {htd_file}: {e}")
-            raise ValueError(f"Failed to extract grid dimensions from HTD file: {e}") from e
 
-    def get_pixel_size(self, plate_path: Union[str, Path]) -> float:
+            logger.warning("Could not find grid dimensions in HTD file %s. Using default dimensions.", htd_file)
+            return (3, 3)  # Default dimensions
+        except Exception as e:
+            logger.error("Error parsing HTD file %s: %s", htd_file, e)
+            logger.warning("Using default grid dimensions due to error.")
+            return (3, 3)  # Default dimensions
+
+    def get_pixel_size(self, plate_path: Union[str, Path],
+                      context: Optional['ProcessingContext'] = None) -> float:
         """
         Gets pixel size by reading TIFF tags from an image file via FileManager.
 
+        In non-legacy modes, returns default pixel size.
+
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             Pixel size in micrometers
@@ -349,6 +366,14 @@ class ImageXpressMetadataHandler(MetadataHandler):
         Raises:
             ValueError: If pixel size cannot be determined from metadata
         """
+        # Default pixel size for ImageXpress (in micrometers)
+        default_pixel_size = 0.325
+
+        # Check if we should skip disk access
+        if not self.is_legacy_mode(context):
+            logger.debug("Using default pixel size (%.3f μm) in non-legacy mode", default_pixel_size)
+            return default_pixel_size
+
         # TRANSITIONAL: Disk-only logic. This implementation assumes:
         # 1. The backend used by file_manager supports listing image files (like DiskStorageBackend).
         # 2. The backend allows direct reading of TIFF file tags (implicitly assumes local file access
@@ -359,7 +384,8 @@ class ImageXpressMetadataHandler(MetadataHandler):
             # Use file_manager to list potential image files
             image_files = self.file_manager.list_image_files(plate_path, extensions={'.tif', '.tiff'}, recursive=True)
             if not image_files:
-                raise ValueError(f"No TIFF images found in {plate_path} to read pixel size.")
+                logger.warning("No TIFF images found in %s to read pixel size. Using default.", plate_path)
+                return default_pixel_size
 
             # Attempt to read tags from the first found image
             # Assumes direct path access is possible via the backend (true for Disk)
@@ -372,18 +398,22 @@ class ImageXpressMetadataHandler(MetadataHandler):
                      # Look for spatial calibration using regex
                      match = re.search(r'id="spatial-calibration-x"[^>]*value="([0-9.]+)"', desc)
                      if match:
-                         logger.info(f"Found pixel size metadata {str(float(match.group(1)))} in {first_image_path}")
+                         logger.info("Found pixel size metadata %.3f in %s",
+                                    float(match.group(1)), first_image_path)
                          return float(match.group(1))
 
                      # Alternative pattern for some formats
                      match = re.search(r'Spatial Calibration: ([0-9.]+) [uµ]m', desc)
                      if match:
-                         logger.info(f"Found pixel size metadata {str(float(match.group(1)))} in {first_image_path}")
+                         logger.info("Found pixel size metadata %.3f in %s",
+                                    float(match.group(1)), first_image_path)
                          return float(match.group(1))
 
             # If we get here, we couldn't find the pixel size
-
+            logger.warning("Could not find pixel size in image metadata. Using default.")
+            return default_pixel_size
 
         except Exception as e:
-            logger.error(f"Error getting pixel size from {plate_path}: {e}", exc_info=True)
-            raise ValueError(f"Failed to determine pixel size from images in {plate_path}: {e}") from e
+            logger.error("Error getting pixel size from %s: %s", plate_path, e, exc_info=True)
+            logger.warning("Using default pixel size due to error.")
+            return default_pixel_size

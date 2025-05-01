@@ -10,6 +10,7 @@ core with a functional interface.
 from typing import Dict, List, Any, Optional, Union, Set, Callable, TypeVar, Generic
 import logging
 from pathlib import Path
+import numpy as np # Added for type checking
 
 # Import base interface
 from .pipeline_base import PipelineInterface
@@ -174,8 +175,50 @@ class Pipeline(PipelineInterface):
 
         # Execute each step
         for i, step in enumerate(self.steps):
-            logger.info("Executing step %d/%d: %s", i+1, len(self.steps), step)
-            context = step.process(context)
+            step_id = id(step) # Get step ID for context/logging
+            logger.info("Executing step %d/%d: %s (ID: %s)", i+1, len(self.steps), step.name, step_id)
+
+            # Assuming step.process returns a dictionary of its outputs
+            step_outputs = step.process(context)
+
+            if not isinstance(step_outputs, dict):
+                 logger.warning(f"Step '{step.name}' process method did not return a dictionary. Output type: {type(step_outputs)}. Skipping results merge and storage adapter write for this step.")
+                 # Decide how to handle this - potentially update context based on return type?
+                 # For now, we assume the step might have modified context directly if it didn't return dict.
+                 # context = step_outputs if isinstance(step_outputs, ProcessingContext) else context # Example handling
+                 continue # Skip merge and storage write if output is not a dict
+
+            # Merge step outputs into context results
+            context.results.update(step_outputs)
+            logger.debug(f"Step '{step.name}' produced outputs: {list(step_outputs.keys())}")
+
+            # --- Write outputs to Storage Adapter ---
+            # Import here to avoid circular imports
+            from ezstitcher.io.storage_adapter import write_result
+
+            pipeline_id = self.name # Use pipeline name as part of the key
+            step_name_safe = step.name.replace(" ", "_").lower() # Make step name safe for keys
+
+            for output_name, output_data in step_outputs.items():
+                if isinstance(output_data, np.ndarray): # Only store numpy arrays
+                    # Construct a unique key
+                    storage_key = f"{pipeline_id}_{step_name_safe}_{i}_{output_name}"
+
+                    # Use the helper function to write the result
+                    success = write_result(
+                        context=context,
+                        key=storage_key,
+                        data=output_data,
+                        fallback_path=None  # No fallback path for pipeline outputs
+                    )
+
+                    if success:
+                        logger.debug("Successfully stored output '%s' with key '%s'",
+                                    output_name, storage_key)
+                else:
+                    logger.debug("Skipping non-numpy output '%s' from step '%s'. Type: %s",
+                                output_name, step.name, type(output_data).__name__)
+            # -----------------------------------------
 
         logger.info("Pipeline completed: %s", self.name)
         return context
@@ -223,6 +266,54 @@ class ProcessingContext:
         # Add any additional attributes
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    @property
+    def storage_mode(self) -> str:
+        """
+        Get the storage mode from the orchestrator.
+
+        Returns:
+            The storage mode ("legacy", "memory", "zarr")
+        """
+        if not hasattr(self, 'orchestrator') or self.orchestrator is None:
+            logger.debug("No orchestrator available, defaulting to 'legacy' storage mode")
+            return "legacy"
+
+        mode = getattr(self.orchestrator, 'storage_mode', "legacy")
+        logger.debug("Resolved storage_mode from context: %s", mode)
+        return mode
+
+    def is_legacy_mode(self) -> bool:
+        """
+        Check if the storage mode is legacy.
+
+        Returns:
+            True if storage_mode is "legacy", False otherwise
+        """
+        return self.storage_mode == "legacy"
+
+    def store_array(self, key: str, data: np.ndarray, fallback_path: Optional[Path] = None) -> bool:
+        """
+        Store a numpy array using the storage adapter if available.
+
+        Args:
+            key: The storage key
+            data: The numpy array to store
+            fallback_path: Optional path to save to if storage adapter is not available
+
+        Returns:
+            True if stored successfully, False if no storage adapter is available or on error
+        """
+        # Import here to avoid circular imports
+        from ezstitcher.io.storage_adapter import write_result
+
+        # Use the helper function to write the result
+        return write_result(
+            context=self,
+            key=key,
+            data=data,
+            fallback_path=fallback_path
+        )
 
     def add_step_plan(self, step, plan):
         """

@@ -18,7 +18,6 @@ from pathlib import Path
 import numpy as np
 
 # Import core components
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager # Added
 from ezstitcher.core.utils import prepare_patterns_and_functions
 from ezstitcher.core.abstract_step import AbstractStep
@@ -135,12 +134,15 @@ class Step(AbstractStep):
         """
         logger.info("Processing step: %s", self.name)
 
+        # Store context for use in _save_images
+        self._current_context = context
+
         # Get directories and components from context
         input_dir = context.get_step_input_dir(self)
         output_dir = context.get_step_output_dir(self)
         in_place = input_dir == output_dir
         if in_place:
-            logger.warning(f"Input and output directories are the same for step {self.name}. Working in-place.")
+            logger.warning("Input and output directories are the same for step %s. Working in-place.", self.name)
 
         well_filter = context.well_filter
         try:
@@ -247,6 +249,44 @@ class Step(AbstractStep):
 
         # Store results in context
         context.results = results
+
+        # Explicitly write numpy array results to storage adapter if available
+        if hasattr(context, 'orchestrator') and context.orchestrator:
+            storage_mode = getattr(context.orchestrator, 'storage_mode', "legacy")
+            if storage_mode != "legacy":
+                # Import here to avoid circular imports
+                from ezstitcher.io.storage_adapter import generate_storage_key, write_result
+
+                # Log the number of results
+                logger.debug("Step '%s' has %d well results to potentially store",
+                            self.name, len(results))
+
+                # Iterate through results and store numpy arrays
+                for well, well_data in results.items():
+                    for component, component_data in well_data.items():
+                        if isinstance(component_data, np.ndarray):
+                            # Generate a meaningful key
+                            key = generate_storage_key(self.name, well, component)
+
+                            # Write to storage adapter
+                            success = write_result(
+                                context=context,
+                                key=key,
+                                data=component_data,
+                                fallback_path=None
+                            )
+
+                            if success:
+                                logger.debug(
+                                    "Successfully stored result for well '%s', component '%s', key '%s'",
+                                    well, component, key
+                                )
+                            else:
+                                logger.warning(
+                                    "Failed to store result for well '%s', component '%s'",
+                                    well, component
+                                )
+
         return context
 
     def _extract_function_and_args(
@@ -300,7 +340,7 @@ class Step(AbstractStep):
 
             # Apply the function
             result = self._apply_single_function(processed_images, func, func_args)
-            processed_images = [self._ensure_2d(img) for img in result]
+            processed_images = [img for img in result]
 
         return processed_images
 
@@ -432,39 +472,87 @@ class Step(AbstractStep):
         file_manager: FileManager
     ) -> List[str]:
         """
-        Save processed images using the FileManager.
+        Save processed images using the StorageAdapter if available, otherwise using FileManager.
 
         Args:
             input_dir: The logical input directory of the step (unused here but kept for signature consistency).
             output_dir: The directory where images should be saved.
             images: List of processed images (numpy arrays).
             filenames: List of original filenames corresponding to the images.
-            file_manager: The FileManager instance to use for saving.
+            file_manager: The FileManager instance to use for saving if StorageAdapter is not available.
 
         Returns:
             List of absolute paths to the saved files.
         """
+        if not images or not filenames:
+            return []
+
         saved_files = []
 
-        # Ensure output directory exists
-        try:
-            file_manager.ensure_directory(output_dir)
-        except Exception as e:
-            logger.error(f"Failed to ensure output directory {output_dir}: {e}")
-            return [] # Cannot save if directory cannot be created
+        # Get context from instance
+        context = self._current_context
+
+        # Check if storage adapter is available
+        has_adapter = False
+        if context and hasattr(context, 'orchestrator') and context.orchestrator:
+            storage_mode = getattr(context.orchestrator, 'storage_mode', "legacy")
+            has_adapter = storage_mode != "legacy" and hasattr(context.orchestrator, 'storage_adapter')
+
+            if has_adapter:
+                logger.debug("Storage adapter available for saving images in step '%s'", self.name)
+            else:
+                logger.debug("No storage adapter available, using file_manager fallback in step '%s'",
+                            self.name)
+
+        # Ensure output directory exists if we're using file_manager
+        if not has_adapter:
+            try:
+                file_manager.ensure_directory(output_dir)
+            except Exception as e:
+                logger.error("Failed to ensure output directory %s: %s", output_dir, e)
+                return [] # Cannot save if directory cannot be created
 
         for img, fname in zip(images, filenames):
-            # Construct the full output path
-            output_path = output_dir / fname
+            if img is None:
+                continue
+
+            # Construct output path
+            rel_path = Path(fname).relative_to(input_dir) if Path(fname).is_relative_to(input_dir) else Path(fname).name
+            output_path = output_dir / rel_path
+
             try:
-                # Use file_manager to save the image
-                if file_manager.save_image(img, output_path):
-                    # Store the absolute path as a string
-                    saved_files.append(str(output_path.resolve()))
+                # Generate a storage key based on step name, well, and filename
+                well = context.well_filter[0] if context and hasattr(context, 'well_filter') and context.well_filter else None
+
+                # Import here to avoid circular imports
+                from ezstitcher.io.storage_adapter import generate_storage_key, write_result
+
+                # Create a key using the step name, well, and filename
+                storage_key = generate_storage_key(self.name, well, Path(fname).stem)
+
+                # Log the key being used
+                logger.debug("Generated storage key '%s' for file '%s'", storage_key, fname)
+
+                # Use the helper function to write the result
+                success = write_result(
+                    context=context,
+                    key=storage_key,
+                    data=img,
+                    fallback_path=output_path,
+                    file_manager=file_manager
+                )
+
+                if success:
+                    # Store the path for compatibility with existing code
+                    saved_files.append(str(output_path))
+                    logger.debug("Successfully saved image '%s' with key '%s'", fname, storage_key)
                 else:
-                    logger.warning(f"Failed to save image to {output_path} via file manager.")
+                    logger.warning("Failed to save image '%s'", fname)
             except Exception as e:
-                logger.error(f"Error saving image {output_path}: {e}", exc_info=True)
+                logger.error("Error saving image %s: %s", output_path, e, exc_info=True)
+
+        # Log summary of saved files
+        logger.debug("Step '%s' saved %d files", self.name, len(saved_files))
 
         return saved_files
 

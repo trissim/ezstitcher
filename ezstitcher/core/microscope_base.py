@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Union, Any, Tuple
+from typing import List, Dict, Optional, Union, Any, Tuple, Literal
 from pathlib import Path
 import re
 import logging
 from collections import defaultdict
-from ezstitcher.io.filemanager import FileManager 
+from ezstitcher.io.filemanager import FileManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,9 @@ class FilenameParser(ABC):
     # Constants
     FILENAME_COMPONENTS = ['well', 'site', 'channel', 'z_index', 'extension']
     PLACEHOLDER_PATTERN = '{iii}'
+
+    def __init__(self, file_manager: FileManager):
+        self.file_manager = file_manager
 
     @classmethod
     @abstractmethod
@@ -67,7 +70,7 @@ class FilenameParser(ABC):
         """
         pass
 
-    def path_list_from_pattern(self, directory, pattern, fm = FileManager(backend='disk')):
+    def path_list_from_pattern(self, directory, pattern, fm = None):
         """
         Get a list of filenames matching a pattern in a directory.
 
@@ -79,6 +82,7 @@ class FilenameParser(ABC):
             list: List of matching filenames
         """
         directory = Path(directory)
+        fm = fm or self.file_manager
 
         # Handle substitution of {series} if present (from Ashlar)
         if "{series}" in pattern:
@@ -217,7 +221,7 @@ class FilenameParser(ABC):
 
         return result
 
-    def _find_and_filter_images(self, folder_path, well_filter=None, extensions=None, fm = FileManager(backend='disk')):
+    def _find_and_filter_images(self, folder_path, well_filter=None, extensions=None, fm = None):
         """
         Find all image files in a directory and filter by well.
 
@@ -230,6 +234,7 @@ class FilenameParser(ABC):
             dict: Dictionary mapping wells to lists of image files
         """
         import time  # Import here for timing
+        fm = fm or self.file_manager
 
         start_time = time.time()
         logger.info("Finding and filtering images in %s", folder_path)
@@ -237,7 +242,7 @@ class FilenameParser(ABC):
         # Find all image files
         folder_path = Path(folder_path)
         extensions = extensions or ['.tif', '.TIF', '.tiff', '.TIFF']
-        image_dir = folder_path 
+        image_dir = folder_path
         logger.info("Using image directory: %s", image_dir)
 
         image_paths = fm.list_image_files(image_dir, extensions, recursive=True)
@@ -333,13 +338,44 @@ class MetadataHandler(ABC):
     Abstract base class for handling microscope metadata.
     """
 
+    def __init__(self, file_manager: Optional[FileManager] = None):
+        """
+        Initialize the metadata handler.
+
+        Args:
+            file_manager: FileManager instance. If None, a disk-based FileManager is created.
+        """
+        if file_manager is None:
+            file_manager = FileManager(backend='disk')
+            logger.debug("Created default disk-based FileManager for MetadataHandler")
+
+        self.file_manager = file_manager
+
+    def is_legacy_mode(self, context: Optional['ProcessingContext'] = None) -> bool:
+        """
+        Check if the storage mode is legacy.
+
+        Args:
+            context: Optional ProcessingContext to get storage_mode from
+
+        Returns:
+            True if storage_mode is "legacy", False otherwise
+        """
+        if context is None:
+            logger.debug("No context provided to is_legacy_mode, defaulting to True")
+            return True
+
+        return context.is_legacy_mode()
+
     @abstractmethod
-    def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
+    def find_metadata_file(self, plate_path: Union[str, Path],
+                          context: Optional['ProcessingContext'] = None) -> Optional[Path]:
         """
         Find the metadata file for a plate.
 
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             Path to the metadata file, or None if not found
@@ -347,12 +383,14 @@ class MetadataHandler(ABC):
         pass
 
     @abstractmethod
-    def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
+    def get_grid_dimensions(self, plate_path: Union[str, Path],
+                           context: Optional['ProcessingContext'] = None) -> Tuple[int, int]:
         """
         Get grid dimensions for stitching from metadata.
 
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             (grid_size_x, grid_size_y)
@@ -360,12 +398,14 @@ class MetadataHandler(ABC):
         pass
 
     @abstractmethod
-    def get_pixel_size(self, plate_path: Union[str, Path]) -> float:
+    def get_pixel_size(self, plate_path: Union[str, Path],
+                      context: Optional['ProcessingContext'] = None) -> float:
         """
         Get the pixel size from metadata.
 
         Args:
             plate_path: Path to the plate folder
+            context: Optional ProcessingContext to get storage_mode from
 
         Returns:
             Pixel size in micrometers

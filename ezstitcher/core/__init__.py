@@ -4,7 +4,6 @@
 from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
 from ezstitcher.core.stitcher import Stitcher
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
 from ezstitcher.core.pipeline import Pipeline, Step, ProcessingContext # Added missing imports from previous diff
 
@@ -18,6 +17,7 @@ from ezstitcher.core.config import (
 from ezstitcher.core.pipeline_factories import AutoPipelineFactory
 
 __all__ = [
+    'ProcessingContext',
     'ImageProcessor',
     'FocusAnalyzer',
     'Stitcher',

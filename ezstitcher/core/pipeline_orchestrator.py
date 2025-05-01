@@ -6,12 +6,11 @@ import time
 import threading
 import concurrent.futures
 from pathlib import Path
-from typing import Union, Optional, List, Dict, Tuple, Any
+from typing import Union, Optional, List, Dict, Tuple, Any, TYPE_CHECKING, Literal
 
 
 from ezstitcher.core.microscope_interfaces import create_microscope_handler, MicroscopeHandler
 from ezstitcher.core.stitcher import Stitcher
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager # Added
 from ezstitcher.core.image_processor import ImageProcessor
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
@@ -22,6 +21,12 @@ from ezstitcher.core.opera_phenix_xml_parser import OperaPhenixXmlParser
 from ezstitcher.core.pipeline import Step, Pipeline, StepExecutionPlan
 
 from ezstitcher.core.pattern_resolver import get_patterns_for_well
+from ezstitcher.io.storage_adapter import StorageAdapter, ZarrStorageAdapter
+
+# Type hint for StorageAdapter without circular import issues at runtime
+if TYPE_CHECKING:
+    from ezstitcher.io.storage_adapter import StorageAdapter
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_PADDING = 3
@@ -38,9 +43,10 @@ class PipelineOrchestrator:
                  config: Optional[PipelineConfig] = None,
                  root_dir: Optional[Union[str, Path]] = None,
                  backend: Optional[str] = None,
-                 file_manager: Optional[FileManager] = None,
                  image_preprocessor: Optional[ImageProcessor] = None,
-                 focus_analyzer: Optional[FocusAnalyzer] = None):
+                 focus_analyzer: Optional[FocusAnalyzer] = None,
+                 storage_mode: Literal["legacy", "memory", "zarr"] = "legacy", # Changed from storage_adapter
+                 storage_root: Optional[Path] = None): # Added storage_root
         """
         Initialize the pipeline orchestrator with dependencies.
 
@@ -51,25 +57,20 @@ class PipelineOrchestrator:
             root_dir: Root directory for file operations. If None, uses current directory.
             backend: String identifier for the storage backend type (e.g., "filesystem", "memory").
                      If None, defaults to "filesystem".
-            file_manager: FileManager instance. If None, a new one is created using root_dir and backend.
             image_preprocessor: Instance for image preprocessing steps.
             focus_analyzer: Instance for focus analysis.
+            storage_mode: Mode for intermediate storage ('legacy', 'memory', 'zarr').
+            storage_root: Root directory for disk-based storage modes (e.g., 'zarr').
         """
         self.config = config or PipelineConfig()
         self.plate_path = Path(plate_path) if plate_path else None
+        self._init_fm = FileManager(backend='disk')
+        self.storage_mode = storage_mode
+        self.storage_adapter: Optional[StorageAdapter] = None
+        self.storage_root = storage_root
 
-        # --- Use provided FileManager or create a new one ---
-        if file_manager is not None:
-            self.file_manager = file_manager
-            logger.info("Using provided FileManager with backend: %s", type(self.file_manager.backend).__name__)
-        else:
-            # Create FileManager using root_dir and backend
-            self.file_manager = FileManager(root_dir=root_dir, backend=backend)
-            logger.info("Created new FileManager with backend: %s", type(self.file_manager.backend).__name__)
 
-        # --- Workspace Path Determination ---
-        # Logic to determine the workspace path, potentially using file_manager if needed
-        # (e.g., checking existence or creating it via ensure_directory).
+
         if workspace_path:
             self.workspace_path = workspace_path
         elif self.plate_path:
@@ -85,7 +86,7 @@ class PipelineOrchestrator:
             try:
                 # 1. Mirror plate_path to workspace_path first
                 logger.info("Mirroring plate directory to workspace...")
-                workspace_fm = FileManager(root_dir=self.file_manager.root_dir, backend="disk")
+                workspace_fm = FileManager(backend="disk")
                 num_links = workspace_fm.mirror_directory_with_symlinks(
                     source_dir=self.plate_path,
                     target_dir=self.workspace_path,
@@ -97,9 +98,12 @@ class PipelineOrchestrator:
                 # 2. Set input_dir to workspace_path for all subsequent operations
                 self.input_dir = self.workspace_path
 
-                # 3. Initialize microscope handler using workspace
+                # 3. Initialize file stuff
+                self.initialize_storage_adapter()
+                self.initialize_file_manager()
+
+                # 4. Initialize microscope handler using workspace
                 logger.info("Initializing microscope handler using workspace...")
-                #microscope_type = self._detect_microscope_handler(self.workspace_path)
                 self.microscope_handler = create_microscope_handler(
                     microscope_type='auto',
                     plate_folder=self.workspace_path,
@@ -127,6 +131,7 @@ class PipelineOrchestrator:
         self.focus_analyzer = focus_analyzer or FocusAnalyzer()
 
 
+
         logger.info("PipelineOrchestrator initialized.")
 
 
@@ -147,14 +152,30 @@ class PipelineOrchestrator:
             if not source_path_for_metadata:
                  raise ValueError("Cannot determine grid size or pixel size without plate_path or input_dir.")
 
-            self.config.grid_size = self.microscope_handler.get_grid_dimensions(source_path_for_metadata)
-            logger.info("Grid size: %s", self.config.grid_size)
+            # Create a context for metadata access
+            from ezstitcher.core.pipeline import ProcessingContext
+            temp_context = ProcessingContext(orchestrator=self)
+
+            # Get grid dimensions with context and fallback to defaults if needed
             try:
-                # Use source_path_for_metadata
-                self.config.pixel_size = self.microscope_handler.get_pixel_size(source_path_for_metadata) or self.config.stitcher.pixel_size
+                self.config.grid_size = self.microscope_handler.get_grid_dimensions(
+                    source_path_for_metadata,
+                    context=temp_context
+                )
+                logger.info("Grid size: %s", self.config.grid_size)
             except Exception as e:
-                # Log error specific to pixel size detection
-                logger.error(f"Failed to auto-detect pixel size from {source_path_for_metadata}: {e}")
+                logger.warning("Failed to get grid dimensions: %s. Using default (4x4).", e)
+                self.config.grid_size = (4, 4)  # Default dimensions
+
+            # Get pixel size with context and fallback to defaults if needed
+            try:
+                self.config.pixel_size = self.microscope_handler.get_pixel_size(
+                    source_path_for_metadata,
+                    context=temp_context
+                ) or self.config.stitcher.pixel_size
+            except Exception as e:
+                logger.warning("Failed to auto-detect pixel size from %s: %s. Using default.",
+                              source_path_for_metadata, e)
                 self.config.pixel_size = self.config.stitcher.pixel_size
             logger.info("Pixel size: %s", self.config.pixel_size)
 
@@ -212,6 +233,45 @@ class PipelineOrchestrator:
             # Final cleanup after all wells have been processed
             # Cleanup is now handled by individual pipelines
 
+            # --- Persist storage adapter if needed ---
+            if self.storage_adapter and hasattr(self.storage_adapter, 'persist'):
+                # Import here to avoid circular imports
+                from ezstitcher.io.storage_adapter import resolve_persist_path
+
+                # Check if there are any keys to persist
+                keys = self.storage_adapter.list_keys()
+                if not keys:
+                    logger.warning("No keys found in storage adapter, nothing to persist")
+                    return True
+
+                # Log the keys that will be persisted
+                logger.debug("Storage adapter contains %d keys to persist: %s",
+                            len(keys), keys[:5] if len(keys) > 5 else keys)
+
+                # Resolve the appropriate persist path
+                persist_target_dir = resolve_persist_path(
+                    storage_mode=self.storage_mode,
+                    workspace_path=self.workspace_path,
+                    storage_root=self.storage_root
+                )
+
+                # Only persist if we have a valid path (None means persist is not applicable)
+                if persist_target_dir:
+                    logger.info("Persisting %d keys using %s to %s...",
+                               len(keys), type(self.storage_adapter).__name__, persist_target_dir)
+                    try:
+                        # Ensure the target directory exists before persisting
+                        persist_target_dir.mkdir(parents=True, exist_ok=True)
+                        self.storage_adapter.persist(persist_target_dir)
+                        logger.info("Persistence complete to %s.", persist_target_dir)
+                    except Exception as e:
+                        logger.error("Storage adapter persist failed: %s", e, exc_info=True)
+                        # Warn but don't fail the whole run
+                else:
+                    logger.debug("No persist path resolved for %s mode, skipping persist",
+                                self.storage_mode)
+
+
             return True
 
         except Exception as e:
@@ -236,14 +296,15 @@ class PipelineOrchestrator:
         # Auto-detect all wells
         all_wells = set()
 
+        disk_fm = FileManager(backend='disk')
         try:
             # Use injected file_manager instance
-            image_paths = self.file_manager.list_image_files(input_dir, recursive=True)
+            image_paths = disk_fm.list_image_files(input_dir, recursive=True)
             logger.info("Found %d image files. Extracting well info...", len(image_paths))
 
             if not self.microscope_handler:
-                 logger.error("Microscope handler not initialized, cannot parse filenames.")
-                 return []
+                logger.error("Microscope handler not initialized, cannot parse filenames.")
+                return []
 
             for img_path in image_paths:
                 # Ensure img_path.name is passed if parser expects only filename string
@@ -563,3 +624,66 @@ class PipelineOrchestrator:
                 output_path=output_path,
                 override_names=[str(input_dir / f) for f in matching_files]
             )
+
+    def initialize_storage_adapter(self):
+        """
+        Initialize the storage adapter based on the storage_mode.
+
+        This method creates a StorageAdapter instance based on the storage_mode:
+        - "legacy": No adapter is created (None)
+        - "memory": MemoryStorageAdapter is created
+        - "zarr": ZarrStorageAdapter is created
+
+        The storage_root is used as the root directory for the adapter.
+        If no storage_root is provided, the input_dir is used.
+        """
+        if self.storage_mode != "legacy":
+            # Determine the effective storage root
+            effective_storage_root = self.storage_root or self.input_dir
+            if not effective_storage_root:
+                raise ValueError("Zarr/memory mode needs a valid root path.")
+
+            # For zarr mode, create a specific subdirectory if no storage_root was provided
+            if self.storage_mode == "zarr" and not self.storage_root:
+                effective_storage_root = self.input_dir / "zarr_storage"
+                logger.warning("Defaulting zarr root to %s", effective_storage_root)
+
+            # Import here to avoid circular imports
+            from ezstitcher.io.storage_adapter import select_storage
+
+            # Create the storage adapter
+            self.storage_adapter = select_storage(
+                mode=self.storage_mode,
+                storage_root=effective_storage_root
+            )
+
+            # Verify the adapter was created successfully
+            if self.storage_adapter is None:
+                raise RuntimeError(
+                    f"Failed to create StorageAdapter for mode '{self.storage_mode}'"
+                )
+
+            logger.info("Initialized StorageAdapter: %s at %s",
+                       type(self.storage_adapter).__name__, effective_storage_root)
+        else:
+            self.storage_adapter = None
+            logger.info("No StorageAdapter: legacy mode.")
+
+    def initialize_file_manager(self):
+        """
+        Initialize the FileManager with the appropriate backend.
+
+        This method creates a FileManager instance with a backend based on the storage_mode:
+        - "memory": Uses a memory backend for testing
+        - All other modes: Uses a filesystem backend
+
+        The input_dir is used as the root directory for the FileManager.
+        """
+        # Always use filesystem backend for FileManager unless explicitly testing memory
+        if self.storage_mode == "memory":
+            backend = "memory"
+        else:
+            backend = "filesystem"
+
+        self.file_manager = FileManager(backend=backend, root_dir=self.input_dir)
+        logger.info("Initialized FileManager with backend '%s'", backend)

@@ -274,7 +274,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
 
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir)
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir,storage_mode="zarr")
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
@@ -299,7 +299,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
 
             PositionGenerationStep()
         ],
-        name="Position Generation Pipeline"
+        name="Position Generation Pipeline",
     )
 
     # Create image assembly pipeline
@@ -403,10 +403,12 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
     # The orchestrator will set up the directories and wells when run is called
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
-
-
-
+    # Use Zarr storage mode for this test
+    orchestrator = PipelineOrchestrator(
+        config=base_pipeline_config,
+        plate_path=zstack_plate_dir,
+        storage_mode="zarr"
+    )
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
@@ -451,7 +453,79 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
 
     # Create a list of pipelines to run
     pipelines = [position_pipeline, assembly_pipeline]
+
     # Run the orchestrator with the pipelines
     success = orchestrator.run(pipelines=pipelines)
     assert success, "Pipeline execution failed"
+
+    # Verify that data was written to Zarr storage
+    assert orchestrator.storage_adapter is not None, "Storage adapter should be initialized"
+    assert orchestrator.storage_mode == "zarr", "Storage mode should be zarr"
+
+    # Check that the Zarr store exists
+    zarr_path = orchestrator.storage_adapter.zarr_path
+    assert zarr_path.exists(), f"Zarr store should exist at {zarr_path}"
+
+    # Check that keys were written to the Zarr store
+    keys = orchestrator.storage_adapter.list_keys()
+    assert len(keys) > 0, "Zarr store should contain keys"
+
+    # Check for specific keys from our steps
+    step_names = ["z-stack_flattening", "percentile_normalization", "channel_composite",
+                  "channel-specific_cleaning"]
+
+    # At least one key should contain each step name
+    for step_name in step_names:
+        matching_keys = [k for k in keys if step_name in k.lower()]
+        assert len(matching_keys) > 0, f"Expected to find keys for step '{step_name}'"
+
     print_thread_activity_report()
+
+def test_storage_adapter_usage_in_steps(zstack_plate_dir, base_pipeline_config):
+    """
+    Test that steps correctly use the StorageAdapter when available.
+
+    This test verifies that:
+    1. Steps use the StorageAdapter when it's available
+    2. Data is correctly written to the storage backend
+    3. The correct keys are generated for the data
+    """
+    # Create orchestrator with memory storage mode
+    orchestrator = PipelineOrchestrator(
+        config=base_pipeline_config,
+        plate_path=zstack_plate_dir,
+        storage_mode="memory"  # Use memory storage for faster testing
+    )
+
+    # Create a simple pipeline with a single step
+    test_pipeline = Pipeline(
+        steps=[
+            # Use a simple step that processes images
+            Step(name="Test Step",
+                 func=(IP.create_projection, {'method': 'max_projection'}),
+                 variable_components=['z_index'],
+                 input_dir=orchestrator.workspace_path)
+        ],
+        name="Test Pipeline"
+    )
+
+    # Run the pipeline
+    success = orchestrator.run(pipelines=[test_pipeline])
+    assert success, "Pipeline execution failed"
+
+    # Verify that data was written to the storage adapter
+    assert orchestrator.storage_adapter is not None, "Storage adapter should be initialized"
+
+    # Check that keys were written to the storage
+    keys = orchestrator.storage_adapter.list_keys()
+    assert len(keys) > 0, "Storage should contain keys"
+
+    # Check for keys from our test step
+    test_step_keys = [k for k in keys if "test_step" in k.lower()]
+    assert len(test_step_keys) > 0, "Expected to find keys for 'Test Step'"
+
+    # Verify we can read the data back from storage
+    for key in test_step_keys:
+        data = orchestrator.storage_adapter.read(key)
+        assert isinstance(data, np.ndarray), f"Data for key '{key}' should be a numpy array"
+        assert data.size > 0, f"Data for key '{key}' should not be empty"

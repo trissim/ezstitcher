@@ -10,9 +10,7 @@ import shutil # For setting up disk tests if needed
 from ezstitcher.io.storage_backend import BasicStorageBackend, MicroscopyStorageBackend, DiskStorageBackend, FakeStorageBackend
 from ezstitcher.io.types import ImageArray
 from ezstitcher.io.constants import DEFAULT_IMAGE_EXTENSIONS
-from ezstitcher.core.file_system_manager import FileSystemManager # For mocking DiskStorageBackend delegations
-
-# --- Fixtures ---
+ # --- Fixtures ---
 @pytest.fixture
 def fake_backend() -> FakeStorageBackend:
     """Provides a clean FakeStorageBackend for each test."""
@@ -150,26 +148,10 @@ class TestDiskStorageBackend:
             tmp_path / "file1.txt", subdir / "file3.txt"
         }
 
-    # Test DELEGATED methods (mock FileSystemManager)
-    @patch.object(FileSystemManager, 'load_image', return_value=np.ones((2,2), dtype=np.uint8))
-    def test_load_image_delegated(self, mock_fsm_load, disk_backend):
-        # No tmp_path needed as we mock the filesystem interaction
-        img_path = "path/does/not/need/to/exist/image.tif"
-        img = disk_backend.load_image(img_path)
-        mock_fsm_load.assert_called_once_with(img_path)
-        assert img is not None
-        np.testing.assert_array_equal(img, np.ones((2,2), dtype=np.uint8))
-
-    @patch.object(FileSystemManager, 'save_image', return_value=True)
-    def test_save_image_delegated(self, mock_fsm_save, disk_backend):
-        img_path = "path/output.tif"
-        img_data = np.zeros((3,3))
-        result = disk_backend.save_image(img_data, img_path)
-        # Check that FSM was called correctly (might depend on FSM signature)
-        mock_fsm_save.assert_called_once_with(img_data, img_path)  # Note: order is image, path
-        assert result is True
-
-    # We're now using our own implementation instead of delegating to FileSystemManager
+    # DEPRECATED tests for FileSystemManager delegation removed.
+    # Native load/save logic should be tested separately if/when implemented.
+ 
+    # We're now using our own implementation instead of delegating to the old FileSystemManager
     def test_list_image_files_native(self, disk_backend, tmp_path):
         # Setup
         (tmp_path / "file1.tif").touch()

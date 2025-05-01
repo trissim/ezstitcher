@@ -16,7 +16,6 @@ import pandas as pd
 from ashlar import fileseries, reg
 
 from ezstitcher.core.config import StitcherConfig
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager # Added
 from ezstitcher.core.image_processor import create_linear_weight_mask
 #from ezstitcher.core.microscope_interfaces import FilenameParser

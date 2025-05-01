@@ -14,9 +14,8 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Type, Mapping, Set
+from typing import Dict, List, Optional, Union, Any, Tuple, Callable, Type, Mapping, Set, Literal
 
-# Removed: from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.io.filemanager import FileManager
 from ezstitcher.core.microscope_base import FilenameParser, MetadataHandler
 
@@ -40,10 +39,9 @@ class MicroscopeHandler(ABC):
     DEFAULT_MICROSCOPE = 'ImageXpress'
     _handlers_cache = None
 
-    # Updated __init__ signature
     def __init__(self, parser: FilenameParser,
                  metadata_handler: MetadataHandler,
-                 file_manager: Optional[FileManager] = None): # Inject FileManager
+                 file_manager: Optional[FileManager] = None):
         """
         Initialize the microscope handler.
 
@@ -61,7 +59,44 @@ class MicroscopeHandler(ABC):
 
         self.file_manager = file_manager
         self.plate_folder: Optional[Path] = None # Store workspace path if needed by methods
-    
+
+    @classmethod
+    def _discover_handlers(cls) -> Dict[str, Tuple[Type[FilenameParser], Type[MetadataHandler]]]:
+        """
+        Discover available microscope handlers.
+
+        Returns:
+            Dict mapping microscope type names to (parser_class, metadata_handler_class) tuples
+        """
+        # Use cached handlers if available
+        if cls._handlers_cache is not None:
+            return cls._handlers_cache
+
+        # Import specific implementations
+        from ezstitcher.microscopes.opera_phenix import OperaPhenixFilenameParser, OperaPhenixMetadataHandler
+        from ezstitcher.microscopes.imagexpress import ImageXpressFilenameParser, ImageXpressMetadataHandler
+
+        # Create mapping of microscope types to handler classes
+        handlers = {
+            'opera_phenix': (OperaPhenixFilenameParser, OperaPhenixMetadataHandler),
+            'imagexpress': (ImageXpressFilenameParser, ImageXpressMetadataHandler),
+        }
+
+        # Add normalized versions (without underscores)
+        normalized_handlers = {}
+        for key, value in handlers.items():
+            normalized_key = key.replace('_', '')
+            if normalized_key != key:
+                normalized_handlers[normalized_key] = value
+
+        # Add normalized versions to the original dict
+        handlers.update(normalized_handlers)
+
+        # Cache the result
+        cls._handlers_cache = handlers
+
+        return handlers
+
     @property
     @abstractmethod
     def common_dirs(self) -> str:
@@ -190,20 +225,22 @@ class MicroscopeHandler(ABC):
         # Note: This method internally uses FSM temporarily
         return self.parser.path_list_from_pattern(directory, pattern)
 
-    # Delegate metadata handling methods to metadata_handler
+    # Delegate metadata handling methods to metadata_handler with context
 
-    def find_metadata_file(self, plate_path: Union[str, Path]) -> Optional[Path]:
-        """Delegate to metadata handler."""
-        # Metadata handler now uses its own injected file_manager
-        return self.metadata_handler.find_metadata_file(plate_path)
+    def find_metadata_file(self, plate_path: Union[str, Path],
+                          context: Optional['ProcessingContext'] = None) -> Optional[Path]:
+        """Delegate to metadata handler with context."""
+        return self.metadata_handler.find_metadata_file(plate_path, context)
 
-    def get_grid_dimensions(self, plate_path: Union[str, Path]) -> Tuple[int, int]:
-        """Delegate to metadata handler."""
-        return self.metadata_handler.get_grid_dimensions(plate_path)
+    def get_grid_dimensions(self, plate_path: Union[str, Path],
+                           context: Optional['ProcessingContext'] = None) -> Tuple[int, int]:
+        """Delegate to metadata handler with context."""
+        return self.metadata_handler.get_grid_dimensions(plate_path, context)
 
-    def get_pixel_size(self, plate_path: Union[str, Path]) -> float:
-        """Delegate to metadata handler."""
-        return self.metadata_handler.get_pixel_size(plate_path)
+    def get_pixel_size(self, plate_path: Union[str, Path],
+                      context: Optional['ProcessingContext'] = None) -> float:
+        """Delegate to metadata handler with context."""
+        return self.metadata_handler.get_pixel_size(plate_path, context)
 
 # Factory function
 def create_microscope_handler(microscope_type: str = 'auto',
@@ -223,9 +260,8 @@ def create_microscope_handler(microscope_type: str = 'auto',
     Raises:
         ValueError: If file_manager is None or if microscope_type cannot be determined.
     """
-    if file_manager is None:
-        file_manager = FileManager(backend='disk')
-        logger.debug("Created default disk-based FileManager for create_microscope_handler")
+    metadata_file_manager = FileManager(backend='disk')
+    logger.debug("Created default disk-based FileManager for create_microscope_handler")
 
     logger.info("Using provided FileManager for microscope handler.")
 
@@ -235,7 +271,8 @@ def create_microscope_handler(microscope_type: str = 'auto',
             raise ValueError("plate_folder is required for auto-detection")
 
         plate_folder = Path(plate_folder)
-        microscope_type = _auto_detect_microscope_type(plate_folder, file_manager)
+        microscope_type = _auto_detect_microscope_type(plate_folder, metadata_file_manager)
+        logger.info("Auto-detected microscope type: %s", microscope_type)
 
     # Get handler class mapping
     handlers = _import_handlers()
@@ -247,7 +284,7 @@ def create_microscope_handler(microscope_type: str = 'auto',
 
     # Create and configure the handler
     logger.info("Creating %s", handler_class.__name__)
-    handler = handler_class()
+    handler = handler_class(file_manager)
     handler.file_manager = file_manager
 
     return handler

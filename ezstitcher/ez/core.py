@@ -6,7 +6,7 @@ for common stitching workflows.
 """
 
 from pathlib import Path
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, List, Dict, Any, Literal
 
 from ezstitcher.core import AutoPipelineFactory
 from ezstitcher.core.pipeline_orchestrator import PipelineOrchestrator
@@ -27,7 +27,9 @@ class EZStitcher:
                  flatten_z: Optional[bool] = None,
                  z_method: str = "max",
                  channel_weights: Optional[List[float]] = None,
-                 well_filter: Optional[List[str]] = None):
+                 well_filter: Optional[List[str]] = None,
+                 storage_mode: Literal["legacy", "memory", "zarr"] = "legacy", # Added
+                 storage_root: Optional[Union[str, Path]] = None): # Added
         """
         Initialize with minimal required parameters.
 
@@ -39,6 +41,8 @@ class EZStitcher:
             z_method: Method for Z-flattening ("max", "mean", "focus", etc.)
             channel_weights: Weights for channel compositing (auto-detected if None)
             well_filter: List of wells to process (processes all if None)
+            storage_mode: Mode for intermediate storage ('legacy', 'memory', 'zarr').
+            storage_root: Root directory for disk-based storage modes (e.g., 'zarr').
         """
         self.input_path = Path(input_path)
 
@@ -52,9 +56,15 @@ class EZStitcher:
         self.normalize = normalize
         self.z_method = z_method
         self.well_filter = well_filter
+        self.storage_mode = storage_mode # Added
+        self.storage_root = Path(storage_root) if storage_root else None # Added
 
-        # Create orchestrator
-        self.orchestrator = PipelineOrchestrator(plate_path=self.input_path)
+        # Create orchestrator, passing storage config
+        self.orchestrator = PipelineOrchestrator(
+            plate_path=self.input_path,
+            storage_mode=self.storage_mode, # Pass config
+            storage_root=self.storage_root   # Pass config
+        )
 
         # Set parameters (no auto-detection for now)
         # Default to False if flatten_z is None (no auto-detection)

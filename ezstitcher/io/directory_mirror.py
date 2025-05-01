@@ -2,7 +2,7 @@
 Directory mirroring utilities for ezstitcher.
 
 This module provides functions for mirroring directory structures using symlinks,
-extracted from FileSystemManager to follow single responsibility principle.
+extracted from the old FileSystemManager to follow single responsibility principle.
 """
 
 import os
