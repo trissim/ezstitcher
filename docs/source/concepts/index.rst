@@ -16,3 +16,4 @@ This section explains the core concepts of microscopy image stitching and how EZ
    function_handling
    processing_context
    directory_structure
+   storage_adapter

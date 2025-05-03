@@ -41,11 +41,6 @@ def create_linear_weight_mask(height, width, margin_ratio=0.1):
     return weight_mask
 
 
-# These functions have been moved to their appropriate classes:
-# - load_image and save_image are now in FileSystemManager
-# - parse_positions_csv is now in CSVHandler
-
-
 class ImageProcessor:
     """
     Handles image normalization, filtering, and compositing.

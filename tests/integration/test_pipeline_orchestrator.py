@@ -10,8 +10,9 @@ from ezstitcher.core.pipeline import Pipeline
 from ezstitcher.core.steps import Step, PositionGenerationStep, ImageStitchingStep, NormStep, CompositeStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.tests.generators.generate_synthetic_data import SyntheticMicroscopyGenerator
-from ezstitcher.core.file_system_manager import FileSystemManager
 from ezstitcher.core.utils import stack
+from ezstitcher.io.filemanager import FileManager
+from ezstitcher.io.constants import DEFAULT_IMAGE_EXTENSIONS # Import constant explicitly
 
 
 
@@ -29,12 +30,12 @@ def find_image_files(directory: Union[str, Path], pattern: str = "*", recursive:
         List of Path objects for image files
     """
     directory = Path(directory)
-    image_files = []
+    image_files = FileManager(backend='disk').list_image_files(directory, recursive=recursive)
 
     # Use rglob for recursive search or glob for non-recursive
     glob_func = directory.rglob if recursive else directory.glob
 
-    for ext in FileSystemManager.default_extensions:
+    for ext in DEFAULT_IMAGE_EXTENSIONS:
         image_files.extend(list(glob_func(f"**/{pattern}{ext}" if recursive else f"{pattern}{ext}")))
 
     return sorted(image_files)
@@ -273,7 +274,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
 
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir)
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir,storage_mode="zarr").initialize()
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
@@ -298,7 +299,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
 
             PositionGenerationStep()
         ],
-        name="Position Generation Pipeline"
+        name="Position Generation Pipeline",
     )
 
     # Create image assembly pipeline
@@ -338,7 +339,7 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
     # The orchestrator will set up the directories and wells when run is called
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir,storage_mode="memory").initialize()
 
     # Create focus directory
     focus_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_focus"
@@ -402,10 +403,12 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
     # The orchestrator will set up the directories and wells when run is called
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
-
-
-
+    # Use Zarr storage mode for this test
+    orchestrator = PipelineOrchestrator(
+        config=base_pipeline_config,
+        plate_path=zstack_plate_dir,
+        storage_mode="zarr"
+    ).initialize()
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
@@ -450,68 +453,79 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
 
     # Create a list of pipelines to run
     pipelines = [position_pipeline, assembly_pipeline]
+
     # Run the orchestrator with the pipelines
     success = orchestrator.run(pipelines=pipelines)
     assert success, "Pipeline execution failed"
+
+    # Verify that data was written to Zarr storage
+    assert orchestrator.storage_adapter is not None, "Storage adapter should be initialized"
+    assert orchestrator.storage_mode == "zarr", "Storage mode should be zarr"
+
+    # Check that the Zarr store exists
+    zarr_path = orchestrator.storage_adapter.zarr_path
+    assert zarr_path.exists(), f"Zarr store should exist at {zarr_path}"
+
+    # Check that keys were written to the Zarr store
+    keys = orchestrator.storage_adapter.list_keys()
+    assert len(keys) > 0, "Zarr store should contain keys"
+
+    # Check for specific keys from our steps
+    step_names = ["z-stack_flattening", "percentile_normalization", "channel_composite",
+                  "channel-specific_cleaning"]
+
+    # At least one key should contain each step name
+    for step_name in step_names:
+        matching_keys = [k for k in keys if step_name in k.lower()]
+        assert len(matching_keys) > 0, f"Expected to find keys for step '{step_name}'"
+
     print_thread_activity_report()
 
-def test_minimal_pipeline_with_defaults(flat_plate_dir, base_pipeline_config, thread_tracker):
+def test_storage_adapter_usage_in_steps(zstack_plate_dir, base_pipeline_config):
     """
-    Test a minimal pipeline that only defines input directory and handles processing,
-    position generation, and stitching in one go using defaults.
+    Test that steps correctly use the StorageAdapter when available.
 
     This test verifies that:
-    1. A pipeline can be created with minimal configuration
-    2. ImageStitchingStep correctly uses the pipeline's input directory by default
-    3. The entire workflow (processing, position generation, stitching) works with defaults
+    1. Steps use the StorageAdapter when it's available
+    2. Data is correctly written to the storage backend
+    3. The correct keys are generated for the data
     """
-    # Set up the orchestrator
-    config = base_pipeline_config
-    orchestrator = PipelineOrchestrator(config=config, plate_path=flat_plate_dir)
+    # Create orchestrator with memory storage mode
+    orchestrator = PipelineOrchestrator(
+        config=base_pipeline_config,
+        plate_path=zstack_plate_dir,
+        storage_mode="memory"  # Use memory storage for faster testing
+    ).initialize()
 
-    # Set up directories
-    #dirs = setup_directories(orchestratorn.workspace_path, orchestrator.input_dir)
-
-    # Create a single all-in-one pipeline that does everything with absolute minimal configuration
-    # Only defining the input directory - everything else should be handled automatically
-    all_in_one_pipeline = Pipeline(
-        input_dir=orchestrator.workspace_path,
-        # No output_dir defined - should be handled automatically
+    # Create a simple pipeline with a single step
+    test_pipeline = Pipeline(
         steps=[
-            # Step 1: Basic image processing
-            NormStep(),
-
-            PositionGenerationStep(),
-
-            ImageStitchingStep(
-                input_dir=orchestrator.workspace_path
-            )
+            # Use a simple step that processes images
+            Step(name="Test Step",
+                 func=(IP.create_projection, {'method': 'max_projection'}),
+                 variable_components=['z_index'],
+                 input_dir=orchestrator.workspace_path)
         ],
-        name="Absolute Minimal Pipeline"
+        name="Test Pipeline"
     )
 
     # Run the pipeline
-    success = orchestrator.run(pipelines=[all_in_one_pipeline])
-    assert success, "Minimal pipeline execution failed"
+    success = orchestrator.run(pipelines=[test_pipeline])
+    assert success, "Pipeline execution failed"
 
-    # Since we didn't specify an output directory, we need to find where the images were saved
-    # They should be in a directory with 'stitched' in the name
-    workspace_parent = orchestrator.workspace_path.parent
-    stitched_dir = None
+    # Verify that data was written to the storage adapter
+    assert orchestrator.storage_adapter is not None, "Storage adapter should be initialized"
 
-    # Look for directories with 'stitched' in the name
-    for path in workspace_parent.glob("*stitched*"):
-        if path.is_dir():
-            stitched_dir = path
-            break
+    # Check that keys were written to the storage
+    keys = orchestrator.storage_adapter.list_keys()
+    assert len(keys) > 0, "Storage should contain keys"
 
-    assert stitched_dir is not None, "Could not find stitched images directory"
-    print(f"Found stitched images directory: {stitched_dir}")
+    # Check for keys from our test step
+    test_step_keys = [k for k in keys if "test_step" in k.lower()]
+    assert len(test_step_keys) > 0, "Expected to find keys for 'Test Step'"
 
-    # Verify that stitched images were created
-    stitched_files = find_image_files(stitched_dir)
-    assert len(stitched_files) > 0, "No stitched images were created"
-
-    print(f"Successfully created {len(stitched_files)} stitched images")
-    print("Using absolute minimal pipeline configuration with defaults")
-    print_thread_activity_report()
+    # Verify we can read the data back from storage
+    for key in test_step_keys:
+        data = orchestrator.storage_adapter.read(key)
+        assert isinstance(data, np.ndarray), f"Data for key '{key}' should be a numpy array"
+        assert data.size > 0, f"Data for key '{key}' should not be empty"

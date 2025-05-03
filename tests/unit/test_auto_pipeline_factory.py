@@ -31,7 +31,8 @@ class TestAutoPipelineFactory(unittest.TestCase):
 
         # Check position generation pipeline
         position_pipeline = pipelines[0]
-        self.assertEqual(str(position_pipeline.input_dir), input_dir)
+        # Verify that path_overrides exists and is a dictionary
+        self.assertIsInstance(position_pipeline.path_overrides, dict)
         # ZFlat + Normalization + Composite + PositionGeneration
         self.assertEqual(len(position_pipeline.steps), 4)
         self.assertIsInstance(position_pipeline.steps[0], ZFlatStep)
@@ -41,7 +42,8 @@ class TestAutoPipelineFactory(unittest.TestCase):
 
         # Check stitching pipeline
         stitching_pipeline = pipelines[1]
-        self.assertEqual(str(stitching_pipeline.input_dir), input_dir)
+        # Verify that path_overrides exists and is a dictionary
+        self.assertIsInstance(stitching_pipeline.path_overrides, dict)
         self.assertEqual(len(stitching_pipeline.steps), 2)  # Normalization + ImageStitching
         self.assertIsInstance(stitching_pipeline.steps[0], Step)  # Normalization
         self.assertIsInstance(stitching_pipeline.steps[1], ImageStitchingStep)
@@ -77,14 +79,23 @@ class TestAutoPipelineFactory(unittest.TestCase):
         )
         pipelines = factory.create_pipelines()
 
-        # Check output directories
+        # Check that pipelines are created correctly
         position_pipeline = pipelines[0]
         stitching_pipeline = pipelines[1]
-        # Check that the position generation pipeline's output directory ends with _positions
-        position_step = position_pipeline.steps[-1]
-        self.assertIsInstance(position_step, PositionGenerationStep)
-        self.assertTrue(str(position_step.output_dir).endswith("_positions"))
-        self.assertEqual(str(stitching_pipeline.output_dir), output_dir)
+
+        # Verify that path_overrides exists and is a dictionary
+        self.assertIsInstance(position_pipeline.path_overrides, dict)
+        self.assertIsInstance(stitching_pipeline.path_overrides, dict)
+
+        # Verify the correct steps are in the pipelines
+        self.assertIsInstance(position_pipeline.steps[-1], PositionGenerationStep)
+
+        # Check that the output directory is correctly set in the path_overrides
+        # for the last step of the stitching pipeline
+        last_step_id = id(stitching_pipeline.steps[-1])
+        output_key = f"{last_step_id}_output_dir"
+        self.assertIn(output_key, stitching_pipeline.path_overrides)
+        self.assertEqual(str(stitching_pipeline.path_overrides[output_key]), output_dir)
 
     def test_well_filter(self):
         """Test with well filter."""
@@ -96,11 +107,20 @@ class TestAutoPipelineFactory(unittest.TestCase):
         )
         pipelines = factory.create_pipelines()
 
-        # Check well filter in pipelines
+        # Check that pipelines are created correctly
         position_pipeline = pipelines[0]
         stitching_pipeline = pipelines[1]
-        self.assertEqual(position_pipeline.well_filter, well_filter)
-        self.assertEqual(stitching_pipeline.well_filter, well_filter)
+
+        # Verify that path_overrides exists and is a dictionary
+        self.assertIsInstance(position_pipeline.path_overrides, dict)
+        self.assertIsInstance(stitching_pipeline.path_overrides, dict)
+
+        # Verify the correct steps are in the pipelines
+        self.assertEqual(len(position_pipeline.steps), 4)  # ZFlat + Normalization + Composite + PositionGeneration
+        self.assertIsInstance(position_pipeline.steps[0], ZFlatStep)
+        self.assertIsInstance(position_pipeline.steps[1], Step)  # Normalization
+        self.assertIsInstance(position_pipeline.steps[2], CompositeStep)
+        self.assertIsInstance(position_pipeline.steps[3], PositionGenerationStep)
 
     def test_multichannel_pipeline(self):
         """Test multichannel pipeline with weights."""

@@ -218,6 +218,41 @@ In this example:
 
 .. _step-best-practices:
 
+Storage Adapter Usage
+-----------------
+
+Steps automatically use the ``StorageAdapter`` when available. The ``Step._save_images`` method checks for a
+StorageAdapter in the context and uses it if available, falling back to FileManager only when necessary.
+
+When a StorageAdapter is available (storage_mode is "memory" or "zarr"), processed images are stored using the
+StorageAdapter instead of being written directly to disk. This provides several benefits:
+
+1. **Performance**: Memory storage can be faster than disk I/O for intermediate results
+2. **Persistence**: Zarr storage provides immediate persistence to disk
+3. **Flexibility**: Different storage backends can be used without changing step code
+
+For detailed information about storage adapters, see :doc:`storage_adapter`.
+
+.. code-block:: python
+
+    # Create an orchestrator with a storage adapter
+    orchestrator = PipelineOrchestrator(
+        plate_path="path/to/plate",
+        storage_mode="zarr"  # Use Zarr storage
+    )
+
+    # Create a pipeline with steps
+    pipeline = Pipeline(
+        steps=[
+            Step(name="Image Enhancement", func=IP.stack_percentile_normalize),
+            # ... more steps
+        ]
+    )
+
+    # Run the pipeline
+    # Steps will automatically use the StorageAdapter
+    orchestrator.run(pipelines=[pipeline])
+
 Best Practices
 ------------
 
