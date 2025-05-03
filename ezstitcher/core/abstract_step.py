@@ -6,11 +6,13 @@ ensuring a consistent interface across different step implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Any, Optional, Dict
+from typing import List, Any, Optional, Dict, TYPE_CHECKING
 from .pipeline_base import StepInterface
 
-# ProcessingContext is defined in pipeline.py
+# ProcessingContext and StepResult are defined in pipeline.py
 # Using string literal for type annotations to avoid circular imports
+if TYPE_CHECKING:
+    from .pipeline import ProcessingContext, StepResult
 
 
 class AbstractStep(StepInterface):
@@ -19,21 +21,29 @@ class AbstractStep(StepInterface):
 
     This class defines the minimal contract that all step implementations must follow,
     ensuring consistent behavior across different step types.
+
+    Step Architecture Notes:
+    - Steps must be stateless and should NOT modify the context directly
+    - Steps must return a StepResult object containing:
+      - Normal processing results
+      - Requested context updates
+      - Requested storage operations
+    - Pipeline.run() is responsible for applying these changes
     """
 
     @abstractmethod
-    def process(self, group: List[Any], context: Optional['ProcessingContext'] = None) -> Any:
+    def process(self, context: 'ProcessingContext') -> 'StepResult':
         """
-        Process a group of images.
+        Process data according to the step's functionality.
 
-        This is the core method that all steps must implement. It takes a group
-        of images and processes them according to the step's functionality.
+        This is the core method that all steps must implement. It processes
+        data according to the step's functionality and returns a structured result.
 
         Args:
-            group: Group of images to process
-            context: Pipeline context for sharing data between steps
+            context: Processing context containing input data and metadata (read-only)
 
         Returns:
-            Processed result (typically an image or list of images)
+            StepResult object containing processing results, context updates, and storage operations.
+            Steps should NOT modify the context directly.
         """
         pass

@@ -28,9 +28,9 @@ class ImageXpressHandler(MicroscopeHandler):
     enforcing semantic alignment between file layout parsing and metadata resolution.
     """
 
-    def __init__(self, file_manager: FileManager):
+    def __init__(self, file_manager: FileManager, pattern_format: Optional[str] = None):
         self.file_manager = file_manager
-        self.parser = ImageXpressFilenameParser(file_manager)
+        self.parser = ImageXpressFilenameParser(file_manager, pattern_format=pattern_format)
         self.metadata_handler = ImageXpressMetadataHandler()
         super().__init__(parser=self.parser, metadata_handler=self.metadata_handler)
 

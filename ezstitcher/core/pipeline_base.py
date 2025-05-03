@@ -9,6 +9,10 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union, List, Dict, Any, TYPE_CHECKING
 from pathlib import Path
 
+# Forward reference for StepResult
+if TYPE_CHECKING:
+    from .pipeline import StepResult
+
 # Use string literal for type annotations to avoid circular imports
 # The actual ProcessingContext class is defined in pipeline.py
 
@@ -31,15 +35,16 @@ class StepInterface(ABC):
         pass
 
     @abstractmethod
-    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
+    def process(self, context: 'ProcessingContext') -> 'StepResult':
         """
         Process data according to the step's functionality.
 
         Args:
-            context: Processing context containing input data and metadata
+            context: Processing context containing input data and metadata (read-only)
 
         Returns:
-            Updated context with processing results
+            StepResult object containing processing results, context updates, and storage operations.
+            Steps should NOT modify the context directly.
         """
         pass
 

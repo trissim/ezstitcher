@@ -31,7 +31,7 @@ def test_2d_plate_stitch(flat_plate_dir, base_pipeline_config, thread_tracker):
         plate_path=flat_plate_dir,
         root_dir=root_dir,
         backend="filesystem"
-    )
+    ).initialize()
 
     # Create output directory path for the factory
     output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
@@ -59,7 +59,7 @@ def test_3d_plate_per_plane_stitch(zstack_plate_dir, base_pipeline_config, threa
         plate_path=zstack_plate_dir,
         root_dir=root_dir,
         backend="filesystem"
-    )
+    ).initialize()
 
     # Create output directory path for the factory
     output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
@@ -90,7 +90,7 @@ def test_3d_plate_max_projection_stitch(zstack_plate_dir, base_pipeline_config, 
         plate_path=plate_path,
         root_dir=root_dir,
         backend="filesystem"
-    )
+    ).initialize()
 
     # Create output directory path for the factory
     output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_stitched"
@@ -120,7 +120,7 @@ def test_3d_plate_focus_detection_stitch(zstack_plate_dir, base_pipeline_config,
         plate_path=zstack_plate_dir,
         root_dir=root_dir,
         backend="filesystem"
-    )
+    ).initialize()
 
     # Create output directory path for the factory
     output_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_focus_stitched"

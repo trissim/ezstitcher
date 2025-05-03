@@ -31,9 +31,9 @@ class OperaPhenixHandler(MicroscopeHandler):
     post-processing steps required after workspace setup.
     """
 
-    def __init__(self, file_manager: FileManager):
+    def __init__(self, file_manager: FileManager, pattern_format: Optional[str] = None):
         self.file_manager = file_manager
-        self.parser = OperaPhenixFilenameParser(file_manager)
+        self.parser = OperaPhenixFilenameParser(file_manager, pattern_format=pattern_format)
         self.metadata_handler = OperaPhenixMetadataHandler()
         super().__init__(parser=self.parser, metadata_handler=self.metadata_handler)
 

@@ -17,8 +17,19 @@ class FilenameParser(ABC):
     FILENAME_COMPONENTS = ['well', 'site', 'channel', 'z_index', 'extension']
     PLACEHOLDER_PATTERN = '{iii}'
 
-    def __init__(self, file_manager: FileManager):
+    def __init__(self, file_manager: FileManager, pattern_format: Optional[str] = None):
         self.file_manager = file_manager
+        self._pattern_format = pattern_format
+
+        # Import here to avoid circular imports
+        from ezstitcher.io.pattern_adapter import PatternFormatRegistry
+        self._pattern_registry = PatternFormatRegistry()
+
+    @property
+    def pattern_adapter(self):
+        """Get the appropriate pattern adapter."""
+        from ezstitcher.io.pattern_adapter import PatternFormatRegistry
+        return self._pattern_registry.get_adapter(self._pattern_format)
 
     @classmethod
     @abstractmethod
@@ -76,7 +87,8 @@ class FilenameParser(ABC):
 
         Args:
             directory (str or Path): Directory to search
-            pattern (str): Pattern to match with {iii} placeholder for site index
+            pattern (str): Pattern to match with placeholders
+            fm (FileManager, optional): FileManager to use
 
         Returns:
             list: List of matching filenames
@@ -84,12 +96,11 @@ class FilenameParser(ABC):
         directory = Path(directory)
         fm = fm or self.file_manager
 
-        # Handle substitution of {series} if present (from Ashlar)
-        if "{series}" in pattern:
-            pattern = pattern.replace("{series}", "{iii}")
+        # Convert pattern to internal format using adapter
+        internal_pattern = self.pattern_adapter.to_internal(pattern)
 
         # Parse the pattern to extract expected components
-        pattern_metadata = self.parse_filename(pattern)
+        pattern_metadata = self.parse_filename(internal_pattern)
         if not pattern_metadata:
             logger.warning(f"Could not parse pattern: {pattern}")
             return []

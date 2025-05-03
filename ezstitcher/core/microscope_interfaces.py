@@ -245,7 +245,8 @@ class MicroscopeHandler(ABC):
 # Factory function
 def create_microscope_handler(microscope_type: str = 'auto',
                               plate_folder: Optional[Union[str, Path]] = None,
-                              file_manager: Optional[FileManager] = None) -> MicroscopeHandler:
+                              file_manager: Optional[FileManager] = None,
+                              pattern_format: Optional[str] = None) -> MicroscopeHandler:
     """
     Factory function to create a microscope handler.
 
@@ -253,6 +254,7 @@ def create_microscope_handler(microscope_type: str = 'auto',
         microscope_type: 'auto', 'imagexpress', 'opera_phenix'.
         plate_folder: Required for 'auto' detection.
         file_manager: FileManager instance. Must be provided.
+        pattern_format: Name of the pattern format to use.
 
     Returns:
         An initialized MicroscopeHandler instance.
@@ -284,7 +286,7 @@ def create_microscope_handler(microscope_type: str = 'auto',
 
     # Create and configure the handler
     logger.info("Creating %s", handler_class.__name__)
-    handler = handler_class(file_manager)
+    handler = handler_class(file_manager, pattern_format=pattern_format)
     handler.file_manager = file_manager
 
     return handler

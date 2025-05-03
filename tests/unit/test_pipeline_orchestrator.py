@@ -146,6 +146,9 @@ def test_init_dependencies_injection(mock_config, mock_file_manager, patch_depen
         storage_mode="legacy"   # Test legacy mode specifically
     )
 
+    # Explicitly initialize the orchestrator
+    orchestrator.initialize()
+
     # FileManager should be created internally
     MockFileManager.assert_called()  # May be called multiple times
     assert orchestrator.microscope_handler is mock_handler_instance
@@ -166,6 +169,9 @@ def test_init_default_filemanager(mock_config, patch_dependencies):
         # No root_dir or backend specified - should use defaults
         storage_mode="legacy"
     )
+
+    # Explicitly initialize the orchestrator
+    orchestrator.initialize()
 
     # Just check that FileManager was called, don't check specific args
     mock_file_manager.assert_called() # FileManager was created

@@ -22,6 +22,9 @@ from ezstitcher.core.pipeline import Step, Pipeline, StepExecutionPlan
 
 from ezstitcher.core.pattern_resolver import get_patterns_for_well
 from ezstitcher.io.storage_adapter import StorageAdapter, ZarrStorageAdapter
+from ezstitcher.io.overlay import OverlayMode
+from ezstitcher.io.storage_config import StorageConfig
+from ezstitcher.materialization.flag_engine import FlagInferenceEngine
 
 # Type hint for StorageAdapter without circular import issues at runtime
 if TYPE_CHECKING:
@@ -45,8 +48,11 @@ class PipelineOrchestrator:
                  backend: Optional[str] = None,
                  image_preprocessor: Optional[ImageProcessor] = None,
                  focus_analyzer: Optional[FocusAnalyzer] = None,
-                 storage_mode: Literal["legacy", "memory", "zarr"] = "legacy", # Changed from storage_adapter
-                 storage_root: Optional[Path] = None): # Added storage_root
+                 storage_mode: Literal["legacy", "memory", "zarr"] = "legacy",
+                 storage_root: Optional[Path] = None,
+                 overlay_mode: Literal["disabled", "on_demand", "auto"] = "auto",
+                 materialization_context: Optional[str] = None,
+                 materialization_strategy: Optional[str] = None):
         """
         Initialize the pipeline orchestrator with dependencies.
 
@@ -61,30 +67,110 @@ class PipelineOrchestrator:
             focus_analyzer: Instance for focus analysis.
             storage_mode: Mode for intermediate storage ('legacy', 'memory', 'zarr').
             storage_root: Root directory for disk-based storage modes (e.g., 'zarr').
+            overlay_mode: Mode for overlay disk writes ('disabled', 'on_demand', 'auto').
+            materialization_context: Context type for materialization policy ('testing', 'benchmark', 'production').
+            materialization_strategy: Materialization strategy ('lazy', 'eager', 'hybrid').
         """
+        # Set basic attributes
         self.config = config or PipelineConfig()
         self.plate_path = Path(plate_path) if plate_path else None
-        self._init_fm = FileManager(backend='disk')
         self.storage_mode = storage_mode
-        self.storage_adapter: Optional[StorageAdapter] = None
         self.storage_root = storage_root
 
+        # Set root context based on workspace_path
+        self.root_context = "workspace" if workspace_path else "plate"
 
+        # Set default root context in VirtualPathFactory
+        from ezstitcher.io.virtual_path_factory import VirtualPathFactory
+        VirtualPathFactory.set_default_root_context(self.root_context)
 
-        if workspace_path:
-            self.workspace_path = workspace_path
-        elif self.plate_path:
-            # Example: Default workspace next to plate path
+        # Configure overlay mode
+        self.overlay_mode = OverlayMode[overlay_mode.upper()]
+        self.overlay_root = None
+
+        # Set workspace_path if provided, otherwise it will be set in initialize()
+        self.workspace_path = Path(workspace_path) if workspace_path else None
+
+        # Initialize core attributes to None
+        self.file_manager = None
+        self.storage_adapter = None
+        self.microscope_handler = None
+        self.input_dir = None
+        self.stitcher = None
+        self.materialization_manager = None
+
+        # Store materialization context
+        self.materialization_context = materialization_context
+
+        # Set other dependencies
+        self.image_preprocessor = image_preprocessor or ImageProcessor()
+        self.focus_analyzer = focus_analyzer or FocusAnalyzer()
+
+        # Store backend parameters for later initialization
+        self._backend = backend
+        self._root_dir = root_dir
+
+        # Set initialization flag
+        self._initialized = False
+
+        # Initialize materialization manager if not using legacy mode
+        if storage_mode != "legacy":
+            from ezstitcher.io.materialization import MaterializationManager, MaterializationPolicy
+            policy = MaterializationPolicy.for_context(materialization_context) if materialization_context else None
+            self.materialization_manager = MaterializationManager(None, policy)  # Will be updated with context later
+
+        logger.info("PipelineOrchestrator constructed. Call initialize() to set up.")
+
+    def initialize(self):
+        """
+        Initialize the orchestrator.
+
+        This method sets up the workspace, file manager, storage adapter,
+        microscope handler, and stitcher. It should be called after construction
+        and before using the orchestrator.
+
+        Returns:
+            self: For method chaining
+        """
+        # Return early if already initialized
+        if self._initialized:
+            logger.info("Orchestrator already initialized")
+            return self
+
+        # Phase 1: Set up workspace_path
+        self._initialize_workspace()
+
+        # Phase 2: Initialize file manager
+        self._initialize_file_manager()
+
+        # Phase 3: Initialize storage adapter
+        self._initialize_storage_adapter()
+
+        # Phase 4: Initialize microscope handler
+        self._initialize_microscope_handler()
+
+        # Phase 5: Initialize stitcher
+        self._initialize_stitcher()
+
+        # Phase 6: Initialize materialization manager
+        self._initialize_materialization_manager()
+
+        # Set initialization flag
+        self._initialized = True
+        logger.info("PipelineOrchestrator fully initialized.")
+
+        return self
+
+    def _initialize_workspace(self):
+        """Initialize workspace path and mirror plate directory if needed."""
+        # Set up workspace_path if not provided in constructor
+        if not self.workspace_path and self.plate_path:
             self.workspace_path = self.plate_path.parent / f"{self.plate_path.name}_workspace"
 
-        # --- Initialize core attributes ---
-        self.microscope_handler = None
-        self.input_dir: Optional[Path] = None
-        self.stitcher = None
-
+        # Mirror plate_path to workspace_path if both are provided
         if self.plate_path and self.workspace_path:
             try:
-                # 1. Mirror plate_path to workspace_path first
+                # Mirror plate_path to workspace_path
                 logger.info("Mirroring plate directory to workspace...")
                 workspace_fm = FileManager(backend="disk")
                 num_links = workspace_fm.mirror_directory_with_symlinks(
@@ -95,57 +181,298 @@ class PipelineOrchestrator:
                 )
                 logger.info("Created %d symlinks in workspace", num_links)
 
-                # 2. Set input_dir to workspace_path for all subsequent operations
+                # Set input_dir to workspace_path for all subsequent operations
                 self.input_dir = self.workspace_path
-
-                # 3. Initialize file stuff
-                self.initialize_storage_adapter()
-                self.initialize_file_manager()
-
-                # 4. Initialize microscope handler using workspace
-                logger.info("Initializing microscope handler using workspace...")
-                self.microscope_handler = create_microscope_handler(
-                    microscope_type='auto',
-                    plate_folder=self.workspace_path,
-                    file_manager=self.file_manager
-                )
-
-                logger.info("Using microscope handler: %s", type(self.microscope_handler).__name__)
-
-
-
-                # 5. Initialize stitcher
-                self.stitcher = Stitcher(
-                    config=self.config.stitcher,
-                    filename_parser=self.microscope_handler.parser,
-                    file_manager=self.file_manager
-                )
             except Exception as e:
-                logger.error("Failed during initialization: %s", e)
+                logger.error("Failed during workspace initialization: %s", e)
                 raise
         else:
             logger.warning("Skipping workspace creation: plate_path or workspace_path not provided.")
 
-        # --- Initialize other dependencies ---
-        self.image_preprocessor = image_preprocessor or ImageProcessor()
-        self.focus_analyzer = focus_analyzer or FocusAnalyzer()
+    def _initialize_file_manager(self):
+        """Initialize the file manager with the appropriate backend."""
+        # Skip if already initialized
+        if self.file_manager is not None:
+            logger.debug("File manager already initialized")
+            return
+
+        # Always use filesystem backend for FileManager unless explicitly testing memory
+        if self.storage_mode == "memory":
+            backend = "memory"
+        else:
+            backend = "filesystem"
+
+        self.file_manager = FileManager(backend=backend, root_dir=self.input_dir)
+        logger.info("Initialized FileManager with backend '%s'", backend)
+
+    def _initialize_storage_adapter(self):
+        """Initialize the storage adapter based on the storage mode."""
+        # Skip if already initialized or using legacy mode
+        if self.storage_adapter is not None or self.storage_mode == "legacy":
+            logger.debug("Storage adapter already initialized or not needed (legacy mode)")
+            return
+
+        # Ensure file manager is initialized
+        self._ensure_file_manager()
+
+        # Normalize storage mode to lowercase
+        normalized_storage_mode = self.storage_mode.lower() if isinstance(self.storage_mode, str) else str(self.storage_mode).lower()
+        logger.debug(f"Normalized storage mode: {normalized_storage_mode} (from {self.storage_mode})")
+
+        # Determine the effective storage root
+        if self.storage_root:
+            # If storage_root is explicitly provided, use it
+            effective_storage_root = self.storage_root
+        elif self.plate_path and self.input_dir:
+            # Otherwise, use a suffixed version of input_dir
+            plate_name = self.plate_path.name
+            # Create a base output directory with the appropriate suffix
+            base_output_dir = self.plate_path.parent / f"{plate_name}{self.config.out_dir_suffix}"
+
+            # For zarr mode, create a specific subdirectory
+            if normalized_storage_mode == "zarr":
+                effective_storage_root = base_output_dir / "zarr_storage"
+            # For memory mode, create a specific subdirectory
+            elif normalized_storage_mode == "memory":
+                effective_storage_root = base_output_dir / "memory_storage"
+            else:
+                # Fallback for any other mode
+                effective_storage_root = base_output_dir / f"{normalized_storage_mode}_storage"
+
+            logger.info(f"Using suffixed storage root: {effective_storage_root}")
+        else:
+            raise ValueError("Zarr/memory mode needs a valid root path. Either provide storage_root or plate_path.")
+
+        # Ensure the storage root directory exists
+        self.file_manager.ensure_directory(effective_storage_root)
+        logger.info(f"Ensured storage root directory exists: {effective_storage_root}")
+
+        # Import here to avoid circular imports
+        from ezstitcher.io.storage_adapter import select_storage
+        from ezstitcher.io.storage_config import StorageConfig
+
+        # Create a StorageConfig instance using self attributes
+        storage_config = StorageConfig(
+            storage_mode=normalized_storage_mode,
+            overlay_mode=self.overlay_mode,
+            overlay_root=self.overlay_root
+        )
+
+        # Create the storage adapter with the storage_config
+        self.storage_adapter = select_storage(
+            mode=normalized_storage_mode,
+            storage_config=storage_config,
+            storage_root=effective_storage_root
+        )
+
+        # Verify the adapter was created successfully
+        if self.storage_adapter is None:
+            raise RuntimeError(
+                f"Failed to create StorageAdapter for mode '{normalized_storage_mode}'"
+            )
+
+        logger.info("Initialized StorageAdapter: %s at %s",
+                   type(self.storage_adapter).__name__, effective_storage_root)
+
+        # Configure overlay for non-legacy storage modes
+        if self.storage_adapter is not None:
+            # Set overlay root to a subdirectory of the storage root
+            self.overlay_root = effective_storage_root / "overlay"
+
+            # Ensure the overlay root directory exists
+            self.file_manager.ensure_directory(self.overlay_root)
+            logger.info(f"Ensured overlay root directory exists: {self.overlay_root}")
+
+            # Configure overlay in storage adapter
+            self.storage_adapter.configure_overlay(self.overlay_mode, self.overlay_root)
+            logger.info(f"Configured overlay for storage adapter: mode={self.overlay_mode.name}, root={self.overlay_root}")
+
+    def _initialize_microscope_handler(self):
+        """Initialize the microscope handler."""
+        # Skip if already initialized
+        if self.microscope_handler is not None:
+            logger.debug("Microscope handler already initialized")
+            return
+
+        # Ensure file manager is initialized
+        self._ensure_file_manager()
+
+        # Check if we have a workspace path
+        if not self.workspace_path:
+            logger.warning("Cannot initialize microscope handler: workspace_path not set")
+            return
+
+        # Initialize microscope handler
+        logger.info("Initializing microscope handler using workspace...")
+        try:
+            self.microscope_handler = create_microscope_handler(
+                microscope_type='auto',
+                plate_folder=self.workspace_path,
+                file_manager=self.file_manager,
+                pattern_format="ashlar"  # Default to Ashlar for backward compatibility
+            )
+            logger.info("Using microscope handler: %s", type(self.microscope_handler).__name__)
+        except Exception as e:
+            logger.error("Failed to initialize microscope handler: %s", e)
+            raise
+
+    def _initialize_stitcher(self):
+        """Initialize the stitcher."""
+        # Skip if already initialized
+        if self.stitcher is not None:
+            logger.debug("Stitcher already initialized")
+            return
+
+        # Ensure microscope handler is initialized
+        microscope_handler = self._ensure_microscope_handler()
+        file_manager = self._ensure_file_manager()
+
+        # Initialize stitcher
+        try:
+            self.stitcher = Stitcher(
+                config=self.config.stitcher,
+                filename_parser=microscope_handler.parser,
+                file_manager=file_manager,
+                pattern_format="ashlar"  # Default to Ashlar for backward compatibility
+            )
+            logger.info("Initialized Stitcher")
+        except Exception as e:
+            logger.error("Failed to initialize stitcher: %s", e)
+            raise
+
+    def _initialize_materialization_manager(self):
+        """Initialize the materialization manager."""
+        # Skip if already initialized or using legacy mode
+        if self.materialization_manager is not None or self.storage_mode == "legacy":
+            logger.debug("Materialization manager already initialized or not needed (legacy mode)")
+            return
+
+        # Skip if storage adapter is not initialized
+        if self.storage_adapter is None:
+            logger.debug("Storage adapter not initialized, skipping materialization manager initialization")
+            return
+
+        # Import here to avoid circular imports
+        try:
+            from ezstitcher.io.materialization import MaterializationManager, MaterializationPolicy
+            from ezstitcher.materialization.flag_engine import FlagInferenceEngine
+            from ezstitcher.io.storage_config import StorageConfig
+
+            # Create a policy based on the storage mode
+            if self.storage_mode == "memory":
+                policy = MaterializationPolicy(force_memory=True)
+            elif self.storage_mode == "zarr":
+                policy = MaterializationPolicy(respect_flags=True)
+            else:
+                policy = MaterializationPolicy()
+
+            # Create a flag inference engine
+            self.flag_inference_engine = FlagInferenceEngine()
+
+            # Create a storage config
+            storage_config = StorageConfig(
+                storage_mode=self.storage_mode,
+                overlay_mode=self.overlay_mode,
+                overlay_root=self.overlay_root
+            )
+
+            # Create the materialization manager with keyword arguments only
+            self.materialization_manager = MaterializationManager(
+                context=self,  # Use self as the context instead of None
+                storage_config=storage_config,
+                policy=policy,
+                engine=self.flag_inference_engine
+            )
+            logger.info("Initialized MaterializationManager with policy for %s mode", self.storage_mode)
+        except ImportError as e:
+            logger.warning("Failed to import MaterializationManager: %s", e)
+        except Exception as e:
+            logger.error("Failed to initialize materialization manager: %s", e)
+            # Don't raise, just log the error and continue without materialization manager
+
+    def needs_materialization(self, step, context=None, pipeline=None):
+        """
+        Check if a step requires materialization.
+
+        Args:
+            step: The step to check
+            context: The processing context (optional)
+            pipeline: The pipeline containing the step (optional)
+
+        Returns:
+            True if materialization is needed, False otherwise
+        """
+        # Check if materialization manager is available
+        if self.materialization_manager:
+            # Import here to avoid circular imports
+            from ezstitcher.io.materialization_resolver import MaterializationResolver
+            return MaterializationResolver.needs_materialization(
+                step, self.materialization_manager, context, pipeline
+            )
+
+        # If no materialization manager is available, check storage mode and overlay mode
+        if self.storage_mode == "legacy" or self.overlay_mode == OverlayMode.DISABLED:
+            return False
+
+        # Check if the step requires filesystem access
+        return (getattr(step, 'requires_fs_input', False) or
+                getattr(step, 'requires_fs_output', False) or
+                getattr(step, 'force_disk_output', False) or
+                getattr(step, 'requires_legacy_fs', False))
+
+    def prepare_materialization(self, step, context):
+        """
+        Prepare materialization for a step.
+
+        Args:
+            step: The step to prepare materialization for
+            context: The processing context
+
+        Returns:
+            Dictionary mapping original file paths to materialized paths
+        """
+        # Check if materialization manager is available
+        if self.materialization_manager:
+            # Update the materialization manager with the context
+            self.materialization_manager.context = context
+
+            # Get well from context
+            well = context.well_filter[0] if context.well_filter else None
+            if not well:
+                logger.warning("No well filter found in context, skipping materialization")
+                return {}
+
+            # Get input directory for the step
+            input_dir = context.get_step_input_dir(step)
+            if not input_dir:
+                logger.warning("No input directory found for step, skipping materialization")
+                return {}
+
+            # Prepare materialization for this step
+            return self.materialization_manager.prepare_for_step(step, well, input_dir)
+
+        # If no materialization manager is available, log a warning and return empty dict
+        logger.warning("No materialization manager available for step %s", step.name)
+        return {}
 
 
-
-        logger.info("PipelineOrchestrator initialized.")
-
-
-    def run(self,pipelines=None):
+    def run(self, pipelines=None):
         """
         Process a plate through the complete pipeline.
 
+        This method requires the orchestrator to be initialized first by calling initialize().
+
         Args:
-            plate_folder: Path to the plate folder
             pipelines: List of pipelines to run for each well
 
         Returns:
             bool: True if successful, False otherwise
+
+        Raises:
+            RuntimeError: If the orchestrator has not been initialized
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator must be initialized before calling run(). Call initialize() first.")
         try:
             # Setup
             source_path_for_metadata = self.input_dir or self.plate_path
@@ -334,6 +661,8 @@ class PipelineOrchestrator:
         """
         Compute input/output directories for all steps in the pipeline.
 
+        This method requires the orchestrator to be initialized first by calling initialize().
+
         This method centralizes all path resolution logic. It applies the following rules:
         1. First step uses workspace_path as input_dir
         2. Subsequent steps use previous step's output_dir as input_dir
@@ -347,7 +676,12 @@ class PipelineOrchestrator:
 
         Returns:
             dict: Dictionary mapping step IDs to StepExecutionPlan objects
+
+        Raises:
+            RuntimeError: If the orchestrator has not been initialized
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator must be initialized before calling prepare_pipeline_paths(). Call initialize() first.")
         from ezstitcher.core.steps import PositionGenerationStep, ImageStitchingStep
 
         path_overrides = path_overrides or {}
@@ -420,9 +754,6 @@ class PipelineOrchestrator:
         """
         Create a processing context for a pipeline with pre-computed paths.
 
-        This method creates an immutable context with all paths resolved.
-        Once created, the context's paths cannot be modified.
-
         Args:
             pipeline: The pipeline to create context for
             well_filter: Optional well filter
@@ -430,7 +761,12 @@ class PipelineOrchestrator:
 
         Returns:
             ProcessingContext: The initialized context with immutable paths
+
+        Raises:
+            RuntimeError: If the orchestrator has not been initialized
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator must be initialized before calling create_context(). Call initialize() first.")
         from ezstitcher.core.pipeline import ProcessingContext
 
         # Compute paths for all steps
@@ -443,11 +779,18 @@ class PipelineOrchestrator:
             orchestrator=self
         )
 
+        # Set root context
+        context.set_root_context(self.root_context)
+
         # Add execution plans to context
         for step in pipeline.steps:
             plan = step_plans.get(id(step))
             if plan:
                 context.add_step_plan(step, plan)
+
+        # Update materialization manager with context if available
+        if hasattr(self, 'materialization_manager') and self.materialization_manager:
+            self.materialization_manager.context = context
 
         return context
 
@@ -496,33 +839,61 @@ class PipelineOrchestrator:
     def get_stitcher(self):
         """
         Provides a new Stitcher instance configured for the current run.
+
+        This method requires the orchestrator to be initialized first by calling initialize().
         This ensures thread safety by creating a new instance on demand.
 
         Returns:
             Stitcher: A new Stitcher instance.
+
+        Raises:
+            RuntimeError: If the orchestrator has not been initialized
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator must be initialized before calling get_stitcher(). Call initialize() first.")
+
+        # Ensure required components are available
+        microscope_handler = self._ensure_microscope_handler()
+        file_manager = self._ensure_file_manager()
+
         logger.debug("Creating new Stitcher instance for requestor.")
-        # Ensure the stitcher is configured using the orchestrator's config
-        # Pass file_manager to ensure the Stitcher has access to it
+        # Create a new Stitcher instance
         return Stitcher(
             config=self.config.stitcher,
-            filename_parser=self.microscope_handler.parser,
-            file_manager=self.file_manager
+            filename_parser=microscope_handler.parser,
+            file_manager=file_manager,
+            pattern_format="ashlar"  # Default to Ashlar for backward compatibility
         )
 
 
     def _get_reference_pattern(self, well, sample_pattern):
         """
         Create a reference pattern for stitching.
+
+        Requires the microscope handler to be initialized.
+
+        Args:
+            well: Well identifier
+            sample_pattern: Sample filename pattern
+
+        Returns:
+            str: Reference pattern for stitching
+
+        Raises:
+            RuntimeError: If microscope handler is not initialized
+            ValueError: If pattern is invalid
         """
         if not sample_pattern:
             raise ValueError(f"No pattern found for well {well}")
 
-        metadata = self.microscope_handler.parser.parse_filename(sample_pattern)
+        # Ensure microscope handler is available
+        microscope_handler = self._ensure_microscope_handler()
+
+        metadata = microscope_handler.parser.parse_filename(sample_pattern)
         if not metadata:
             raise ValueError(f"Could not parse pattern: {sample_pattern}")
 
-        return self.microscope_handler.parser.construct_filename(
+        return microscope_handler.parser.construct_filename(
             well=metadata['well'],
             site="{iii}",
             channel=metadata.get('channel'),
@@ -535,8 +906,60 @@ class PipelineOrchestrator:
     def generate_positions(self, well, input_dir, positions_dir):
         """
         Generate stitching positions for a well using a dedicated stitcher instance.
+
+        This method requires the orchestrator to be initialized first by calling initialize().
+
+        Raises:
+            RuntimeError: If the orchestrator has not been initialized
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator must be initialized before calling generate_positions(). Call initialize() first.")
         logger.info("Generating positions for well %s", well)
+
+        # Check if we need to use overlay
+        needs_overlay = (
+            hasattr(self, 'storage_adapter') and
+            self.storage_adapter is not None and
+            self.storage_mode != "legacy" and
+            self.overlay_mode != OverlayMode.DISABLED
+        )
+
+        # If using overlay, ensure all required images are written to disk
+        if needs_overlay:
+            logger.info("Using overlay for generate_positions")
+            # Get patterns for this well
+            all_patterns = get_patterns_for_well(well, input_dir, self.microscope_handler)
+            if not all_patterns:
+                raise ValueError(f"No patterns found for well {well}")
+
+            # Get all matching files
+            all_files = []
+            for pattern in all_patterns:
+                matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
+                all_files.extend(matching_files)
+
+            # Register overlay operations for all files
+            overlay_paths = {}
+            for file_path in all_files:
+                # Construct a key based on the file path
+                rel_path = Path(file_path).relative_to(input_dir) if Path(file_path).is_relative_to(input_dir) else Path(file_path).name
+                key = f"overlay_{well}_{rel_path}"
+
+                # Try to get the data from storage adapter
+                try:
+                    if self.storage_adapter.exists(key):
+                        # Register for overlay
+                        disk_path = self.storage_adapter.register_for_overlay(key, operation_type="read", cleanup=True)
+                        if disk_path:
+                            overlay_paths[file_path] = disk_path
+                except Exception as e:
+                    logger.warning(f"Error registering overlay for {file_path}: {e}")
+
+            # Execute all overlay operations
+            if overlay_paths:
+                self.storage_adapter.execute_all_overlay_operations(self.file_manager)
+                logger.info(f"Executed {len(overlay_paths)} overlay operations for generate_positions")
+
         # Get a dedicated stitcher instance for this operation
         stitcher_to_use = self.get_stitcher()
         positions_dir = Path(positions_dir)
@@ -562,19 +985,38 @@ class PipelineOrchestrator:
             self.config.grid_size[1],
         )
 
+        # Clean up overlay operations if needed
+        if needs_overlay:
+            self.storage_adapter.cleanup_overlay_operations(self.file_manager)
+
         return positions_file, reference_pattern
 
     def _create_output_filename(self, pattern):
         """
         Create an output filename for a stitched image based on a pattern.
+
+        Requires the microscope handler to be initialized.
+
+        Args:
+            pattern: Filename pattern
+
+        Returns:
+            str: Output filename
+
+        Raises:
+            RuntimeError: If microscope handler is not initialized
+            ValueError: If pattern is invalid
         """
+        # Ensure microscope handler is available
+        microscope_handler = self._ensure_microscope_handler()
+
         parsable = pattern.replace('{iii}', '001')
-        metadata = self.microscope_handler.parser.parse_filename(parsable)
+        metadata = microscope_handler.parser.parse_filename(parsable)
 
         if not metadata:
             raise ValueError(f"Could not parse pattern: {pattern}")
 
-        return self.microscope_handler.parser.construct_filename(
+        return microscope_handler.parser.construct_filename(
             well=metadata['well'],
             site=metadata['site'],
             channel=metadata['channel'],
@@ -587,13 +1029,64 @@ class PipelineOrchestrator:
     def stitch_images(self, well, input_dir, output_dir, positions_file):
         """
         Stitch images for a well using a dedicated stitcher instance.
+
+        This method requires the orchestrator to be initialized first by calling initialize().
+
+        Raises:
+            RuntimeError: If the orchestrator has not been initialized
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator must be initialized before calling stitch_images(). Call initialize() first.")
         logger.info("Stitching images for well %s", well)
+
+        # Check if we need to use overlay
+        needs_overlay = (
+            hasattr(self, 'storage_adapter') and
+            self.storage_adapter is not None and
+            self.storage_mode != "legacy" and
+            self.overlay_mode != OverlayMode.DISABLED
+        )
+
+        # If using overlay, ensure all required images are written to disk
+        if needs_overlay:
+            logger.info("Using overlay for stitch_images")
+            # Get patterns for this well
+            all_patterns = get_patterns_for_well(well, input_dir, self.microscope_handler)
+            if not all_patterns:
+                raise ValueError(f"No patterns found for well {well} in {input_dir}")
+
+            # Get all matching files
+            all_files = []
+            for pattern in all_patterns:
+                matching_files = self.microscope_handler.parser.path_list_from_pattern(input_dir, pattern)
+                all_files.extend(matching_files)
+
+            # Register overlay operations for all files
+            overlay_paths = {}
+            for file_path in all_files:
+                # Construct a key based on the file path
+                rel_path = Path(file_path).relative_to(input_dir) if Path(file_path).is_relative_to(input_dir) else Path(file_path).name
+                key = f"overlay_{well}_{rel_path}"
+
+                # Try to get the data from storage adapter
+                try:
+                    if self.storage_adapter.exists(key):
+                        # Register for overlay
+                        disk_path = self.storage_adapter.register_for_overlay(key, operation_type="read", cleanup=True)
+                        if disk_path:
+                            overlay_paths[file_path] = disk_path
+                except Exception as e:
+                    logger.warning(f"Error registering overlay for {file_path}: {e}")
+
+            # Execute all overlay operations
+            if overlay_paths:
+                self.storage_adapter.execute_all_overlay_operations(self.file_manager)
+                logger.info(f"Executed {len(overlay_paths)} overlay operations for stitch_images")
+
         # Get a dedicated stitcher instance for this operation via the orchestrator's method
         stitcher_to_use = self.get_stitcher()
         output_dir = Path(output_dir)
         input_dir = Path(input_dir)
-
 
         # Ensure output directory exists using file_manager
         self.file_manager.ensure_directory(output_dir)
@@ -625,6 +1118,78 @@ class PipelineOrchestrator:
                 override_names=[str(input_dir / f) for f in matching_files]
             )
 
+        # Clean up overlay operations if needed
+        if needs_overlay:
+            self.storage_adapter.cleanup_overlay_operations(self.file_manager)
+
+    def _ensure_file_manager(self):
+        """
+        Ensure file manager is initialized.
+
+        Returns:
+            FileManager: The initialized file manager
+
+        Raises:
+            RuntimeError: If file manager is not initialized
+        """
+        if self.file_manager is None:
+            raise RuntimeError(
+                "File manager is not initialized. Call initialize() first, or "
+                "ensure plate_path and workspace_path are properly set."
+            )
+        return self.file_manager
+
+    def _ensure_storage_adapter(self):
+        """
+        Ensure storage adapter is initialized if not in legacy mode.
+
+        Returns:
+            StorageAdapter: The initialized storage adapter, or None if in legacy mode
+
+        Raises:
+            RuntimeError: If storage adapter is not initialized when required
+        """
+        if self.storage_mode != "legacy" and self.storage_adapter is None:
+            raise RuntimeError(
+                "Storage adapter is not initialized. Call initialize() first, or "
+                "ensure storage_mode is properly set."
+            )
+        return self.storage_adapter
+
+    def _ensure_microscope_handler(self):
+        """
+        Ensure microscope handler is initialized.
+
+        Returns:
+            MicroscopeHandler: The initialized microscope handler
+
+        Raises:
+            RuntimeError: If microscope handler is not initialized
+        """
+        if self.microscope_handler is None:
+            raise RuntimeError(
+                "Microscope handler is not initialized. Call initialize() first, or "
+                "ensure plate_path and workspace_path are properly set."
+            )
+        return self.microscope_handler
+
+    def _ensure_stitcher(self):
+        """
+        Ensure stitcher is initialized.
+
+        Returns:
+            Stitcher: The initialized stitcher
+
+        Raises:
+            RuntimeError: If stitcher is not initialized
+        """
+        if self.stitcher is None:
+            raise RuntimeError(
+                "Stitcher is not initialized. Call initialize() first, or "
+                "ensure microscope_handler is properly initialized."
+            )
+        return self.stitcher
+
     def initialize_storage_adapter(self):
         """
         Initialize the storage adapter based on the storage_mode.
@@ -635,39 +1200,13 @@ class PipelineOrchestrator:
         - "zarr": ZarrStorageAdapter is created
 
         The storage_root is used as the root directory for the adapter.
-        If no storage_root is provided, the input_dir is used.
+        If no storage_root is provided, a suffixed version of input_dir is used
+        to ensure output directories are never the same as input directories.
+
+        Note: This method is deprecated. Use initialize() instead.
         """
-        if self.storage_mode != "legacy":
-            # Determine the effective storage root
-            effective_storage_root = self.storage_root or self.input_dir
-            if not effective_storage_root:
-                raise ValueError("Zarr/memory mode needs a valid root path.")
-
-            # For zarr mode, create a specific subdirectory if no storage_root was provided
-            if self.storage_mode == "zarr" and not self.storage_root:
-                effective_storage_root = self.input_dir / "zarr_storage"
-                logger.warning("Defaulting zarr root to %s", effective_storage_root)
-
-            # Import here to avoid circular imports
-            from ezstitcher.io.storage_adapter import select_storage
-
-            # Create the storage adapter
-            self.storage_adapter = select_storage(
-                mode=self.storage_mode,
-                storage_root=effective_storage_root
-            )
-
-            # Verify the adapter was created successfully
-            if self.storage_adapter is None:
-                raise RuntimeError(
-                    f"Failed to create StorageAdapter for mode '{self.storage_mode}'"
-                )
-
-            logger.info("Initialized StorageAdapter: %s at %s",
-                       type(self.storage_adapter).__name__, effective_storage_root)
-        else:
-            self.storage_adapter = None
-            logger.info("No StorageAdapter: legacy mode.")
+        logger.warning("initialize_storage_adapter() is deprecated. Use initialize() instead.")
+        self._initialize_storage_adapter()
 
     def initialize_file_manager(self):
         """
@@ -678,12 +1217,10 @@ class PipelineOrchestrator:
         - All other modes: Uses a filesystem backend
 
         The input_dir is used as the root directory for the FileManager.
-        """
-        # Always use filesystem backend for FileManager unless explicitly testing memory
-        if self.storage_mode == "memory":
-            backend = "memory"
-        else:
-            backend = "filesystem"
 
-        self.file_manager = FileManager(backend=backend, root_dir=self.input_dir)
-        logger.info("Initialized FileManager with backend '%s'", backend)
+        Note: This method is deprecated. Use initialize() instead.
+        """
+        logger.warning("initialize_file_manager() is deprecated. Use initialize() instead.")
+        self._initialize_file_manager()
+
+

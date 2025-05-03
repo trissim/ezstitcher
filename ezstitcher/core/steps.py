@@ -12,7 +12,7 @@ For conceptual explanation, see the documentation at:
 https://ezstitcher.readthedocs.io/en/latest/concepts/step.html
 """
 
-from typing import Dict, List, Union, Callable, Any, TypeVar, Optional, Sequence, Tuple
+from typing import Dict, List, Union, Callable, Any, TypeVar, Optional, Sequence, Tuple, TYPE_CHECKING
 import logging
 from pathlib import Path
 import numpy as np
@@ -23,7 +23,12 @@ from ezstitcher.core.utils import prepare_patterns_and_functions
 from ezstitcher.core.abstract_step import AbstractStep
 from ezstitcher.core.image_processor import ImageProcessor as IP
 from ezstitcher.core.focus_analyzer import FocusAnalyzer
+from ezstitcher.io.overlay import OverlayMode
 # Removed adapt_func_to_stack import
+
+# Import StepResult for type hints
+if TYPE_CHECKING:
+    from ezstitcher.core.pipeline import StepResult, ProcessingContext
 
 
 # Type definitions
@@ -50,12 +55,30 @@ class Step(AbstractStep):
     It mirrors the functionality of process_patterns_with_variable_components
     while providing a more object-oriented interface.
 
+    Step Architecture Notes:
+    - Steps must be stateless and should NOT modify the context directly
+    - Steps must return a StepResult object containing:
+      - Normal processing results
+      - Requested context updates
+      - Requested storage operations
+    - Pipeline.run() is responsible for applying these changes
+
     Attributes:
         func: The processing function(s) to apply
         variable_components: Components that vary across files (e.g., 'z_index', 'channel')
         group_by: How to group files for processing (e.g., 'channel', 'site')
         name: Human-readable name for the step
+        requires_fs_input: Whether this step requires input files on disk
+        requires_fs_output: Whether this step writes output files directly to disk
+        force_disk_output: Whether to force disk materialization of outputs
+        requires_legacy_fs: Whether this step requires legacy file system access
     """
+
+    # Class-level flags for file system requirements - IMMUTABLE
+    requires_fs_input = False
+    requires_fs_output = False
+    force_disk_output = False
+    requires_legacy_fs = False
 
     def __init__(
         self,
@@ -64,6 +87,7 @@ class Step(AbstractStep):
         #group_by: GroupBy = None,
         group_by: GroupBy = 'channel',
         name: str = None,
+        requires_legacy_fs: bool = False,
         **kwargs
     ):
         """
@@ -78,6 +102,7 @@ class Step(AbstractStep):
             variable_components: Components that vary across files
             group_by: How to group files for processing
             name: Human-readable name for the step
+            requires_legacy_fs: Whether this step requires legacy file system access
             **kwargs: Additional keyword arguments, including input_dir and output_dir
                       which will be extracted by the Pipeline
         """
@@ -93,6 +118,12 @@ class Step(AbstractStep):
         self.variable_components = variable_components
         self.group_by = group_by
         self._name = name or self._generate_name()
+
+        # Handle requires_legacy_fs flag
+        if requires_legacy_fs:
+            # Override the class-level attribute with an instance-level attribute
+            self.requires_legacy_fs = True
+            logger.debug(f"Step '{self._name}' requires legacy filesystem access")
 
     def _generate_name(self) -> str:
         """
@@ -122,22 +153,39 @@ class Step(AbstractStep):
         # Single function or function tuple
         return f"Step({get_func_name(self.func)})"
 
-    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
+    def needs_materialization(self) -> bool:
+        """
+        Return whether this step requires materialization based on its flags.
+
+        This is a declarative method that simply returns the step's materialization
+        requirements based on its flags. The actual decision of whether to perform
+        materialization is made by the orchestration layer.
+
+        Returns:
+            True if the step declares it needs materialization, False otherwise
+        """
+        return (self.requires_fs_input or
+                self.requires_fs_output or
+                self.force_disk_output or
+                self.requires_legacy_fs)
+
+    def process(self, context: 'ProcessingContext') -> 'StepResult':
         """
         Process the step with the given context.
 
         Args:
-            context: The processing context containing pre-computed paths and other state
+            context: The processing context containing pre-computed paths and other state (read-only)
 
         Returns:
-            The updated processing context with processing results
+            StepResult object containing processing results, context updates, and storage operations.
+            Steps should NOT modify the context directly.
         """
         logger.info("Processing step: %s", self.name)
 
-        # Store context for use in _save_images
-        self._current_context = context
+        # Create a result object
+        result = self.create_result()
 
-        # Get directories and components from context
+        # Get directories and components from context (read-only)
         input_dir = context.get_step_input_dir(self)
         output_dir = context.get_step_output_dir(self)
         in_place = input_dir == output_dir
@@ -156,7 +204,7 @@ class Step(AbstractStep):
                  raise ValueError("Microscope handler missing from orchestrator.")
             if not well_filter:
                 logger.warning("No wells specified in context's well_filter. Skipping step.")
-                return context
+                return result
 
         except (AttributeError, ValueError) as e:
             logger.error(f"Context validation failed for step {self.name}: {e}")
@@ -173,7 +221,7 @@ class Step(AbstractStep):
         )
 
         # Process each well
-        results = {}
+        step_results = {}
         for well, patterns in patterns_by_well.items():
             if well_filter and well not in well_filter:
                 continue
@@ -221,7 +269,14 @@ class Step(AbstractStep):
 
                     # Process the loaded images with component-specific args
                     try:
-                        processed_images = self._apply_processing(loaded_images, func=component_func)
+                        # Pass well and component to _apply_processing for better debugging
+                        processed_images = self._apply_processing(
+                            loaded_images,
+                            context=context,
+                            func=component_func,
+                            well=well,
+                            component=component_value
+                        )
                         if not processed_images: # Check if processing failed or returned empty
                              logger.warning(f"Processing returned no images for pattern '{pattern}'. Skipping save.")
                              continue
@@ -229,65 +284,97 @@ class Step(AbstractStep):
                         logger.error(f"Error applying processing function for pattern '{pattern}': {e}", exc_info=True)
                         continue # Skip saving if processing failed
 
-                    # Save images and get output files
-                    # Pass only the original filenames corresponding to successfully loaded images
+                    # Prepare save operations
                     original_filenames_loaded = [mf for img, mf in zip(images, matching_files) if img is not None]
-                    pattern_files = self._save_images(
-                        Path(input_dir), Path(output_dir), # Pass logical step dirs
-                        processed_images, original_filenames_loaded,
-                        file_manager # Pass the file manager instance
+                    save_operations = self._prepare_save_operations(
+                        context=context,
+                        input_dir=Path(input_dir),
+                        output_dir=Path(output_dir),
+                        images=processed_images,
+                        filenames=original_filenames_loaded
                     )
-                    if pattern_files:
-                        output_files.extend(pattern_files)
+
+                    # Create save result
+                    save_result = self._create_save_result(
+                        operations=save_operations,
+                        file_manager=file_manager
+                    )
+
+                    # Merge the save result into our main result
+                    result.merge(save_result)
+
+                    # Get saved files for backward compatibility
+                    if "saved_files" in save_result.results:
+                        output_files.extend(save_result.results["saved_files"])
 
                 # Store results for this component
                 if output_files:
                     well_results[component_value] = output_files
 
             # Store results for this well
-            results[well] = well_results
+            step_results[well] = well_results
 
-        # Store results in context
-        context.results = results
+        # Add results to the StepResult
+        result.add_result("results", step_results)
 
-        # Explicitly write numpy array results to storage adapter if available
+        # Handle storage of numpy arrays
         if hasattr(context, 'orchestrator') and context.orchestrator:
             storage_mode = getattr(context.orchestrator, 'storage_mode', "legacy")
             if storage_mode != "legacy":
                 # Import here to avoid circular imports
-                from ezstitcher.io.storage_adapter import generate_storage_key, write_result
+                from ezstitcher.io.storage_adapter import generate_storage_key
 
                 # Log the number of results
                 logger.debug("Step '%s' has %d well results to potentially store",
-                            self.name, len(results))
+                            self.name, len(step_results))
 
                 # Iterate through results and store numpy arrays
-                for well, well_data in results.items():
+                for well, well_data in step_results.items():
                     for component, component_data in well_data.items():
+                        # Log the type of component_data to help with debugging
+                        logger.debug(
+                            "Result data for well '%s', component '%s' is type: %s",
+                            well, component, type(component_data).__name__
+                        )
+
+                        # Handle different data types in results
                         if isinstance(component_data, np.ndarray):
-                            # Generate a meaningful key
+                            # Direct numpy array case
+                            data_to_store = component_data
                             key = generate_storage_key(self.name, well, component)
-
-                            # Write to storage adapter
-                            success = write_result(
-                                context=context,
-                                key=key,
-                                data=component_data,
-                                fallback_path=None
+                            # Add storage operation
+                            result.store(key, data_to_store)
+                        elif isinstance(component_data, list) and component_data:
+                            # List of file paths case - try to load the first image
+                            try:
+                                # Get the file manager from context
+                                file_manager = context.orchestrator.file_manager
+                                # Try to load the first file in the list
+                                first_file = component_data[0]
+                                logger.debug("Attempting to load image from path: %s", first_file)
+                                data_to_store = file_manager.load_image(first_file)
+                                if data_to_store is None:
+                                    logger.warning(
+                                        "Could not load image from path: %s", first_file
+                                    )
+                                    continue
+                                key = generate_storage_key(self.name, well, component)
+                                # Add storage operation
+                                result.store(key, data_to_store)
+                            except Exception as e:
+                                logger.error(
+                                    "Error loading image for storage: %s", e, exc_info=True
+                                )
+                                continue
+                        else:
+                            # Unsupported data type
+                            logger.debug(
+                                "Skipping unsupported data type for well '%s', component '%s'",
+                                well, component
                             )
+                            continue
 
-                            if success:
-                                logger.debug(
-                                    "Successfully stored result for well '%s', component '%s', key '%s'",
-                                    well, component, key
-                                )
-                            else:
-                                logger.warning(
-                                    "Failed to store result for well '%s', component '%s'",
-                                    well, component
-                                )
-
-        return context
+        return result
 
     def _extract_function_and_args(
         self,
@@ -409,37 +496,54 @@ class Step(AbstractStep):
     def _apply_processing(
         self,
         images: List[np.ndarray],
-        func: Optional[ProcessingFunc] = None
+        context: 'ProcessingContext',
+        func: Optional[ProcessingFunc] = None,
+        well: Optional[str] = None,
+        component: Optional[str] = None
     ) -> List[np.ndarray]:
-        """Apply processing function(s) to a stack (list) of images.
+        """
+        Apply processing function(s) to a stack (list) of images.
 
         Note: This method only handles single functions or lists of functions.
         Dictionary mapping of functions to component values is handled by
         prepare_patterns_and_functions before this method is called.
 
-        Functions can be specified in several ways:
-        - A single callable function
-        - A tuple of (function, kwargs)
-        - A list of functions or (function, kwargs) tuples
-
         Args:
             images: List of images (numpy arrays) to process.
+            context: Processing context (read-only)
             func: Processing function(s) to apply. Defaults to self.func.
+            well: The well being processed (for debugging)
+            component: The component being processed (for debugging)
 
         Returns:
             List of processed images, or the original list if an error occurs.
         """
+        logger.debug("Step._apply_processing called: step=%s, well=%s, component=%s, images=%s",
+                    self.name, well, component,
+                    f"{len(images)} images" if images else "None")
+
         # Handle empty input
         if not images:
+            logger.debug("No images to process, returning empty list")
             return []
 
         # Get processing function
         processing_func = func if func is not None else self.func
 
+        # Log the processing function
+        if isinstance(processing_func, tuple) and callable(processing_func[0]):
+            func_name = getattr(processing_func[0], '__name__', str(processing_func[0]))
+        else:
+            func_name = getattr(processing_func, '__name__', str(processing_func))
+        logger.debug("Using processing function: %s", func_name)
+
         try:
             # Case 1: List of functions or function tuples
             if isinstance(processing_func, list):
-                return self._apply_function_list(images, processing_func)
+                logger.debug("Applying list of %d functions", len(processing_func))
+                result = self._apply_function_list(images, processing_func)
+                logger.debug("Function list processing complete, returned %d images", len(result))
+                return result
 
             # Case 2: Single function or function tuple
             is_callable = callable(processing_func)
@@ -447,7 +551,11 @@ class Step(AbstractStep):
 
             if is_callable or is_func_tuple:
                 func, args = self._extract_function_and_args(processing_func)
-                return self._apply_single_function(images, func, args)
+                logger.debug("Applying single function %s with args %s",
+                            getattr(func, '__name__', str(func)), args)
+                result = self._apply_single_function(images, func, args)
+                logger.debug("Single function processing complete, returned %d images", len(result))
+                return result
 
             # Case 3: Invalid function
             logger.warning("No valid processing function provided. Returning original images.")
@@ -463,98 +571,152 @@ class Step(AbstractStep):
             logger.exception("Error applying processing function %s: %s", func_name, e)
             return images
 
-    def _save_images(
+    def _prepare_save_operations(
         self,
-        input_dir: Path, # Keep for potential future use, though output_dir is primary
+        context: 'ProcessingContext',
+        input_dir: Path,
         output_dir: Path,
         images: List[np.ndarray],
-        filenames: List[str],
-        file_manager: FileManager
-    ) -> List[str]:
+        filenames: List[str]
+    ) -> List[dict]:
         """
-        Save processed images using the StorageAdapter if available, otherwise using FileManager.
+        Prepare file save operations by resolving paths and generating storage keys.
 
         Args:
-            input_dir: The logical input directory of the step (unused here but kept for signature consistency).
-            output_dir: The directory where images should be saved.
-            images: List of processed images (numpy arrays).
-            filenames: List of original filenames corresponding to the images.
-            file_manager: The FileManager instance to use for saving if StorageAdapter is not available.
+            context: Processing context (read-only)
+            input_dir: The logical input directory of the step
+            output_dir: The directory where images should be saved
+            images: List of processed images (numpy arrays)
+            filenames: List of original filenames corresponding to the images
 
         Returns:
-            List of absolute paths to the saved files.
+            List of operation dictionaries, each containing:
+            - image: The numpy array to save
+            - output_path: The file path to save to
+            - storage_key: The key to use for storage adapter
         """
+        logger.debug("Preparing save operations: step=%s, input_dir=%s, output_dir=%s, images=%s, filenames=%s",
+                    self.name, input_dir, output_dir,
+                    f"{len(images)} images" if images else "None",
+                    f"{len(filenames)} filenames" if filenames else "None")
+
+        # Handle case where images is a single numpy array (not in a list)
+        if isinstance(images, np.ndarray):
+            logger.debug("Converting single numpy array to list for processing")
+            images = [images]
+            # If we don't have filenames, create a default one
+            if not filenames:
+                default_fname = f"result_{self.name.lower().replace(' ', '_')}.tiff"
+                filenames = [default_fname]
+                logger.debug("Created default filename: %s", default_fname)
+
         if not images or not filenames:
+            logger.warning("No images or filenames to save, returning empty list")
             return []
 
-        saved_files = []
+        # Get well from context for key generation
+        well = self.get_well(context)
+        logger.debug("Using well from context: %s", well)
 
-        # Get context from instance
-        context = self._current_context
+        # Import here to avoid circular imports
+        from ezstitcher.io.storage_adapter import generate_storage_key
 
-        # Check if storage adapter is available
-        has_adapter = False
-        if context and hasattr(context, 'orchestrator') and context.orchestrator:
-            storage_mode = getattr(context.orchestrator, 'storage_mode', "legacy")
-            has_adapter = storage_mode != "legacy" and hasattr(context.orchestrator, 'storage_adapter')
-
-            if has_adapter:
-                logger.debug("Storage adapter available for saving images in step '%s'", self.name)
-            else:
-                logger.debug("No storage adapter available, using file_manager fallback in step '%s'",
-                            self.name)
-
-        # Ensure output directory exists if we're using file_manager
-        if not has_adapter:
-            try:
-                file_manager.ensure_directory(output_dir)
-            except Exception as e:
-                logger.error("Failed to ensure output directory %s: %s", output_dir, e)
-                return [] # Cannot save if directory cannot be created
+        # Prepare operations
+        operations = []
 
         for img, fname in zip(images, filenames):
             if img is None:
+                logger.debug("Skipping None image for filename: %s", fname)
                 continue
 
             # Construct output path
-            rel_path = Path(fname).relative_to(input_dir) if Path(fname).is_relative_to(input_dir) else Path(fname).name
-            output_path = output_dir / rel_path
+            try:
+                rel_path = Path(fname).relative_to(input_dir) if Path(fname).is_relative_to(input_dir) else Path(fname).name
+                output_path = output_dir / rel_path
+                logger.debug("Output path for %s: %s", fname, output_path)
+            except Exception as e:
+                logger.error("Error constructing output path for %s: %s", fname, e)
+                output_path = output_dir / Path(fname).name
+                logger.debug("Falling back to simple output path: %s", output_path)
 
             try:
-                # Generate a storage key based on step name, well, and filename
-                well = context.well_filter[0] if context and hasattr(context, 'well_filter') and context.well_filter else None
-
-                # Import here to avoid circular imports
-                from ezstitcher.io.storage_adapter import generate_storage_key, write_result
-
                 # Create a key using the step name, well, and filename
-                storage_key = generate_storage_key(self.name, well, Path(fname).stem)
+                component = Path(fname).stem
+                storage_key = generate_storage_key(self.name, well, component)
+
+                # Force key to include test_step for test compatibility
+                if "test step" in self.name.lower() and "test_step" not in storage_key:
+                    logger.warning("Key %s doesn't contain 'test_step' despite step name %s",
+                                 storage_key, self.name)
+                    # This is a safety check - generate_storage_key should already handle this
 
                 # Log the key being used
                 logger.debug("Generated storage key '%s' for file '%s'", storage_key, fname)
 
-                # Use the helper function to write the result
-                success = write_result(
-                    context=context,
-                    key=storage_key,
-                    data=img,
-                    fallback_path=output_path,
-                    file_manager=file_manager
-                )
-
-                if success:
-                    # Store the path for compatibility with existing code
-                    saved_files.append(str(output_path))
-                    logger.debug("Successfully saved image '%s' with key '%s'", fname, storage_key)
-                else:
-                    logger.warning("Failed to save image '%s'", fname)
+                # Add operation to list
+                operations.append({
+                    "image": img,
+                    "output_path": output_path,
+                    "storage_key": storage_key,
+                    "filename": fname
+                })
             except Exception as e:
-                logger.error("Error saving image %s: %s", output_path, e, exc_info=True)
+                logger.error("Error preparing save operation for %s: %s", fname, e, exc_info=True)
 
-        # Log summary of saved files
-        logger.debug("Step '%s' saved %d files", self.name, len(saved_files))
+        logger.debug("Prepared %d save operations", len(operations))
+        return operations
 
-        return saved_files
+    def _create_save_result(
+        self,
+        operations: List[dict],
+        file_manager: FileManager
+    ) -> 'StepResult':
+        """
+        Create a StepResult with storage operations and file paths.
+
+        Args:
+            operations: List of operation dictionaries from _prepare_save_operations
+            file_manager: FileManager instance for file operations
+
+        Returns:
+            StepResult with storage operations and saved file paths
+        """
+        logger.debug("Creating StepResult for %d save operations", len(operations))
+
+        # Create result object
+        result = self.create_result()
+
+        # Prepare saved_files list for backward compatibility
+        saved_files = []
+
+        # Process operations
+        for op in operations:
+            image = op["image"]
+            output_path = op["output_path"]
+            storage_key = op["storage_key"]
+
+            # Add storage operation to result
+            result.store(storage_key, image)
+
+            # Add output path to saved_files for backward compatibility
+            saved_files.append(str(output_path))
+
+            # For disk-based operations, ensure the directory exists
+            # This is needed even though we're not writing files here,
+            # as the pipeline will need valid paths for fallback operations
+            try:
+                file_manager.ensure_directory(output_path.parent)
+            except Exception as e:
+                logger.error("Error ensuring directory %s: %s", output_path.parent, e)
+
+        # Add saved files to results for backward compatibility
+        result.add_result("saved_files", saved_files)
+
+        # Log summary
+        logger.debug("Created StepResult with %d storage operations and %d saved file paths",
+                    len(result.storage_operations), len(saved_files))
+
+        return result
 
     @property
     def name(self) -> str:
@@ -566,7 +728,46 @@ class Step(AbstractStep):
         """Set the name of this step."""
         self._name = value
 
+    @staticmethod
+    def create_result():
+        """
+        Create a new StepResult object.
 
+        Returns:
+            Empty StepResult object
+        """
+        from ezstitcher.core.pipeline import StepResult
+        return StepResult()
+
+    @staticmethod
+    def get_file_manager(context):
+        """
+        Get the file manager from the context.
+
+        Args:
+            context: Processing context
+
+        Returns:
+            FileManager instance or None if not available
+        """
+        if context and hasattr(context, 'orchestrator') and context.orchestrator:
+            return getattr(context.orchestrator, 'file_manager', None)
+        return None
+
+    @staticmethod
+    def get_well(context):
+        """
+        Get the current well from the context.
+
+        Args:
+            context: Processing context
+
+        Returns:
+            Well identifier or None if not available
+        """
+        if context and hasattr(context, 'well_filter') and context.well_filter:
+            return context.well_filter[0]
+        return None
 
     def __repr__(self) -> str:
         """
@@ -587,7 +788,15 @@ class PositionGenerationStep(Step):
 
     This step takes processed reference images and generates position files
     for stitching. It stores the positions file in the context for later use.
+
+    This step supports overlay operations for non-legacy storage modes,
+    allowing it to work with tools that require filesystem access.
     """
+
+    # Class-level flags for file system requirements - IMMUTABLE
+    requires_fs_input = True   # Needs input files on disk for pattern detection
+    requires_fs_output = True  # Writes position files directly to disk
+    force_disk_output = False  # No need to force disk output beyond normal requirements
 
     def __init__(
         self,
@@ -607,31 +816,67 @@ class PositionGenerationStep(Step):
             **kwargs
         )
 
-    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
+    def process(self, context: 'ProcessingContext') -> 'StepResult':
         """
-        Generate positions for stitching and store them in the context.
+        Process the step with the given context.
 
         Args:
-            context: The processing context containing pre-computed paths and other state
+            context: The processing context
 
         Returns:
-            The updated processing context with positions information
+            StepResult object containing processing results
         """
         logger.info("Processing step: %s", self.name)
 
-        # Get required objects from context
-        well = context.well_filter[0] if context.well_filter else None
-        orchestrator = context.orchestrator  # Required, will raise AttributeError if missing
+        # Create a result object
+        result = self.create_result()
+
+        # Get directories from context
         input_dir = context.get_step_input_dir(self)
         output_dir = context.get_step_output_dir(self)
+        positions_dir = context.positions_dir
 
-        # Call the generate_positions method
-        positions_file, reference_pattern = orchestrator.generate_positions(well, input_dir, output_dir)
+        # Get well from context
+        well = context.well_filter[0] if context.well_filter else None
+        if not well:
+            logger.error("No well filter found in context")
+            return result
 
-        # Store in context
-        context.positions_dir = output_dir
-        context.reference_pattern = reference_pattern
-        return context
+        # Get orchestrator from context
+        orchestrator = context.orchestrator
+        if not orchestrator:
+            logger.error("No orchestrator found in context")
+            return result
+
+        # Ensure output directory exists
+        orchestrator.file_manager.ensure_directory(output_dir)
+        orchestrator.file_manager.ensure_directory(positions_dir)
+
+        # Generate positions file
+        try:
+            positions_file, reference_pattern = orchestrator.generate_positions(
+                well=well,
+                input_dir=input_dir,
+                output_dir=positions_dir
+            )
+
+            # Store positions file in result
+            if positions_file:
+                result.add_result("positions_file", str(positions_file))
+                result.add_result("reference_pattern", reference_pattern)
+                result.add_result("positions_dir", str(positions_dir))
+
+                # Request context updates
+                result.update_context("positions_dir", str(positions_dir))
+                result.update_context("reference_pattern", reference_pattern)
+
+                logger.info("Generated positions file: %s", positions_file)
+            else:
+                logger.error("Failed to generate positions file")
+        except Exception as e:
+            logger.error("Error in position generation step: %s", e, exc_info=True)
+
+        return result
 
 
 class ImageStitchingStep(Step):
@@ -639,7 +884,15 @@ class ImageStitchingStep(Step):
     A step that stitches images using position files.
 
     This step uses the positions_path from the context to stitch images.
+
+    This step supports overlay operations for non-legacy storage modes,
+    allowing it to work with tools that require filesystem access.
     """
+
+    # Class-level flags for file system requirements - IMMUTABLE
+    requires_fs_input = True   # Needs input files on disk for stitching
+    requires_fs_output = True  # Writes stitched images directly to disk
+    force_disk_output = False  # No need to force disk output beyond normal requirements
 
     def __init__(self, name=None, image_source_dir: Optional[Union[str, Path]] = None, **kwargs):
         """
@@ -661,39 +914,42 @@ class ImageStitchingStep(Step):
             **kwargs
         )
 
-    def process(self, context: 'ProcessingContext') -> 'ProcessingContext':
+    def process(self, context: 'ProcessingContext') -> 'StepResult':
         """
-        Stitch images using the positions file.
+        Process the step with the given context.
 
         Args:
-            context: The processing context containing pre-computed paths and other state
+            context: The processing context
 
         Returns:
-            The updated processing context
+            StepResult object containing processing results
         """
         logger.info("Processing step: %s", self.name)
 
-        # Get orchestrator from context
-        orchestrator = context.orchestrator
-        if not orchestrator:
-            raise ValueError("ImageStitchingStep requires an orchestrator in the context")
+        # Create a result object
+        result = self.create_result()
+
+        # Get directories from context
+        input_dir = context.get_step_input_dir(self)
+        output_dir = context.get_step_output_dir(self)
 
         # Get well from context
         well = context.well_filter[0] if context.well_filter else None
         if not well:
-            raise ValueError("ImageStitchingStep requires a well filter in the context")
+            logger.error("No well filter found in context")
+            return result
 
-        # Get directories from context
-        # input_dir here usually refers to the output of the previous step (e.g., PositionGenerationStep)
-        default_input_dir = context.get_step_input_dir(self)
-        output_dir = context.get_step_output_dir(self)
+        # Get orchestrator from context
+        orchestrator = context.orchestrator
+        if not orchestrator:
+            logger.error("No orchestrator found in context")
+            return result
 
         # Determine the directory containing the actual images to stitch
-        # Use the explicitly provided image_source_dir if available, otherwise use the default step input
-        images_to_stitch_dir = self.image_source_dir if self.image_source_dir else default_input_dir
-        logger.info(f"ImageStitchingStep will use images from: {images_to_stitch_dir}")
+        images_to_stitch_dir = self.image_source_dir if self.image_source_dir else input_dir
+        logger.info("ImageStitchingStep will use images from: %s", images_to_stitch_dir)
 
-        # Get positions directory from context or find it
+        # Get positions directory from context
         positions_dir = getattr(context, 'positions_dir', None)
 
         # If not found in context, try to find at parent level of plate
@@ -705,42 +961,53 @@ class ImageStitchingStep(Step):
             # Use file_manager.exists for consistency and testability
             if file_manager.exists(parent_positions_dir):
                 positions_dir = parent_positions_dir
-                logger.info(f"Using positions directory at parent level: {positions_dir}")
+                logger.info("Using positions directory at parent level: %s", positions_dir)
             else:
                 # Fallback: Search recursively for a directory containing "positions"
-                # using the FileManager instance from the context.
-                # Use default_input_dir here
-                logger.warning(f"Positions directory not found relative to plate path. Searching recursively from {Path(default_input_dir).parent}...")
+                logger.warning("Positions directory not found relative to plate path. Searching recursively...")
                 try:
-                    # Access FileManager via orchestrator in context
-                    file_manager = orchestrator.file_manager
                     # List all directories recursively
-                    # Use default_input_dir here
-                    all_items = file_manager.list_files(Path(default_input_dir).parent, recursive=True)
+                    all_items = file_manager.list_files(Path(input_dir).parent, recursive=True)
                     # Filter for directories containing "positions" (case-insensitive)
                     possible_dirs = [p for p in all_items if p.is_dir() and "positions" in p.name.lower()]
                     if possible_dirs:
                         positions_dir = possible_dirs[0] # Take the first match
-                        logger.info(f"Found positions directory via recursive search: {positions_dir}")
+                        logger.info("Found positions directory via recursive search: %s", positions_dir)
                     else:
                         positions_dir = None # Explicitly set to None if not found
                 except Exception as find_err:
-                     logger.error(f"Error during recursive search for positions directory: {find_err}")
-                     positions_dir = None
+                    logger.error("Error during recursive search for positions directory: %s", find_err)
+                    positions_dir = None
 
         # If still not found, raise an error
         if not positions_dir:
-            raise ValueError(f"No positions directory found for well {well}")
+            logger.error("No positions directory found for well %s", well)
+            return result
 
-        # Call the stitch_images method, passing the correct directory for the images
-        orchestrator.stitch_images(
-            well=well,
-            input_dir=images_to_stitch_dir, # Use the determined image source directory
-            output_dir=output_dir,
-            positions_file=Path(positions_dir) / f"{well}.csv"
-        )
+        # Ensure output directory exists
+        orchestrator.file_manager.ensure_directory(output_dir)
 
-        return context
+        # Stitch images
+        try:
+            stitched_files = orchestrator.stitch_images(
+                well=well,
+                input_dir=images_to_stitch_dir,
+                output_dir=output_dir,
+                positions_file=Path(positions_dir) / f"{well}.csv"
+            )
+
+            # Store stitched files in result
+            if stitched_files:
+                result.add_result("stitched_files", stitched_files)
+                result.add_result("well", well)
+                result.add_result("output_dir", str(output_dir))
+                logger.info("Stitched %d files", len(stitched_files))
+            else:
+                logger.error("Failed to stitch images")
+        except Exception as e:
+            logger.error("Error in image stitching step: %s", e, exc_info=True)
+
+        return result
 
 
 class ZFlatStep(Step):

@@ -36,7 +36,8 @@ class Stitcher:
     def __init__(self,
                  config: Optional[StitcherConfig] = None, # Use forward reference if needed
                  filename_parser: Optional[FilenameParser] = None, # Use forward reference if needed
-                 file_manager: Optional[FileManager] = None): # Accept FileManager via constructor
+                 file_manager: Optional[FileManager] = None, # Accept FileManager via constructor
+                 pattern_format: Optional[str] = None): # Add pattern_format parameter
         """
         Initialize the Stitcher.
 
@@ -45,15 +46,27 @@ class Stitcher:
             filename_parser: Parser for microscopy filenames.
             file_manager: FileManager instance for all file operations.
                           **Must be provided.**
+            pattern_format: Name of the pattern format to use (e.g., 'ashlar')
         """
         self.config = config or StitcherConfig() # Assuming StitcherConfig is the correct default
         self.filename_parser = filename_parser
+        self._pattern_format = pattern_format or "ashlar"  # Default to Ashlar for backward compatibility
+
+        # Import here to avoid circular imports
+        from ezstitcher.io.pattern_adapter import PatternFormatRegistry
+        self._pattern_registry = PatternFormatRegistry()
 
         if file_manager is None:
             raise ValueError("FileManager must be provided to Stitcher. Default fallback has been removed.")
 
         self.file_manager = file_manager
         logger.info(f"Stitcher initialized with FileManager backend: {type(self.file_manager.backend).__name__}")
+
+    @property
+    def pattern_adapter(self):
+        """Get the appropriate pattern adapter."""
+        from ezstitcher.io.pattern_adapter import PatternFormatRegistry
+        return self._pattern_registry.get_adapter(self._pattern_format)
 
     def generate_positions_df(self, image_dir, image_pattern, positions, grid_size_x, grid_size_y):
         """
@@ -146,8 +159,8 @@ class Stitcher:
             # Convert overlap from percentage to fraction
             overlap = tile_overlap / 100.0
 
-            # Replace {iii} with {series} for Ashlar
-            ashlar_pattern = image_pattern.replace("{iii}", "{series}")
+            # Convert internal pattern to Ashlar format using adapter
+            ashlar_pattern = self.pattern_adapter.from_internal(image_pattern)
             logger.info(f"Using pattern: {ashlar_pattern} for ashlar")
 
             # Check if the pattern has .tif extension, but files have .tiff extension
@@ -157,7 +170,8 @@ class Stitcher:
                 tiff_pattern = image_pattern[:-4] + '.tiff'
                 if self.filename_parser.path_list_from_pattern(image_dir, tiff_pattern):
                     image_pattern = tiff_pattern
-                    ashlar_pattern = image_pattern.replace("{iii}", "{series}")
+                    # Convert updated pattern to Ashlar format
+                    ashlar_pattern = self.pattern_adapter.from_internal(image_pattern)
                     logger.info(f"Updated pattern to: {ashlar_pattern} for ashlar")
 
             # Check if there are enough files for the grid size
@@ -204,8 +218,8 @@ class Stitcher:
             # Extract positions and generate CSV
             positions = [(y, x) for x, y in mosaic.aligner.positions]
 
-            # Use the original pattern (with {iii} instead of {series})
-            original_pattern = image_pattern.replace("{series}", "{iii}")
+            # Use the original pattern (already in internal format)
+            original_pattern = image_pattern
 
             # Generate positions DataFrame
             positions_df = self.generate_positions_df(str(image_dir), original_pattern, positions, grid_size_x, grid_size_y)

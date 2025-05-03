@@ -59,12 +59,12 @@ class EZStitcher:
         self.storage_mode = storage_mode # Added
         self.storage_root = Path(storage_root) if storage_root else None # Added
 
-        # Create orchestrator, passing storage config
+        # Create orchestrator, passing storage config, and explicitly initialize it
         self.orchestrator = PipelineOrchestrator(
             plate_path=self.input_path,
             storage_mode=self.storage_mode, # Pass config
             storage_root=self.storage_root   # Pass config
-        )
+        ).initialize()  # Explicitly initialize the orchestrator
 
         # Set parameters (no auto-detection for now)
         # Default to False if flatten_z is None (no auto-detection)

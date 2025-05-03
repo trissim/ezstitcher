@@ -274,7 +274,7 @@ def test_pipeline_architecture(flat_plate_dir, base_pipeline_config, thread_trac
 
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir,storage_mode="zarr")
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir,storage_mode="zarr").initialize()
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
@@ -339,7 +339,7 @@ def test_zstack_pipeline_architecture_focus(zstack_plate_dir, base_pipeline_conf
     # The orchestrator will set up the directories and wells when run is called
     config = base_pipeline_config
 
-    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=zstack_plate_dir)
+    orchestrator = PipelineOrchestrator(config=base_pipeline_config,plate_path=flat_plate_dir,storage_mode="memory").initialize()
 
     # Create focus directory
     focus_dir = orchestrator.workspace_path.parent / f"{orchestrator.workspace_path.name}_focus"
@@ -408,7 +408,7 @@ def test_zstack_pipeline_architecture(zstack_plate_dir, base_pipeline_config, th
         config=base_pipeline_config,
         plate_path=zstack_plate_dir,
         storage_mode="zarr"
-    )
+    ).initialize()
 
     # Create position generation pipeline with reference steps
     position_pipeline = Pipeline(
@@ -495,7 +495,7 @@ def test_storage_adapter_usage_in_steps(zstack_plate_dir, base_pipeline_config):
         config=base_pipeline_config,
         plate_path=zstack_plate_dir,
         storage_mode="memory"  # Use memory storage for faster testing
-    )
+    ).initialize()
 
     # Create a simple pipeline with a single step
     test_pipeline = Pipeline(

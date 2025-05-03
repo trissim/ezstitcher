@@ -11,6 +11,7 @@ from ezstitcher.io.storage_adapter import (
     ZarrStorageAdapter,
     select_storage,
     resolve_persist_path,
+    generate_storage_key,
 )
 
 # --- Fixtures ---
@@ -174,12 +175,16 @@ def test_zarr_persist(zarr_adapter: ZarrStorageAdapter, sample_data: dict[str, n
 
 def test_select_storage_memory(temp_storage_dir: Path):
     """Test factory function for 'memory' mode."""
-    adapter = select_storage(mode="memory", storage_root=temp_storage_dir)
+    from ezstitcher.io.storage_config import StorageConfig
+    storage_config = StorageConfig()
+    adapter = select_storage(mode="memory", storage_config=storage_config, storage_root=temp_storage_dir)
     assert isinstance(adapter, MemoryStorageAdapter)
 
 def test_select_storage_zarr(temp_storage_dir: Path):
     """Test factory function for 'zarr' mode."""
-    adapter = select_storage(mode="zarr", storage_root=temp_storage_dir)
+    from ezstitcher.io.storage_config import StorageConfig
+    storage_config = StorageConfig()
+    adapter = select_storage(mode="zarr", storage_config=storage_config, storage_root=temp_storage_dir)
     assert isinstance(adapter, ZarrStorageAdapter)
     # Check if the path was correctly passed and the store initialized
     assert adapter.storage_root == temp_storage_dir
@@ -187,8 +192,33 @@ def test_select_storage_zarr(temp_storage_dir: Path):
 
 def test_select_storage_invalid(temp_storage_dir: Path):
     """Test factory function with an invalid mode."""
+    from ezstitcher.io.storage_config import StorageConfig
+    storage_config = StorageConfig()
     with pytest.raises(ValueError, match="Invalid storage mode"):
-        select_storage(mode="invalid_mode", storage_root=temp_storage_dir)
+        select_storage(mode="invalid_mode", storage_config=storage_config, storage_root=temp_storage_dir)
+
+# --- Key Generation Tests ---
+
+def test_generate_storage_key():
+    """Test that generate_storage_key properly normalizes step names."""
+    # Test that "Test Step" becomes "test_step" in the key
+    key = generate_storage_key("Test Step", "A01", "channel_1")
+    assert "test_step" in key, f"Expected 'test_step' in key, got '{key}'"
+    assert key == "test_step_A01_channel_1", f"Expected 'test_step_A01_channel_1', got '{key}'"
+
+    # Test with extra whitespace
+    key = generate_storage_key("  Test Step  ", "A01", "channel_1")
+    assert "test_step" in key, f"Expected 'test_step' in key, got '{key}'"
+    assert key == "test_step_A01_channel_1", f"Expected 'test_step_A01_channel_1', got '{key}'"
+
+    # Test with different case
+    key = generate_storage_key("TEST STEP", "A01", "channel_1")
+    assert "test_step" in key, f"Expected 'test_step' in key, got '{key}'"
+    assert key == "test_step_A01_channel_1", f"Expected 'test_step_A01_channel_1', got '{key}'"
+
+    # Test with no well or component
+    key = generate_storage_key("Test Step")
+    assert key == "test_step", f"Expected 'test_step', got '{key}'"
 
 # --- Persist Path Resolution Tests ---
 
