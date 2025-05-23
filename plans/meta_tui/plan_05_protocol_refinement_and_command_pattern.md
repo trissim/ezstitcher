@@ -13,6 +13,7 @@
     2.  Ensuring that classes implement only the protocols relevant to their primary responsibility, potentially by delegating secondary responsibilities to collaborator objects.
     3.  Clarifying the data contracts (arguments and return types) for protocol methods, using `CorePlateData`, `CoreStepData` (from Plan 01), or other TUI-specific data transfer objects (DTOs) instead of raw `Dict[str, Any]` where appropriate.
     4.  Ensuring command objects are pure encapsulations of an action, taking necessary context (like adapters and `TUIState`) during execution rather than holding excessive state themselves.
+    5.  Recognizing that the TUI redesign (Plans 01, 02, 03) introduces a large number of new user interactions which must be encapsulated via a robust and comprehensive command pattern.
 
 **Architectural Principles**:
 *   **Interface Segregation Principle (ISP)**: Clients should not be forced to depend on interfaces they do not use. Protocols should be fine-grained.
@@ -30,11 +31,16 @@
     1.  **Base `TUICommand(Protocol)`**:
         ```python
         # In openhcs.tui.interfaces.py (or a new openhcs.tui.commands.protocols.py)
+        from typing import Protocol, Any, List, Optional, Dict, Coroutine, Tuple, TYPE_CHECKING
+        if TYPE_CHECKING:
+            from openhcs.tui.state import TUIState # Assuming TUIState is defined here
+            from openhcs.tui.adapters.core_adapter_protocols import CoreApplicationAdapterInterface, CoreOrchestratorAdapterInterface
+
         class TUICommand(Protocol):
             async def execute(self, app_adapter: "CoreApplicationAdapterInterface",
                               plate_adapter: Optional["CoreOrchestratorAdapterInterface"], # If relevant to current context
                               ui_state: "TUIState", # Renamed for clarity
-                              **kwargs: Any) -> None: ... # kwargs for command-specific params
+                              **kwargs: Any) -> Coroutine[Any, Any, Tuple[bool, Optional[str]]]: ... # kwargs for command-specific params
 
             def can_execute(self, ui_state: "TUIState",
                             app_adapter: Optional["CoreApplicationAdapterInterface"] = None, # Optional for simple checks
@@ -43,70 +49,103 @@
                 return True # Default
         ```
     2.  **Specialized Command Protocols (Examples, if beneficial)**:
-        *   `DialogCommand(TUICommand)`: For commands that primarily show dialogs. Might have specific methods or properties related to dialog management if common patterns emerge.
-        *   `PlateOperationCommand(TUICommand)`: For commands operating on the active plate/orchestrator. `plate_adapter` would be non-optional in `execute`.
-        *   `StepOperationCommand(TUICommand)`: For commands operating on steps within a plate.
-    *   **Rationale**: Specialization can make command types more explicit and allow for type-checking specific command categories if needed by invokers (e.g., a `MenuBuilder` might only accept `MenuCommand` types). However, over-specialization should be avoided if the base `TUICommand` is sufficient. Start with the refined `TUICommand` and introduce specializations only if clear benefits arise.
+        *   While specific marker protocols like `DialogCommand` could be created, the primary focus will be on implementing concrete command classes. The base `TUICommand` should be robust enough. Specialization might occur naturally if common setup/execution patterns emerge for groups of commands.
+    *   **Rationale**: The `execute` method now returns a success status and an optional message, allowing UI components (like the status bar or dialogs) to react to the outcome of operations. This aligns with the adapter methods from Plan 01.
+
+    3.  **Examples of Specific `TUICommand` Classes (Non-Exhaustive List)**:
+        *   **Top Bar:**
+            *   `ShowGlobalSettingsDialogCommand(TUICommand)`: Params: None.
+            *   `ShowHelpDialogCommand(TUICommand)`: Params: None.
+            *   `ExitApplicationCommand(TUICommand)`: Params: None.
+        *   **Plate Manager Toolbar & List Interactions:**
+            *   `AddPlatesCommand(TUICommand)`: Params: `folder_paths: List[str]`. (Handles multi-folder selection from a dialog).
+            *   `DeleteSelectedPlatesCommand(TUICommand)`: Params: `plate_ids: List[str]` (from `ui_state.selected_plate_ids`).
+            *   `ShowEditPlateConfigDialogCommand(TUICommand)`: Params: `plate_id: str`.
+            *   `InitializeSelectedPlatesCommand(TUICommand)`: Params: `plate_ids: List[str]`.
+            *   `CompileSelectedPlatesCommand(TUICommand)`: Params: `plate_ids: List[str]`.
+            *   `CompileAllInitializedPlatesCommand(TUICommand)`: Params: None. (Alternative to selected)
+            *   `RunSelectedPlatesCommand(TUICommand)`: Params: `plate_ids: List[str]`.
+            *   `RunAllCompiledPlatesCommand(TUICommand)`: Params: None. (Alternative to selected)
+            *   `ReorderPlateCommand(TUICommand)`: Params: `plate_id: str`, `direction: Literal["up", "down"]`.
+        *   **Pipeline Editor Toolbar & List Interactions:**
+            *   `AddDefaultStepCommand(TUICommand)`: Params: `plate_id: str`, `default_step_type: str`.
+            *   `DeleteSelectedStepsCommand(TUICommand)`: Params: `plate_id: str`, `step_ids: List[str]`.
+            *   `ShowStepFuncEditorCommand(TUICommand)`: Params: `plate_id: str`, `step_id: str` (or `is_new_step: bool`). Updates `ui_state.active_left_pane_view` and `ui_state.current_step_for_editing`.
+            *   `LoadPipelineCommand(TUICommand)`: Params: `plate_id: str`, `file_path: Path`.
+            *   `SavePipelineCommand(TUICommand)`: Params: `plate_id: str`, `file_path: Optional[Path]` (optional for save-as).
+            *   `ReorderStepCommand(TUICommand)`: Params: `plate_id: str`, `step_id: str`, `direction: Literal["up", "down"]`.
+        *   **STEP/FUNC Editor (Main Toolbar):**
+            *   `ToggleStepFuncViewCommand(TUICommand)`: Params: `target_view: Literal["step_settings", "func_menu"]`. Updates `ui_state.step_func_editor_active_tab`.
+            *   `SaveStepFromEditorCommand(TUICommand)`: Params: `plate_id: str`, `step_data: CoreStepData` (from `ui_state.current_step_for_editing` potentially modified by `current_step_unsaved_changes`).
+            *   `CloseStepFuncEditorCommand(TUICommand)`: Params: None. Updates `ui_state.active_left_pane_view` to "plate_manager".
+        *   **STEP/FUNC Editor (Step Settings View):**
+            *   `LoadStepDefinitionCommand(TUICommand)`: Params: `plate_id: str`, `file_path: Path`. (Loads into current editor state).
+            *   `SaveStepDefinitionAsCommand(TUICommand)`: Params: `step_data: CoreStepData`, `file_path: Path`.
+            *   `ResetStepParameterCommand(TUICommand)`: Params: `step_uid: str`, `parameter_key: str`. (Resets to default or initial value).
+        *   **STEP/FUNC Editor (Func Menu View):**
+            *   `AddFunctionToPatternCommand(TUICommand)`: Params: `step_uid: str`.
+            *   `LoadFuncPatternCommand(TUICommand)`: Params: `step_uid: str`, `file_path: Path`.
+            *   `SaveFuncPatternAsCommand(TUICommand)`: Params: `func_pattern_data: Any`, `file_path: Path`.
+            *   `ManageFuncPatternDictKeyCommand(TUICommand)`: Params: `step_uid: str`, `action: Literal["add", "remove", "edit"]`, `key_name: Optional[str]`, `new_key_name: Optional[str]`.
+            *   `SelectFunctionForPatternItemCommand(TUICommand)`: Params: `step_uid: str`, `pattern_item_index: int`, `backend_name: str`, `func_name: str`.
+            *   `ResetFuncKwargCommand(TUICommand)`: Params: `step_uid: str`, `pattern_item_index: int`, `kwarg_name: str`.
+        *   **Status Bar:**
+            *   `ToggleLogHistoryDrawerCommand(TUICommand)`: Params: None. Updates `ui_state.is_status_log_expanded`.
+        *   **Dialog Actions:**
+            *   `SubmitGlobalSettingsCommand(TUICommand)`: Params: `updated_config_data: Dict[str, Any]`.
+            *   `SubmitPlateConfigCommand(TUICommand)`: Params: `plate_id: str`, `updated_config_data: Dict[str, Any]`.
+            *   `FileDialogConfirmCommand(TUICommand)`: Params: `dialog_context: Dict[str, Any]`, `selected_path: Path`. Invokes the callback command from `dialog_context`.
+            *   `FileDialogCancelCommand(TUICommand)`: Params: `dialog_context: Dict[str, Any]`.
 
 ### 2.2. Refine Callback Protocols
 
-*   **Current**: `DialogResultCallback`, `ErrorCallback`, `ValidationResultCallback`, `PlateEventHandler` are defined as `Protocol`s. Many classes implement all of them.
-*   **Observation**: This wide implementation suggests these might be too generic or that components are acting as catch-alls for many event types.
+*   **Current**: `DialogResultCallback`, `ErrorCallback`, `ValidationResultCallback`, `PlateEventHandler` are defined as `Protocol`s.
+*   **Observation**: Wide implementation suggests these might be too generic or components act as catch-alls.
 *   **Proposed Action**:
-    1.  **Review Necessity**: Determine if all these distinct callback protocols are truly needed or if some can be consolidated or made more specific to the component that *emits* the event.
-    2.  **`DialogResultCallback(data: Dict[str, Any]) -> None`**:
-        *   Refine `data` to be more specific if possible (e.g., `DialogOutputData(TypedDict)` or a Pydantic model).
-        *   Ensure that only components directly responsible for handling a dialog's outcome implement this.
-    3.  **`ErrorCallback(message: str, details: str = "") -> None`**:
-        *   This seems reasonable. Ensure it's used consistently for UI-level error reporting.
-    4.  **`ValidationResultCallback(data: Dict[str, Any]) -> None`**:
-        *   Refine `data` (e.g., `ValidationOutputData(TypedDict)`).
-    5.  **`PlateEventHandler`**:
-        *   `async def on_plate_added(self, plate: Dict[str, Any]) -> None:` -> `plate: CorePlateData`
-        *   `async def on_plate_removed(self, plate: Dict[str, Any]) -> None:` -> `plate_id: str` (or `CorePlateData` if full data is useful)
-        *   `async def on_plate_selected(self, plate: Dict[str, Any]) -> None:` -> `plate_data: Optional[CorePlateData]`
-        *   `async def on_plate_status_changed(self, plate_id: str, status: str) -> None:` (seems okay, maybe add `message: Optional[str]`)
-    *   **Decoupling Implementation**: Instead of one class implementing many callbacks, consider:
-        *   Using the `TUIState` event bus more: Components emit specific events, and interested controllers subscribe.
-        *   If a component truly needs to handle multiple types of results, it can have distinct methods that are registered as callbacks, rather than formally implementing many broad protocols.
+    1.  **Prioritize `TUIState` as Event Bus**: Many previous callback protocols might be deprecated. Instead of direct callbacks, commands will modify `TUIState`. UI components (views and controllers) will observe `TUIState` and react to relevant changes. This decouples components significantly. For example, instead of a `PlateEventHandler.on_plate_added` callback, an `AddPlatesCommand` would update `ui_state.plates_data`, and any view displaying the plate list would re-render based on this new state.
+    2.  **Minimal Essential Callbacks**: If any callbacks remain essential for highly dynamic UI updates not easily achieved by observing `TUIState` (e.g., a very specific interaction within a complex widget not fully managed by a controller), their `data` parameters must use specific DTOs/TypedDicts, not generic `Dict[str, Any]`.
+        *   `DialogResultCallback(data: SpecificDialogOutputData) -> None` (if specific dialogs need direct, non-command callbacks).
+        *   `ErrorCallback` might still be useful for components that can receive errors outside the main command flow, but its usage should be reviewed.
+    3.  **Remove `PlateEventHandler` as a broad protocol**: Its specific events are better handled by commands updating `TUIState` (e.g., `plate_added` results in updated `plates_data` list; `plate_selected` updates `active_plate_id`).
 
 ### 2.3. Data Contracts for Protocol Methods
 
-*   **Action**: Review all protocol methods (especially in `CoreApplicationAdapterInterface` and `CoreOrchestratorAdapterInterface` from Plan 01, and the callback protocols).
-*   Replace generic `Dict[str, Any]`, `Any`, `List[Dict]` with more specific types:
-    *   `CorePlateData` (defined in Plan 01 interfaces)
-    *   `CoreStepData` (defined in Plan 01 interfaces)
-    *   New `TypedDict` or Pydantic models for other structured data passed between TUI and adapters (e.g., for function details, configuration deltas).
+*   **Action**: Review all protocol methods. This includes the `CoreApplicationAdapterInterface` and `CoreOrchestratorAdapterInterface` from Plan 01, the refined `TUICommand`, and any remaining callback protocols.
+*   Replace generic `Dict[str, Any]`, `Any`, `List[Dict]` with specific types:
+    *   `CorePlateData`, `CoreStepData` (from Plan 01 interfaces).
+    *   New `TypedDict` or Pydantic models for other structured data (e.g., `PlateConfigUpdateData`, `GlobalConfigUpdateData`, `FileDialogContext`).
+    *   Command `__init__` parameters or `execute`'s `**kwargs` should also use these specific DTOs or `TypedDict`s for clarity when commands are instantiated or dispatched with parameters.
 *   **Example**:
-    *   `CoreOrchestratorAdapterInterface.update_config(self, config_delta: Dict[str, Any])` could become `update_config(self, config_delta: PlateConfigUpdateData)`.
+    *   `ShowEditPlateConfigDialogCommand(plate_id: str)` in `__init__`.
+    *   `AddPlatesCommand.execute(**kwargs)` might expect `kwargs['folder_paths']: List[str]`.
 
 ### 2.4. Command Object State and Responsibilities
 
 *   **Action**:
-    1.  **Statelessness**: Commands should ideally be stateless or hold minimal state directly related to their specific invocation (e.g., parameters passed via `**kwargs` to `execute`). They should derive necessary information from `ui_state` and adapters during execution.
-    2.  **Single Action**: Each command class should encapsulate a single, well-defined user action. If a command becomes too complex, consider breaking it into smaller, more focused commands that can be composed.
-    3.  **Constructor**: Command `__init__` methods should be lightweight, primarily for setting up any fixed parameters. Avoid complex logic or state loading in constructors. The `state` and `context` (now adapters) are passed to `execute`.
-    4.  **`can_execute` Logic**: This method should rely on `ui_state` and potentially query adapters (if the condition depends on core state). It should be efficient as it might be called frequently to update UI element enablement.
+    1.  **Statelessness**: Commands should be stateless or hold minimal state directly related to their specific invocation (e.g., parameters passed via `__init__` or `**kwargs` to `execute`). They derive necessary information from `ui_state` and adapters during execution.
+    2.  **Single Action**: Each command class encapsulates a single, well-defined user action.
+    3.  **Constructor**: Command `__init__` methods should be lightweight, primarily for setting up fixed parameters necessary for the command's execution.
+    4.  **`can_execute` Logic**: This method is crucial for dynamically enabling/disabling UI elements in the new TUI design. It will rely heavily on `ui_state` (e.g., `ui_state.selected_plate_id`, `ui_state.active_left_pane_view`, status of items) and potentially query adapters. It must be efficient.
 
 ## 3. Refactoring Steps
 
 1.  **Create/Update Interface Files**:
-    *   Modify `openhcs/tui/interfaces.py` (from Plan 01) to include the refined `TUICommand` protocol and any specialized command protocols.
-    *   Update or create new files for refined callback protocols if necessary (e.g., `openhcs.tui.callbacks.py`).
-    *   Define `TypedDict` or Pydantic models for data contracts in a shared TUI types module (e.g., `openhcs.tui.types.py`).
-2.  **Refactor Command Classes (`openhcs.tui.commands.py` and submodules)**:
-    *   Update command classes to inherit from the new `TUICommand` (or specialized versions).
-    *   Modify `execute` and `can_execute` signatures.
-    *   Replace direct core interactions with calls to adapter methods.
-    *   Use new DTOs/TypedDicts for data exchange with adapters.
+    *   Modify `openhcs/tui/interfaces.py` (from Plan 01) to include the refined `TUICommand` protocol.
+    *   Review and significantly reduce or eliminate `openhcs.tui.callbacks.py` in favor of `TUIState` observation.
+    *   Define necessary DTOs/`TypedDict`s in `openhcs.tui.types.py`.
+2.  **Refactor and Create Command Classes (`openhcs.tui.commands/` directory with submodules)**:
+    *   Update existing command classes to inherit from the new `TUICommand` and modify their signatures and logic.
+    *   **Create all the new command classes** identified in section 2.1.3, ensuring they correctly interact with adapters and `TUIState`.
+    *   Organize commands into submodules within `openhcs.tui.commands/` (e.g., `plate_commands.py`, `step_commands.py`, `dialog_commands.py`).
 3.  **Refactor Components Implementing Callbacks**:
-    *   Review classes that implement multiple callback protocols.
-    *   If a class is genuinely responsible for handling diverse events, ensure its handler methods are clear and focused.
-    *   If a class is acting as a "catch-all," refactor to delegate handling to more appropriate components or use more specific event subscriptions via `TUIState`.
-    *   Update callback method signatures to use refined data contracts.
+    *   Remove implementations of deprecated callback protocols.
+    *   Modify components (now primarily controllers and views as per Plan 02) to observe `TUIState` for changes and update themselves accordingly.
 4.  **Update Command Instantiation and Execution**:
-    *   Modify `CommandRegistry` (if used) or any direct command invokers (e.g., in `MenuBar`, toolbars from Plan 02) to pass the correct adapter interfaces and `TUIState` to `command.execute()`.
-    *   Ensure `can_execute` is called with the necessary arguments.
+    *   Wire up the new commands in the new UI components (toolbars, menus, dialogs, list item interactions as defined in Plan 02). This involves:
+        *   Ensuring UI elements (buttons, etc.) trigger the instantiation and execution of the correct command.
+        *   Passing necessary parameters (often from `TUIState` or user input) to the command's `__init__` or `execute`'s `**kwargs`.
+        *   Using the result (`Tuple[bool, Optional[str]]`) of command execution to provide feedback to the user (e.g., via status bar updates in `TUIState`).
+    *   Ensure `can_execute` is called by UI components to dynamically set the enabled/disabled state of buttons.
 
 ## 4. Verification
 

@@ -10,12 +10,13 @@
     *   Numerous `async def` functions lack explicit return type annotations (e.g., in `pipeline_editor.py`, `plate_manager_core.py`, `function_pattern_editor.py`). This reduces code clarity and hinders static analysis.
     *   Several instances of unawaited coroutines were detected (e.g., `pipeline_editor.py` calling `execute` from `setup`, `file_browser.py` in `main_async`). These are potential bugs, as the coroutine might not run to completion or its result/exceptions might be lost.
     *   Asynchronous task management (creation, tracking, cancellation, error handling) is decentralized, often relying on `get_app().create_background_task(...)` scattered throughout various UI components and command handlers. This makes it difficult to manage the lifecycle of async operations globally, handle errors consistently, or implement features like task cancellation.
+    *   Furthermore, the TUI redesign (as per Plan 01 and Plan 02) introduces many new asynchronous interactions, such as extended adapter methods for file I/O, dynamic data fetching for the STEP/FUNC editor, and multi-plate operations, all of which require robust and consistent asynchronous management.
 
 **Goal**: To standardize asynchronous operations within the TUI by:
-    1.  Introducing a centralized `AsyncUIManager` (or `TUITaskManager`) responsible for managing the lifecycle of UI-initiated asynchronous tasks.
-    2.  Ensuring all `async def` functions have explicit return type annotations.
-    3.  Systematically reviewing and fixing all identified unawaited coroutine calls.
-    4.  Implementing consistent error handling for asynchronous operations, potentially facilitated by the `AsyncUIManager`.
+    1.  Introducing a centralized `AsyncUIManager` (or `TUITaskManager`) responsible for managing the lifecycle of all UI-initiated asynchronous tasks, especially those interacting with the core adapters or performing significant background work.
+    2.  Ensuring all `async def` functions, including those in new components and adapter interfaces, have explicit return type annotations.
+    3.  Systematically reviewing and fixing all identified unawaited coroutine calls and ensuring new asynchronous code adheres to best practices.
+    4.  Implementing consistent error handling for asynchronous operations, including those from the redesigned adapter interfaces, potentially facilitated by the `AsyncUIManager`.
 
 **Architectural Principles**:
 *   **Clarity and Explicitness**: Code should clearly state its intentions, including asynchronous behavior and return types.
@@ -170,28 +171,33 @@ class AsyncUIManager:
 ## 3. Refactoring Steps
 
 1.  **Integrate `AsyncUIManager`**:
-    *   Instantiate `AsyncUIManager` in `OpenHCSTUI.__init__` and pass it to components that need to run async tasks (or make it accessible via `TUIState` or a global accessor if appropriate for `prompt_toolkit`'s app structure).
-    *   Replace direct calls to `get_app().create_background_task(...)` or `asyncio.create_task(...)` with `async_ui_manager.submit_task(coro)` for fire-and-forget tasks, or `await async_ui_manager.run_task_and_wait(coro)` if the result is needed immediately.
+    *   Instantiate `AsyncUIManager` in the main application controller (e.g., `AppController` from Plan 02) and ensure it's accessible to all components (controllers, commands) that initiate asynchronous operations, particularly those interacting with the core adapters.
+    *   Replace direct calls to `get_app().create_background_task(...)` or `asyncio.create_task(...)` with `async_ui_manager.submit_task(coro)` (or `fire_and_forget`) for tasks that update UI upon completion, or `await async_ui_manager.run_task_and_wait(coro)` if the result is needed immediately and sequentially.
+    *   Crucially, `AsyncUIManager` must be used for *all* calls to the adapter interfaces (defined in `plan_01_interface_separation_and_core_decoupling.md`) that are potentially long-running or involve I/O. Key examples from the redesigned TUI include:
+        *   **Plate operations**: `initialize()`, `compile_orchestrator_pipeline()`, `execute_orchestrator_pipeline()` from `CoreOrchestratorAdapterInterface`.
+        *   **File operations**: `save_pipeline_to_file()`, `load_pipeline_from_file()` (from `CoreOrchestratorAdapterInterface`); `save_step_to_file()`, `load_step_from_file()`, `save_func_pattern_to_file()`, `load_func_pattern_from_file()` (from `CoreApplicationAdapterInterface`).
+        *   **Data fetching for UI**: `get_orchestrator_config_dict()`, `get_global_config()`, `update_orchestrator_config()`, `update_global_config_dict()`, `get_step_definition_details()`, `get_available_backends_for_func_registry()`, `get_functions_for_backend()`, `get_function_signature()`, `list_directory_contents()`.
 
 2.  **Add Return Type Annotations**:
-    *   Systematically review all `async def` functions in the `openhcs.tui` package.
-    *   Add explicit return type annotations. For functions that don't return a value, use `-> None`.
-    *   **Target files from report**: `pipeline_editor.py`, `file_browser.py`, `tui_launcher.py`, `dual_step_func_editor.py`, `__main__.py`, `menu_bar.py`, `utils.py`, `function_pattern_editor.py`, `plate_manager_core.py`, `tui_architecture.py`, `status_bar.py`, `dialogs/*`, `services/*`, `utils/*`.
+    *   Systematically review all `async def` functions in the `openhcs.tui` package, including all existing code and *all new* `async def` methods introduced in the redesigned TUI's components, controllers (as defined in `plan_02_component_modularization.md`), and the extended adapter interfaces themselves (as defined in `plan_01_interface_separation_and_core_decoupling.md`).
+    *   Add explicit return type annotations. For functions that don't return a value, use `-> None`. For adapter methods returning success/error tuples, ensure these are accurately typed (e.g., `-> Tuple[bool, Optional[str]]`).
+    *   **Original target files from report still apply**: `pipeline_editor.py`, `file_browser.py`, `tui_launcher.py`, `dual_step_func_editor.py`, `__main__.py`, `menu_bar.py`, `utils.py`, `function_pattern_editor.py`, `plate_manager_core.py`, `tui_architecture.py`, `status_bar.py`, `dialogs/*`, `services/*`, `utils/*`. This list will expand with the new components from Plan 02.
 
-3.  **Fix Unawaited Coroutines**:
-    *   Review each instance of "Unawaited Coroutines" from the `async_patterns_tui.md` report.
-    *   **`pipeline_editor.py`**: In `PipelineEditorPane.setup`, the calls to `execute` for various commands (e.g., `AddStepCommand().execute(...)`) are likely intended to be fire-and-forget. Wrap these in `self.async_ui_manager.fire_and_forget(AddStepCommand().execute(...))`.
-    *   **`file_browser.py`**: In `main_async`, the call to `Application(...).run_async()` should likely be `await Application(...).run_async()` if `main_async` is the top-level entry point for this specific test/example. If it's meant to run in background, use `async_ui_manager.fire_and_forget()`.
-    *   **`__main__.py`**: In `main`, the call to `OpenHCSTUILauncher(...).run()` should be `await OpenHCSTUILauncher(...).run()` if `run` is async and `main` is the top-level async entry.
-    *   **`utils.py` / `dialog_helpers.py`**: In `focus_text_area` (called by `prompt_for_path_dialog`), the call `app.layout.focus(text_area)` is synchronous. The issue might be that `prompt_for_path_dialog` itself is called without `await` if it's an `async` function. Ensure all calls to `async` dialog functions are awaited or managed by `AsyncUIManager`.
-    *   **`plate_manager_core.py`**: In `PlateManagerPane._initialize_ui`, similar to `pipeline_editor.py`, command executions should be wrapped with `self.async_ui_manager.fire_and_forget(...)`.
-    *   **`tui_architecture.py`**: In `OpenHCSTUI` constructor and methods, calls to command `execute` methods should be wrapped with `self.async_ui_manager.fire_and_forget(...)`.
-    *   **`dialogs/plate_dialog_manager.py`**: Calls to `dialog.show()` or similar async dialog methods within `PlateDialogManager` should be `await`ed if their result is used or if they must complete before proceeding. If they are fire-and-forget UI updates, use `async_ui_manager.fire_and_forget()`.
+3.  **Fix Unawaited Coroutines and Ensure Correct Async Usage in New Code**:
+    *   Review each instance of "Unawaited Coroutines" from the original `async_patterns_tui.md` report and apply fixes as initially planned (e.g., using `async_ui_manager.fire_and_forget` or `await`).
+    *   **Critically, new UI interaction flows resulting from the TUI redesign (e.g., event handlers in new view components, command execution logic within new controllers or refactored commands as per Plan 02) must be carefully reviewed.** Ensure that all asynchronous calls (especially to adapter methods or other async utilities) are correctly awaited if their result is needed for subsequent logic, or managed via `async_ui_manager.fire_and_forget()` or `await async_ui_manager.run_task_and_wait()` if they are background tasks or their lifecycle needs explicit management. This includes, but is not limited to:
+        *   Button click handlers in toolbars or views that trigger core operations.
+        *   Event handlers in controllers that respond to UI events or `TUIState` changes by initiating async actions.
+        *   The execution flow of all `Command` objects, particularly how they interact with the adapter interfaces.
 
 4.  **Consistent Error Handling**:
-    *   The `ManagedTask` class provides basic error logging.
-    *   Consider adding a global error notification mechanism via `TUIState` within `ManagedTask.run`'s `except Exception` block, so that `StatusBar` or a dedicated error display component can show async task errors to the user.
-    *   For tasks where specific error handling is needed by the caller (not just logging), use `await async_ui_manager.run_task_and_wait(coro)` and wrap the call in a `try...except` block.
+    *   The `ManagedTask` class provides basic error logging. This should be the default for fire-and-forget tasks.
+    *   Consider adding a global error notification mechanism via `TUIState` within `ManagedTask.run`'s `except Exception` block (as originally planned), so that `StatusBarController` can update `StatusBarView` or a dedicated error display component can show async task errors to the user.
+    *   For tasks where specific error handling is needed by the caller (e.g., `await async_ui_manager.run_task_and_wait(coro)`), the calling code (typically controllers or commands) must wrap the call in a `try...except` block.
+    *   **Error reporting from adapter methods (often returning `Tuple[bool, Optional[str]]` as per Plan 01) must be consistently handled.** After an async adapter call completes (whether successful or not based on the boolean flag), the calling TUI code (usually controllers or commands) should:
+        *   Check the success flag.
+        *   If an error message is present, update `TUIState` to display this message in the status bar (e.g., `TUIState.latest_log_message = error_message`) or trigger a user-facing error dialog if the error is critical.
+        *   Update relevant parts of `TUIState` to reflect the outcome (e.g., if loading a pipeline failed, ensure the UI doesn't falsely indicate success).
 
 ## 4. Verification
 

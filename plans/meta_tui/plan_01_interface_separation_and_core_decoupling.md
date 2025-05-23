@@ -25,7 +25,7 @@ This new file will house all protocols defining the contract between the TUI and
 
 ```python
 # openhcs/tui/interfaces.py
-from typing import Protocol, Any, List, Optional, Dict, Coroutine, Union
+from typing import Protocol, Any, List, Optional, Dict, Coroutine, Union, Tuple, TYPE_CHECKING
 from pathlib import Path
 
 # Forward declare for type hints if needed, or use actual types if importable without circularity
@@ -37,17 +37,17 @@ if TYPE_CHECKING:
 
 
 class CoreStepData(Protocol):
-    """Data representation of a pipeline step for TUI consumption."""
+    """Data representation of a pipeline step for TUI consumption. Should be serializable (e.g. via pickling)."""
     uid: str
     name: str
     step_type: str # e.g., "FunctionStep", "CompositeStep"
     func_display_name: Optional[str] # Name of the function/pattern
     params: Dict[str, Any]
-    status: str # e.g., "new", "configured", "error"
+    status: str # e.g., "new", "configured", "error_config", "error_validation"
     is_enabled: bool
-    # Potentially other TUI-relevant metadata
+    # Potentially other TUI-relevant metadata like description, tags
 
-    def to_dict(self) -> Dict[str, Any]: ...
+    def to_dict(self) -> Dict[str, Any]: ... # For potential serialization if not directly pickleable
 
 
 class CorePlateData(Protocol):
@@ -55,7 +55,7 @@ class CorePlateData(Protocol):
     id: str # Unique identifier for the plate/orchestrator
     name: str # Display name, often derived from path
     path: str # Filesystem path to the plate data
-    status: str # e.g., "new", "initialized", "compiled_ok", "error_init"
+    status: str # TUI-facing status string, e.g., "!" (new), "?" (initialized), "✔︎" (compiled_ok), "✗c" (compile_error), "✗r" (run_error). Adapter maps core status to these.
     backend_name: Optional[str]
     pipeline_definition_summary: Optional[str] # e.g., "5 steps" or list of step names
 
@@ -64,25 +64,45 @@ class CoreOrchestratorAdapterInterface(Protocol):
     """
     Interface for TUI interactions related to a single plate/pipeline orchestrator.
     Methods should be asynchronous if they involve I/O or potentially long-running core operations.
+    Return types often include a Tuple with success status and an optional error message.
     """
 
     async def get_plate_data(self) -> CorePlateData: ...
-    async def get_config(self) -> Dict[str, Any]: ...
-    async def update_config(self, config_delta: Dict[str, Any]) -> None: ...
+    async def get_orchestrator_config_dict(self) -> Dict[str, Any]: ... # Returns a dict representation of the orchestrator's current config.
+    async def update_orchestrator_config(self, config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]: ... # Takes full config data, returns success/error.
 
-    async def initialize(self) -> None: ...
-    async def get_pipeline_steps(self) -> List[CoreStepData]: ...
-    async def add_step(self, step_type: str, func_identifier: Optional[str], default_name: str) -> Optional[CoreStepData]: ...
-    async def update_step(self, step_uid: str, changes: Dict[str, Any]) -> Optional[CoreStepData]: ...
-    async def remove_step(self, step_uid: str) -> bool: ...
-    async def move_step(self, step_uid: str, direction: str) -> bool: ... # direction: "up" or "down"
-    async def save_pipeline_definition_to_storage(self, path_override: Optional[Path] = None) -> str: ... # Returns actual save path
-    async def load_pipeline_definition_from_storage(self, path: Path) -> List[CoreStepData]: ...
+    async def initialize(self) -> Tuple[bool, Optional[str]]: ... # Returns success status and optional error message.
+    async def get_pipeline_steps(self) -> List[CoreStepData]: ... # Gets the current pipeline steps as TUI-consumable data.
 
-    async def compile_pipeline(self) -> bool: ... # Returns success status
-    async def execute_compiled_pipeline(self) -> bool: ... # Returns success status
-    async def get_last_compilation_error(self) -> Optional[str]: ...
-    async def get_last_execution_error(self) -> Optional[str]: ...
+    async def add_new_step_to_pipeline(self, step_configuration: Dict[str, Any]) -> Tuple[Optional[CoreStepData], Optional[str]]: ...
+    # Takes a dictionary with step configuration (e.g., name, type, func_identifier for FunctionStep).
+    # Returns the created CoreStepData or an error message.
+
+    async def add_default_step_to_pipeline(self, default_step_type: str = "FunctionStep") -> Tuple[Optional[CoreStepData], Optional[str]]: ...
+    # Adds a step with default parameters of the specified type.
+
+    async def update_pipeline_step(self, step_uid: str, updated_step_data: Dict[str, Any]) -> Tuple[Optional[CoreStepData], Optional[str]]: ...
+    # Takes the UID of the step to update and a dictionary with the new data for the step.
+    # Returns the updated CoreStepData or an error message.
+
+    async def remove_step(self, step_uid: str) -> bool: ... # Returns True if successful.
+    async def move_step(self, step_uid: str, direction: str) -> bool: ... # direction: "up" or "down". Returns True if successful.
+
+    async def save_pipeline_to_file(self, file_path: Path, pipeline_steps: List[CoreStepData]) -> Tuple[bool, Optional[str]]: ...
+    # Adapter handles conversion of CoreStepData list to a savable format (e.g., list of AbstractStep, then pickling).
+
+    async def load_pipeline_from_file(self, file_path: Path) -> Tuple[Optional[List[CoreStepData]], Optional[str]]: ...
+    # Adapter handles unpickling and conversion of loaded core steps back to CoreStepData list.
+
+    async def compile_orchestrator_pipeline(self, pipeline_steps: List[CoreStepData]) -> Tuple[bool, Optional[str]]: ...
+    # Takes the current list of TUI step data, adapter converts to core steps and compiles.
+
+    async def execute_orchestrator_pipeline(self) -> Tuple[bool, Optional[str]]: ...
+    # Executes the last successfully compiled pipeline for this orchestrator.
+
+    async def get_step_definition_details(self, step_type_name: str, existing_params: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]: ...
+    # Returns constructor parameters (name, type, default value, annotation) for the given AbstractStep subclass (e.g., "FunctionStep").
+    # Optionally populates with existing_params if editing a step. Uses Python's `inspect` module.
 
 
 class CoreApplicationAdapterInterface(Protocol):
@@ -90,18 +110,49 @@ class CoreApplicationAdapterInterface(Protocol):
     Interface for TUI interactions related to global application state and general core functionalities.
     """
 
-    async def get_global_config(self) -> 'GlobalPipelineConfig': ... # Use actual type if safe
-    async def update_global_config(self, config_data: Dict[str, Any]) -> None: ... # Pass data, adapter handles conversion
+    async def get_global_config(self) -> 'GlobalPipelineConfig': ... # Use actual type if safe, returns the actual Pydantic model instance.
+    async def update_global_config_dict(self, config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]: ...
+    # Updates the global configuration from a dictionary, returns success/error.
 
     async def get_available_plates(self) -> List[CorePlateData]: ...
-    async def add_new_plate(self, path: str, backend_name: str, plate_name: Optional[str] = None) -> Optional[str]: ... # Returns plate_id or None on failure
-    async def remove_plate(self, plate_id: str) -> bool: ...
+
+    async def add_new_plate_orchestrator(self, folder_path: str) -> Tuple[Optional[str], Optional[str]]: ...
+    # Creates a new plate/orchestrator for the given folder_path. Returns (plate_id, error_message).
+    # The new orchestrator uses default global config settings.
+
+    async def add_new_plate_orchestrators(self, folder_paths: List[str]) -> List[Tuple[Optional[str], Optional[str]]]: ...
+    # Batch version of add_new_plate_orchestrator.
+
+    async def remove_plate(self, plate_id: str) -> bool: ... # Returns True if successful.
     async def get_orchestrator_adapter(self, plate_id: str) -> Optional[CoreOrchestratorAdapterInterface]: ...
 
     async def get_file_manager(self) -> 'FileManager': ... # Use actual type if safe
-    async def get_func_registry_summary(self) -> Dict[str, List[str]]: ... # Backend -> List of func names
-    async def get_function_details(self, backend_name: str, func_name: str) -> Optional[Dict[str, Any]]: ... # Pattern, params, etc.
-    async def validate_function_pattern(self, pattern: Union[List, Dict]) -> bool: ...
+
+    async def list_directory_contents(self, path: str, backend_name: str = "disk") -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]: ...
+    # Returns list of {'name': str, 'is_dir': bool, 'path': str} or error. Uses FileManager.
+
+    async def get_available_backends_for_func_registry(self) -> List[str]: ... # Returns list of backend names (e.g. "core", "custom").
+
+    async def get_functions_for_backend(self, backend_name: str) -> List[Dict[str, Any]]: ...
+    # Returns a list of dictionaries, each representing a function: {'name': str, 'doc': Optional[str]}.
+
+    async def get_function_signature(self, backend_name: str, func_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]: ...
+    # Returns parameters with defaults/types for a registered function using `inspect.signature`.
+    # Format: {'param_name': {'default': ..., 'annotation': ...}, ...} or error.
+
+    async def validate_function_pattern(self, pattern: Union[List, Dict]) -> bool: ... # Remains for quick validation if needed by TUI.
+
+    async def save_step_to_file(self, step_data: CoreStepData, file_path: Path) -> Tuple[bool, Optional[str]]: ...
+    # Adapter converts CoreStepData to a serializable AbstractStep form (if not already) and pickles it.
+
+    async def load_step_from_file(self, file_path: Path) -> Tuple[Optional[CoreStepData], Optional[str]]: ...
+    # Adapter unpickles AbstractStep and converts to CoreStepData.
+
+    async def save_func_pattern_to_file(self, func_pattern: Any, file_path: Path) -> Tuple[bool, Optional[str]]: ...
+    # Pickles a function pattern (typically a list or dict).
+
+    async def load_func_pattern_from_file(self, file_path: Path) -> Tuple[Optional[Any], Optional[str]]: ...
+    # Unpickles a function pattern.
 
     async def shutdown_core_services(self) -> None: ...
 ```
@@ -141,9 +192,9 @@ SHARED_EXECUTOR = ThreadPoolExecutor(max_workers=5, thread_name_prefix="tui-core
 # Helper to convert core Step object to CoreStepData
 def _core_step_to_tui_data(step: AbstractStep) -> CoreStepData:
     # This is a simplified conversion. Actual implementation will need more detail.
+    # Step status needs to be determined/updated based on core step state.
     func_display_name = None
     if isinstance(step, FunctionStep):
-        # Attempt to get a display name from the function pattern if possible
         if isinstance(step.func_pattern, list) and step.func_pattern:
             first_call = step.func_pattern[0]
             if isinstance(first_call, dict) and 'func' in first_call:
@@ -156,342 +207,231 @@ def _core_step_to_tui_data(step: AbstractStep) -> CoreStepData:
         "name": step.name,
         "step_type": step.__class__.__name__,
         "func_display_name": func_display_name,
-        "params": step.params.copy() if step.params else {}, # Ensure copy
-        "status": getattr(step, 'status', 'unknown'), # Assuming steps might have a status
+        "params": step.params.copy() if step.params else {},
+        "status": getattr(step, 'tui_status', 'new'), # Core step should have a 'tui_status' or adapter maps it
         "is_enabled": getattr(step, 'is_enabled', True),
     }
 
+# Helper to convert core Orchestrator state to CorePlateData
 def _core_orchestrator_to_tui_plate_data(orchestrator: PipelineOrchestrator) -> CorePlateData:
-    # Simplified conversion
-    pipeline_def = orchestrator.pipeline_definition
+    # The orchestrator's internal status (e.g., new, initialized, compiled_ok, error_compile, error_run)
+    # needs to be mapped to the TUI-specific symbols (e.g., "!", "?", "✔︎", "✗c", "✗r").
+    # This mapping logic will reside in the adapter or this helper.
+    # Example mapping:
+    core_status = getattr(orchestrator, 'status', 'unknown') # Orchestrator needs a robust status attribute
+    tui_status_map = {
+        'new': '!',
+        'initialized': '?',
+        'compiled_ok': '✔︎',
+        'error_init': '✗i',
+        'error_compile': '✗c',
+        'error_run': '✗r',
+        'run_completed': '✓', # Different check from compiled_ok
+        'saved': '💾',
+        'loaded': '📤',
+        'unknown': '⁇'
+    }
+    tui_status = tui_status_map.get(core_status, '⁇')
+
+    pipeline_def = orchestrator.pipeline_definition # This is List[AbstractStep]
     summary = f"{len(pipeline_def)} steps" if pipeline_def else "No pipeline"
+
     return { # type: ignore
         "id": orchestrator.plate_id,
-        "name": orchestrator.plate_path.name,
+        "name": orchestrator.plate_path.name, # Or a configured display name
         "path": str(orchestrator.plate_path),
-        "status": getattr(orchestrator, 'status', 'unknown'), # Orchestrator needs a status attribute
+        "status": tui_status,
         "backend_name": orchestrator.config.default_backend.value if orchestrator.config and orchestrator.config.default_backend else None,
         "pipeline_definition_summary": summary,
     }
 
 
 class SingleOrchestratorAdapter(CoreOrchestratorAdapterInterface):
-    def __init__(self, orchestrator: PipelineOrchestrator, loop: asyncio.AbstractEventLoop):
-        self._orchestrator = orchestrator
-        self._loop = loop
+    # ... (initializer and _run_sync as before) ...
+    # The adapter is responsible for managing the PipelineOrchestrator's status attribute
+    # (e.g., self._orchestrator.status = "initialized") after operations.
+    # It also manages the self._orchestrator.pipeline_definition (List[AbstractStep]),
+    # converting to/from List[CoreStepData] for TUI interaction.
 
-    async def _run_sync(self, func, *args, **kwargs):
-        return await self._loop.run_in_executor(SHARED_EXECUTOR, lambda: func(*args, **kwargs))
+    # Example method stubs reflecting changes:
+    async def initialize(self) -> Tuple[bool, Optional[str]]:
+        # ... call self._orchestrator.initialize() ...
+        # ... update self._orchestrator.status ...
+        # ... return True, None or False, "Error message" ...
+        pass
 
-    async def get_plate_data(self) -> CorePlateData:
-        return await self._run_sync(_core_orchestrator_to_tui_plate_data, self._orchestrator)
+    async def get_orchestrator_config_dict(self) -> Dict[str, Any]:
+        # ... return self._orchestrator.config.model_dump() ...
+        pass
 
-    async def get_config(self) -> Dict[str, Any]:
-        return await self._run_sync(lambda: self._orchestrator.config.model_dump() if self._orchestrator.config else {})
+    async def update_orchestrator_config(self, config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        # ... update self._orchestrator.config based on config_data ...
+        # ... handle persistence if orchestrator config supports it ...
+        # ... return success/error ...
+        pass
 
-    async def update_config(self, config_delta: Dict[str, Any]) -> None:
-        # Orchestrator config update logic needs to be defined in core
-        # For now, assuming a method like `update_plate_config` exists
-        await self._run_sync(getattr(self._orchestrator, 'update_plate_config', lambda cd: None), config_delta)
+    async def add_new_step_to_pipeline(self, step_configuration: Dict[str, Any]) -> Tuple[Optional[CoreStepData], Optional[str]]:
+        # 1. Convert step_configuration into parameters for a new core AbstractStep (e.g., FunctionStep).
+        #    This might involve looking up FUNC_REGISTRY for function patterns if type is FunctionStep.
+        # 2. Create the core step instance.
+        # 3. Add to self._orchestrator.pipeline_definition (the List[AbstractStep]).
+        # 4. Convert the new core step to CoreStepData.
+        # 5. Return (CoreStepData, None) or (None, "Error message").
+        pass
 
-    async def initialize(self) -> None:
-        await self._run_sync(self._orchestrator.initialize)
-        # Update orchestrator status after initialization
-        setattr(self._orchestrator, 'status', 'initialized')
+    async def add_default_step_to_pipeline(self, default_step_type: str = "FunctionStep") -> Tuple[Optional[CoreStepData], Optional[str]]:
+        # Similar to add_new_step_to_pipeline but with default configuration for the step_type.
+        # E.g., create a FunctionStep with a placeholder name and no function selected.
+        pass
 
+    async def update_pipeline_step(self, step_uid: str, updated_step_data: Dict[str, Any]) -> Tuple[Optional[CoreStepData], Optional[str]]:
+        # 1. Find the core AbstractStep in self._orchestrator.pipeline_definition by step_uid.
+        # 2. Update its attributes based on updated_step_data. This is complex as `updated_step_data` is TUI-facing;
+        #    careful mapping to core step attributes (e.g. `func_pattern` for FunctionStep) is needed.
+        # 3. Convert the updated core step back to CoreStepData.
+        # 4. Return (CoreStepData, None) or (None, "Error message").
+        pass
 
-    async def get_pipeline_steps(self) -> List[CoreStepData]:
-        pipeline_def = await self._run_sync(lambda: self._orchestrator.pipeline_definition)
-        return [_core_step_to_tui_data(step) for step in pipeline_def] if pipeline_def else []
+    async def save_pipeline_to_file(self, file_path: Path, pipeline_steps: List[CoreStepData]) -> Tuple[bool, Optional[str]]:
+        # 1. The adapter needs to convert `pipeline_steps: List[CoreStepData]` back into `List[AbstractStep]`.
+        #    This is a critical step: it might involve re-creating AbstractStep instances based on CoreStepData.
+        #    Alternatively, the adapter could maintain the List[AbstractStep] internally and `pipeline_steps` is just for TUI display sync.
+        #    Assuming the adapter holds the canonical List[AbstractStep] (self._orchestrator.pipeline_definition).
+        # 2. Use a utility (perhaps on FileManager or a dedicated serialization service) to pickle
+        #    `self._orchestrator.pipeline_definition` to `file_path`.
+        # 3. Return (True, None) or (False, "Error message").
+        pass
 
-    async def add_step(self, step_type: str, func_identifier: Optional[str], default_name: str) -> Optional[CoreStepData]:
-        # This logic is complex and involves FUNC_REGISTRY.
-        # For now, placeholder. Actual logic will create a step and add it.
-        # The core orchestrator should have a method for this.
-        # Example: new_step_core = await self._run_sync(self._orchestrator.add_new_step, step_type, func_identifier, default_name)
-        # For now, let's assume it's handled by directly manipulating pipeline_definition for simplicity in this plan.
-        # This part needs careful implementation in the orchestrator.
-        
-        # Simplified: Create a FunctionStep (assuming this is the primary type added)
-        # This still uses FUNC_REGISTRY, which the adapter aims to abstract away from commands.
-        # The adapter itself can use FUNC_REGISTRY.
-        func_pattern = None
-        if func_identifier and step_type == "FunctionStep":
-            # func_identifier might be "backend_name.func_name"
-            # This lookup should be more robust.
-            parts = func_identifier.split('.', 1)
-            if len(parts) == 2 and parts[0] in FUNC_REGISTRY and parts[1] in FUNC_REGISTRY[parts[0]]:
-                 func_pattern = FUNC_REGISTRY[parts[0]][parts[1]]['pattern']
+    async def load_pipeline_from_file(self, file_path: Path) -> Tuple[Optional[List[CoreStepData]], Optional[str]]:
+        # 1. Use a utility to unpickle `List[AbstractStep]` from `file_path`.
+        # 2. Set `self._orchestrator.pipeline_definition` with the loaded steps.
+        # 3. Convert each loaded AbstractStep into CoreStepData.
+        # 4. Return (List[CoreStepData], None) or (None, "Error message").
+        pass
 
-        new_core_step = FunctionStep(name=default_name, func_pattern=func_pattern)
-        
-        current_def = self._orchestrator.pipeline_definition
-        if current_def is None: current_def = []
-        current_def.append(new_core_step)
-        self._orchestrator.pipeline_definition = current_def
-        return _core_step_to_tui_data(new_core_step)
+    async def compile_orchestrator_pipeline(self, pipeline_steps: List[CoreStepData]) -> Tuple[bool, Optional[str]]:
+        # 1. Similar to save_pipeline_to_file, ensure `self._orchestrator.pipeline_definition` (List[AbstractStep])
+        #    is consistent with `pipeline_steps` from TUI. This might involve updating the core list.
+        # 2. Call `self._orchestrator.compile_pipelines(self._orchestrator.pipeline_definition)`.
+        # 3. Store compiled contexts and update orchestrator status.
+        # 4. Return (True, None) or (False, "Error message with compilation error").
+        pass
 
+    async def execute_orchestrator_pipeline(self) -> Tuple[bool, Optional[str]]:
+        # ... call self._orchestrator.execute_compiled_plate(...) ...
+        # ... update orchestrator status ...
+        # ... return success/error with execution error details ...
+        pass
 
-    async def update_step(self, step_uid: str, changes: Dict[str, Any]) -> Optional[CoreStepData]:
-        # Find step by UID, update its attributes, return updated CoreStepData
-        # This should ideally be a method on the orchestrator.
-        pipeline_def = self._orchestrator.pipeline_definition
-        if pipeline_def:
-            for step in pipeline_def:
-                if step.uid == step_uid:
-                    # Apply changes. This is simplified.
-                    # A real implementation would be more careful about what can be changed.
-                    for key, value in changes.items():
-                        if hasattr(step, key):
-                            setattr(step, key, value)
-                    # If func_pattern changed, it might need re-validation or re-creation of the step
-                    if 'func_pattern' in changes and isinstance(step, FunctionStep):
-                        step.func_pattern = changes['func_pattern'] # This is a direct update, might need more logic
-                    return _core_step_to_tui_data(step)
-        return None
+    async def get_step_definition_details(self, step_type_name: str, existing_params: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        # 1. Dynamically import or get a reference to the actual AbstractStep subclass (e.g., FunctionStep, CompositeStep).
+        # 2. Use `inspect.signature(StepClass.__init__)` to get parameters.
+        # 3. Format these into a dictionary: {'param_name': {'default': ..., 'annotation': ..., 'type_str': ...}}.
+        # 4. If `existing_params` are provided, merge them into the 'default' values for editing.
+        # 5. Return (details_dict, None) or (None, "Error message").
+        pass
 
-    async def remove_step(self, step_uid: str) -> bool:
-        pipeline_def = self._orchestrator.pipeline_definition
-        if pipeline_def:
-            original_len = len(pipeline_def)
-            self._orchestrator.pipeline_definition = [s for s in pipeline_def if s.uid != step_uid]
-            return len(self._orchestrator.pipeline_definition) < original_len
-        return False
-
-    async def move_step(self, step_uid: str, direction: str) -> bool:
-        # Implement move logic within self._orchestrator.pipeline_definition
-        # This is complex and needs careful index management.
-        # Placeholder for now.
-        return False # Placeholder
-
-    async def save_pipeline_definition_to_storage(self, path_override: Optional[Path] = None) -> str:
-        # Orchestrator needs a robust save method.
-        # For now, mimic existing logic from MenuBar/Commands.
-        # This still directly uses core types like AbstractStep.
-        # The goal is for the adapter to handle this translation.
-        pipeline_def = self._orchestrator.pipeline_definition
-        if not pipeline_def:
-            raise ValueError("Pipeline is empty, nothing to save.")
-
-        default_filename = "pipeline_definition.json" # Simplified
-        save_path = path_override or (self._orchestrator.plate_path / default_filename)
-
-        pipeline_dicts = [step.to_dict() for step in pipeline_def] # Assumes to_dict() exists and is suitable
-
-        # This should use FileManager from ProcessingContext if available
-        # For simplicity, direct write:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(save_path, 'w') as f:
-            import json
-            json.dump(pipeline_dicts, f, indent=2)
-        setattr(self._orchestrator, 'status', 'saved') # Example status update
-        return str(save_path)
-
-
-    async def load_pipeline_definition_from_storage(self, path: Path) -> List[CoreStepData]:
-        # Orchestrator needs a robust load method.
-        # This should return List[CoreStepData]
-        # For now, mimic existing logic.
-        if not path.exists() or not path.is_file():
-            raise FileNotFoundError(f"Pipeline file not found: {path}")
-        with open(path, "rb") as f:
-            import pickle # Assuming pickle for now, consistent with commands.py
-            loaded_core_steps = pickle.load(f) # This loads actual AbstractStep instances
-
-        if not isinstance(loaded_core_steps, list) or \
-           not all(isinstance(item, AbstractStep) for item in loaded_core_steps):
-            raise ValueError("Invalid pipeline file format.")
-
-        self._orchestrator.pipeline_definition = loaded_core_steps
-        setattr(self._orchestrator, 'status', 'loaded') # Example status update
-        return [_core_step_to_tui_data(step) for step in loaded_core_steps]
-
-
-    async def compile_pipeline(self) -> bool:
-        # This needs to handle the pipeline_definition correctly.
-        # The orchestrator's compile_pipelines might expect the actual step objects.
-        if not self._orchestrator.pipeline_definition:
-            setattr(self._orchestrator, 'status', 'error_compile')
-            setattr(self._orchestrator, 'last_compile_error', 'Pipeline definition is empty.')
-            return False
-        try:
-            compiled_data = await self._run_sync(
-                self._orchestrator.compile_pipelines,
-                self._orchestrator.pipeline_definition # Pass the list of AbstractStep objects
-            )
-            self._orchestrator.last_compiled_contexts = compiled_data # Store on orchestrator
-            setattr(self._orchestrator, 'status', 'compiled_ok')
-            setattr(self._orchestrator, 'last_compile_error', None)
-            return True
-        except Exception as e:
-            setattr(self._orchestrator, 'status', 'error_compile')
-            setattr(self._orchestrator, 'last_compile_error', str(e))
-            return False
-
-    async def execute_compiled_pipeline(self) -> bool:
-        if getattr(self._orchestrator, 'status', '') != 'compiled_ok' or \
-           not hasattr(self._orchestrator, 'last_compiled_contexts') or \
-           not self._orchestrator.last_compiled_contexts:
-            setattr(self._orchestrator, 'status', 'error_run')
-            setattr(self._orchestrator, 'last_exec_error', 'Pipeline not compiled or compiled contexts missing.')
-            return False
-        try:
-            await self._run_sync(
-                self._orchestrator.execute_compiled_plate,
-                self._orchestrator.pipeline_definition, # Stateless definition
-                self._orchestrator.last_compiled_contexts
-            )
-            setattr(self._orchestrator, 'status', 'run_completed')
-            setattr(self._orchestrator, 'last_exec_error', None)
-            return True
-        except Exception as e:
-            setattr(self._orchestrator, 'status', 'error_run')
-            setattr(self._orchestrator, 'last_exec_error', str(e))
-            return False
-
-    async def get_last_compilation_error(self) -> Optional[str]:
-        return getattr(self._orchestrator, 'last_compile_error', None)
-
-    async def get_last_execution_error(self) -> Optional[str]:
-        return getattr(self._orchestrator, 'last_exec_error', None)
+    # ... other methods like get_plate_data, get_pipeline_steps, remove_step, move_step need to be fully implemented ...
 
 
 class TUICoreAdapter(CoreApplicationAdapterInterface):
     def __init__(self, initial_context: ProcessingContext, global_config: GlobalPipelineConfig):
+        # ... (initialization as before) ...
+        # The TUICoreAdapter will manage multiple SingleOrchestratorAdapter instances or directly
+        # manage multiple PipelineOrchestrator core instances.
+        # For "compile all" / "run all", it would iterate over its managed orchestrator adapters
+        # and call their compile/execute methods sequentially, aggregating results.
         self._initial_context = initial_context
-        self._global_config = global_config # This is the single, shared instance
+        self._global_config = global_config
         self._file_manager = initial_context.filemanager
         self._loop = asyncio.get_event_loop()
-        self._orchestrators: Dict[str, PipelineOrchestrator] = {} # Manages core orchestrator instances
+        self._orchestrators: Dict[str, PipelineOrchestrator] = {}
+        self._orchestrator_adapters: Dict[str, SingleOrchestratorAdapter] = {}
+
 
     async def _run_sync(self, func, *args, **kwargs):
         return await self._loop.run_in_executor(SHARED_EXECUTOR, lambda: func(*args, **kwargs))
 
     async def get_global_config(self) -> GlobalPipelineConfig:
-        return self._global_config # Return the shared instance
+        return self._global_config
 
-    async def update_global_config(self, config_data: Dict[str, Any]) -> None:
-        # The GlobalPipelineConfig is a Pydantic model.
-        # It should be updated carefully. The launcher might be the sole owner.
-        # This adapter method might just trigger a save if the config object itself is mutated elsewhere,
-        # or it might update the shared instance.
-        # For now, assume direct update of the shared instance.
-        # This needs careful consideration of ownership.
-        try:
-            updated_config = GlobalPipelineConfig(**{**self._global_config.model_dump(), **config_data})
-            # Update the shared instance fields.
-            for field_name, value in updated_config.model_dump().items():
-                setattr(self._global_config, field_name, value)
-            # Persist changes if GlobalPipelineConfig has a save method
-            if hasattr(self._global_config, 'save_to_default_location'):
-                 await self._run_sync(self._global_config.save_to_default_location)
-        except Exception as e:
-            # Log error
-            print(f"Error updating global config via adapter: {e}") # Replace with logger
+    async def update_global_config_dict(self, config_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        # ... similar to previous update_global_config, but returns Tuple ...
+        # Ensure Pydantic model update and persistence logic is robust.
+        pass
 
-    async def get_available_plates(self) -> List[CorePlateData]:
-        # This implies the adapter needs to know about all active orchestrators
-        # or query a central registry if one exists in core.
-        # For now, assume self._orchestrators holds them.
-        return [_core_orchestrator_to_tui_plate_data(orch) for orch in self._orchestrators.values()]
+    async def add_new_plate_orchestrator(self, folder_path: str) -> Tuple[Optional[str], Optional[str]]:
+        # 1. Create Path object from folder_path.
+        # 2. plate_id = str(folder_path.resolve()).
+        # 3. If plate_id already in self._orchestrators, return (plate_id, "Plate already exists").
+        # 4. Create a new OrchestratorConfig for this plate_path. It should inherit defaults from
+        #    self._global_config (e.g., default_backend). If an orchestrator-specific config file
+        #    exists in folder_path, load it. Otherwise, create a new one.
+        # 5. Create PipelineOrchestrator instance.
+        #    `core_orchestrator = PipelineOrchestrator(context=self._initial_context_for_new_plate, config_override=new_orch_config, plate_id_override=plate_id)`
+        #    The context might need to be tailored or a new one created.
+        #    The new orchestrator should be initialized with a default GlobalPipelineConfig.
+        # 6. Store core_orchestrator in self._orchestrators.
+        # 7. Create SingleOrchestratorAdapter for it and store in self._orchestrator_adapters.
+        # 8. Return (plate_id, None) or (None, "Error message").
+        pass
 
-    async def add_new_plate(self, path: str, backend_name: str, plate_name: Optional[str] = None) -> Optional[str]:
-        # This involves creating a new PipelineOrchestrator instance.
-        # The orchestrator's constructor or a factory method should be used.
-        # The ProcessingContext needs to be correctly configured for this new plate.
-        plate_path = Path(path)
-        name = plate_name or plate_path.name
-        plate_id = str(plate_path.resolve()) # Use resolved path as a unique ID
+    async def add_new_plate_orchestrators(self, folder_paths: List[str]) -> List[Tuple[Optional[str], Optional[str]]]:
+        results = []
+        for path in folder_paths:
+            results.append(await self.add_new_plate_orchestrator(path))
+        return results
 
-        if plate_id in self._orchestrators:
-            # Log warning: plate already exists
-            return plate_id
+    async def list_directory_contents(self, path: str, backend_name: str = "disk") -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+        # Use self._file_manager (which might need a backend concept) to list contents.
+        # Example: `items = await self._run_sync(self._file_manager.list_directory, path, backend_name)`
+        # Convert items to the required format: `[{'name': str, 'is_dir': bool, 'path': str}, ...]`.
+        pass
 
-        # Create a new context for this plate, possibly derived from initial_context
-        # This is a simplification; context creation might be more involved.
-        plate_specific_context = ProcessingContext(
-            filemanager=self._file_manager, # Share filemanager
-            global_config=self._global_config # Share global_config
-        )
-        # The orchestrator config needs to be created/loaded for this plate.
-        # This is a major simplification.
-        from openhcs.core.orchestrator.config import OrchestratorConfig # Example
-        
-        # Determine backend Enum member
-        try:
-            backend_enum_member = Backend[backend_name.upper()]
-        except KeyError:
-            # Log error: invalid backend name
-            return None
+    async def get_available_backends_for_func_registry(self) -> List[str]:
+        # return [backend.value for backend in Backend] # Assuming Backend is an Enum used in FUNC_REGISTRY keys
+        # Or directly: `return list(FUNC_REGISTRY.keys())` if keys are strings.
+        pass
 
-        orch_config = OrchestratorConfig(
-            plate_path=plate_path,
-            default_backend=backend_enum_member,
-            # other necessary config fields
-        )
-        try:
-            orchestrator = await self._run_sync(
-                PipelineOrchestrator,
-                context=plate_specific_context,
-                config_override=orch_config, # Pass specific config
-                plate_id_override=plate_id
-            )
-            # Initialize status for new orchestrator
-            setattr(orchestrator, 'status', 'new')
-            self._orchestrators[plate_id] = orchestrator
-            return plate_id
-        except Exception as e:
-            # Log error creating orchestrator
-            return None
+    async def get_functions_for_backend(self, backend_name: str) -> List[Dict[str, Any]]:
+        # Access FUNC_REGISTRY[backend_name] and format into list of {'name': str, 'doc': Optional[str]}.
+        pass
 
+    async def get_function_signature(self, backend_name: str, func_name: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        # 1. Get the actual function object from FUNC_REGISTRY[backend_name][func_name]['function_ref'].
+        # 2. Use `inspect.signature(func_obj)` to get signature.
+        # 3. Iterate `sig.parameters.values()`:
+        #    For each param, extract name, default (if not inspect.Parameter.empty), annotation (if not inspect.Parameter.empty).
+        #    Store as {'param_name': {'default': ..., 'annotation': ..., 'kind': str(param.kind)}}.
+        # 4. Return (params_dict, None) or (None, "Error message").
+        pass
 
-    async def remove_plate(self, plate_id: str) -> bool:
-        if plate_id in self._orchestrators:
-            # Any cleanup for the orchestrator?
-            del self._orchestrators[plate_id]
-            return True
-        return False
+    async def save_step_to_file(self, step_data: CoreStepData, file_path: Path) -> Tuple[bool, Optional[str]]:
+        # 1. Convert CoreStepData to an AbstractStep instance. This is complex.
+        #    Requires knowing the step_type from CoreStepData and instantiating the correct AbstractStep subclass.
+        #    Example: `core_step = FunctionStep(name=step_data.name, func_pattern=..., params=...)`.
+        #    This conversion logic is crucial and might need a factory.
+        # 2. Use `pickle.dump(core_step, file_handle)` to save.
+        # 3. Return (True, None) or (False, "Error message").
+        pass
 
-    async def get_orchestrator_adapter(self, plate_id: str) -> Optional[CoreOrchestratorAdapterInterface]:
-        orchestrator = self._orchestrators.get(plate_id)
-        if orchestrator:
-            return SingleOrchestratorAdapter(orchestrator, self._loop)
-        return None
+    async def load_step_from_file(self, file_path: Path) -> Tuple[Optional[CoreStepData], Optional[str]]:
+        # 1. Use `pickle.load(file_handle)` to load an AbstractStep instance.
+        # 2. Convert the loaded AbstractStep to CoreStepData using `_core_step_to_tui_data`.
+        # 3. Return (CoreStepData, None) or (None, "Error message").
+        pass
 
-    async def get_file_manager(self) -> FileManager:
-        return self._file_manager
+    async def save_func_pattern_to_file(self, func_pattern: Any, file_path: Path) -> Tuple[bool, Optional[str]]:
+        # Use `pickle.dump(func_pattern, file_handle)`.
+        pass
 
-    async def get_func_registry_summary(self) -> Dict[str, List[str]]:
-        summary = {}
-        for backend, funcs in FUNC_REGISTRY.items():
-            summary[str(backend)] = list(funcs.keys())
-        return summary
+    async def load_func_pattern_from_file(self, file_path: Path) -> Tuple[Optional[Any], Optional[str]]:
+        # Use `pickle.load(file_handle)`.
+        pass
 
-    async def get_function_details(self, backend_name: str, func_name: str) -> Optional[Dict[str, Any]]:
-        # Convert backend_name string to Backend enum if necessary for FUNC_REGISTRY access
-        try:
-            backend_enum = Backend[backend_name.upper()]
-            if backend_enum in FUNC_REGISTRY and func_name in FUNC_REGISTRY[backend_enum]:
-                return FUNC_REGISTRY[backend_enum][func_name].copy() # Return a copy
-        except KeyError:
-            pass # Backend name not found
-        return None
+    # ... other methods like get_available_plates, remove_plate, get_orchestrator_adapter ...
+    # ... shutdown_core_services needs to properly shutdown all orchestrators and the SHARED_EXECUTOR ...
 
-    async def validate_function_pattern(self, pattern: Union[List, Dict]) -> bool:
-        # This should call the core validation logic.
-        try:
-            # Assuming validate_pattern_structure is synchronous
-            await self._run_sync(validate_pattern_structure, pattern, FUNC_REGISTRY)
-            return True
-        except Exception:
-            return False # Or raise a specific validation error
-
-    async def shutdown_core_services(self) -> None:
-        # Example: if orchestrators need explicit shutdown
-        for orch in self._orchestrators.values():
-            if hasattr(orch, 'shutdown') and callable(orch.shutdown):
-                await self._run_sync(orch.shutdown)
-        SHARED_EXECUTOR.shutdown(wait=True)
 ```
 
 ## 4. Refactoring TUI Modules
