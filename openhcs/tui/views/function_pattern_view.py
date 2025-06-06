@@ -13,8 +13,8 @@ from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.widgets import Button, Label, Box, Frame
 from prompt_toolkit.formatted_text import HTML
 
-from openhcs.tui.services.pattern_data_manager import PatternDataManager
-from openhcs.tui.services.function_registry_service import FunctionRegistryService
+from openhcs.business_logic.pattern_data_manager import PatternDataManager
+from openhcs.business_logic.function_registry_service import FunctionRegistryService
 from openhcs.tui.services.pattern_file_service import PatternFileService
 from openhcs.tui.components.pattern_key_selector import PatternKeySelector
 from openhcs.tui.components.function_list_manager import FunctionListManager
@@ -278,7 +278,7 @@ class FunctionPatternView:
         try:
             # Show function selection dialog instead of auto-selecting default
             from openhcs.tui.dialogs.function_selector_dialog import FunctionSelectorDialog
-            from openhcs.tui.services.function_registry_service import FunctionRegistryService
+            from openhcs.business_logic.function_registry_service import FunctionRegistryService
 
             logger.info("DEBUG: Opening function selection dialog for new function")
 

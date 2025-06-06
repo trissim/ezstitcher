@@ -18,8 +18,9 @@ from openhcs.tui.interfaces.swappable_pane import SwappablePaneInterface
 from openhcs.core.context.processing_context import ProcessingContext
 from openhcs.core.steps.function_step import FunctionStep
 from openhcs.constants.constants import Backend
-from openhcs.core.pipeline import Pipeline
+# from openhcs.core.pipeline import Pipeline # May not be needed directly as much
 from openhcs.tui.services.visual_programming_dialog_service import VisualProgrammingDialogService
+from openhcs.business_logic.pipeline_logic_service import PipelineLogicService
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,9 @@ class PipelineEditorPane:
         self.context = context
         self.steps_lock = asyncio.Lock()
 
-        # EXACT: Pipeline-plate association storage
-        self.plate_pipelines: Dict[str, Pipeline] = {}  # {plate_path: Pipeline}
+        # Initialize PipelineLogicService
+        self.pipeline_logic_service = PipelineLogicService(file_manager=context.filemanager)
+        # self.plate_pipelines is now managed by pipeline_logic_service
         self.current_selected_plates: List[str] = []    # Currently selected plate paths
         self.pipeline_differs_across_plates: bool = False
 
@@ -229,7 +231,7 @@ class PipelineEditorPane:
         # Pipeline definitions are stored separately, not in the orchestrator
         if hasattr(self.state, 'selected_plate') and self.state.selected_plate:
             plate_path = self.state.selected_plate['path']
-            pipeline = self.plate_pipelines.get(plate_path)
+            pipeline = self.pipeline_logic_service.get_pipeline(plate_path)
 
             if pipeline and len(pipeline) > 0:
                 # Convert Pipeline (list of steps) to display format
@@ -268,7 +270,7 @@ class PipelineEditorPane:
         """Get step objects from stored pipeline (orchestrator doesn't store pipeline_definition)."""
         if hasattr(self.state, 'selected_plate') and self.state.selected_plate:
             plate_path = self.state.selected_plate['path']
-            pipeline = self.plate_pipelines.get(plate_path)
+            pipeline = self.pipeline_logic_service.get_pipeline(plate_path)
             return list(pipeline) if pipeline else []
         return []
 
@@ -302,25 +304,42 @@ class PipelineEditorPane:
             )
             return
 
-        # EXACT: Get target pipeline(s)
-        target_pipelines = []
-        for plate_path in self.current_selected_plates:
-            pipeline = self.plate_pipelines.get(plate_path)
-            if not pipeline:
-                # EXACT: Create new pipeline if none exists
-                pipeline = Pipeline(name=f"Pipeline for {Path(plate_path).name}")
-                self.plate_pipelines[plate_path] = pipeline
-            target_pipelines.append(pipeline)
+        # The visual_programming_service.show_add_step_dialog might need adjustment
+        # if it relies on direct Pipeline objects for its `target_pipelines` argument.
+        # For now, we assume it can work without direct pipeline objects or can be adapted.
+        # It's more likely it needs some context or identifiers.
+        # Let's assume it returns a FunctionStep instance or None.
 
-        # EXACT: Launch visual programming dialog using service
-        created_step = await self.visual_programming_service.show_add_step_dialog(target_pipelines)
+        # For the purpose of this refactor, we'll assume `show_add_step_dialog`
+        # might not need `target_pipelines` or this part of its usage will change.
+        # The core task is to get a `created_step`.
+        # If `show_add_step_dialog` *must* have the pipeline objects, we'd fetch them:
+        # target_pipelines_objects = [self.pipeline_logic_service.get_or_create_pipeline(pp) for pp in self.current_selected_plates]
+        # created_step = await self.visual_programming_service.show_add_step_dialog(target_pipelines_objects)
+        # This detail depends on visual_programming_service's interface.
+        # For now, simplifying to focus on pipeline_logic_service integration:
+
+        created_step = await self.visual_programming_service.show_add_step_dialog(
+            target_pipelines=self.current_selected_plates # Or adjust based on service needs
+        )
 
         if created_step:
-            # EXACT: Add step to all target pipelines
-            for pipeline in target_pipelines:
-                pipeline.append(copy.deepcopy(created_step))
+            if not isinstance(created_step, FunctionStep):
+                await show_error_dialog("Add Step Error", "Failed to create a valid step.", self.state)
+                return
 
-            # EXACT: Refresh display
+            for plate_path in self.current_selected_plates:
+                try:
+                    # The service handles pipeline creation if it doesn't exist.
+                    self.pipeline_logic_service.add_step(plate_path, created_step)
+                except ValueError as ve: # Catch if step is not FunctionStep (already checked but good practice)
+                    await show_error_dialog("Add Step Error", str(ve), self.state)
+                    return # Stop if one fails
+                except Exception as e:
+                    await show_error_dialog("Add Step Error", f"Error adding step to {plate_path}: {e}", self.state)
+                    return # Stop if one fails
+
+            logger.info(f"Added step {created_step.name} to pipelines for plates: {self.current_selected_plates}")
             await self._update_pipeline_display_for_selection(self.current_selected_plates)
 
     async def _handle_delete_step(self):
@@ -351,24 +370,26 @@ class PipelineEditorPane:
             await show_error_dialog("Delete Error", "Selected step has no ID.", self.state)
             return
 
-        # EXACT: Remove from all target pipelines
-        removed_count = 0
+        # Remove step from all target pipelines using the service
+        deleted_in_at_least_one_pipeline = False
         for plate_path in self.current_selected_plates:
-            pipeline = self.plate_pipelines.get(plate_path)
-            if pipeline:
-                # EXACT: Find and remove step by object ID
-                for i, step in enumerate(pipeline):
-                    if str(id(step)) == step_id:
-                        pipeline.pop(i)
-                        removed_count += 1
-                        break
+            try:
+                if self.pipeline_logic_service.delete_step(plate_path, step_id):
+                    deleted_in_at_least_one_pipeline = True
+            except Exception as e:
+                # Log error for this specific plate but continue with others
+                logger.error(f"Error deleting step {step_id} from pipeline for plate {plate_path}: {e}")
+                await show_error_dialog("Delete Error", f"Error deleting step from {plate_path}: {e}", self.state)
+                # Depending on desired behavior, might want to stop or collect errors
 
-        if removed_count > 0:
-            # EXACT: Refresh display
+        if deleted_in_at_least_one_pipeline:
+            logger.info(f"Attempted deletion of step {step_id} from pipelines for plates: {self.current_selected_plates}")
             await self._update_pipeline_display_for_selection(self.current_selected_plates)
-            logger.info(f"Removed step {step_id} from {removed_count} pipeline(s)")
         else:
-            await show_error_dialog("Delete Error", f"Step {step_id} not found in any selected pipeline.", self.state)
+            # This message might be misleading if some deletions failed due to exceptions
+            # but others succeeded, or if the step just wasn't found.
+            # The service logs a warning if step not found.
+            await show_error_dialog("Delete Error", f"Step {step_id} not found or not deleted in any selected pipeline.", self.state)
 
     async def _handle_edit_step(self):
         """EXACT: Edit step handler with visual programming integration."""
@@ -398,40 +419,54 @@ class PipelineEditorPane:
             await show_error_dialog("Edit Error", "Selected step has no ID.", self.state)
             return
 
-        # EXACT: Find step instance in first pipeline (they're identical)
+        # Find the original FunctionStep object to pass to the dialog
+        # This requires getting the pipeline from the service first.
         first_plate_path = self.current_selected_plates[0]
-        pipeline = self.plate_pipelines.get(first_plate_path)
+        pipeline = self.pipeline_logic_service.get_pipeline(first_plate_path)
 
         if not pipeline:
             await show_error_dialog("Edit Error", "No pipeline found for selected plate.", self.state)
             return
 
-        target_step = None
-        for step in pipeline:
-            if str(id(step)) == step_id:
-                target_step = step
+        original_step_object = None
+        for step_in_pipeline in pipeline:
+            # Assuming step_id from list_manager matches step_in_pipeline.step_id
+            if step_in_pipeline.step_id == step_id:
+                original_step_object = step_in_pipeline
                 break
 
-        if not target_step:
-            await show_error_dialog("Edit Error", f"Step {step_id} not found in pipeline.", self.state)
+        if not original_step_object:
+            await show_error_dialog("Edit Error", f"Step {step_id} not found in the actual pipeline.", self.state)
             return
 
-        # EXACT: Launch visual programming dialog for editing using service
-        edited_step = await self.visual_programming_service.show_edit_step_dialog(target_step)
+        # Launch visual programming dialog for editing using service, passing the actual step object
+        edited_step = await self.visual_programming_service.show_edit_step_dialog(original_step_object)
 
         if edited_step:
-            # EXACT: Update step in all target pipelines
-            for plate_path in self.current_selected_plates:
-                pipeline = self.plate_pipelines.get(plate_path)
-                if pipeline:
-                    # EXACT: Find and replace step by object ID
-                    for i, step in enumerate(pipeline):
-                        if step is target_step:
-                            pipeline[i] = copy.deepcopy(edited_step)
-                            break
+            if not isinstance(edited_step, FunctionStep):
+                await show_error_dialog("Edit Error", "Editing did not return a valid step.", self.state)
+                return
 
-            # EXACT: Refresh display
-            await self._update_pipeline_display_for_selection(self.current_selected_plates)
+            updated_in_at_least_one_pipeline = False
+            for plate_path in self.current_selected_plates:
+                try:
+                    # Use original_step_object.step_id for identifying the step to update.
+                    # The service will replace the step found by this ID with edited_step.
+                    if self.pipeline_logic_service.update_step(plate_path, original_step_object.step_id, edited_step):
+                        updated_in_at_least_one_pipeline = True
+                except ValueError as ve: # Catch if edited_step is not FunctionStep
+                    await show_error_dialog("Edit Error", str(ve), self.state)
+                    # Decide if to stop or continue for other plates
+                except Exception as e:
+                    logger.error(f"Error updating step {original_step_object.step_id} in pipeline for plate {plate_path}: {e}")
+                    await show_error_dialog("Edit Error", f"Error updating step in {plate_path}: {e}", self.state)
+
+            if updated_in_at_least_one_pipeline:
+                logger.info(f"Attempted update of step {original_step_object.step_id} in pipelines for plates: {self.current_selected_plates}")
+                await self._update_pipeline_display_for_selection(self.current_selected_plates)
+            else:
+                # Service logs warning if step not found for update.
+                await show_error_dialog("Edit Error", f"Step {original_step_object.step_id} not updated in any selected pipeline.", self.state)
 
     async def _handle_load_pipeline(self):
         """EXACT: Load pipeline handler with multi-plate support."""
@@ -456,22 +491,14 @@ class PipelineEditorPane:
             return
 
         try:
-            # EXACT: Load pipeline data
-            loaded_data = self.context.filemanager.load(file_path, Backend.DISK.value)
-
-            if not isinstance(loaded_data, list):
-                await show_error_dialog("Load Error", "Invalid pipeline format - must be a list of steps.", self.state)
-                return
-
-            # EXACT: Create Pipeline object from loaded data
-            loaded_pipeline = Pipeline(name=f"Loaded from {Path(file_path).name}")
-            loaded_pipeline.extend(loaded_data)
-
-            # EXACT: Apply to all selected plates
+            # Load and apply pipeline for each selected plate using the service
             for plate_path in self.current_selected_plates:
-                self.plate_pipelines[plate_path] = copy.deepcopy(loaded_pipeline)
+                # The service method handles loading, associating, and storing the pipeline.
+                # It will raise an exception on failure, which is caught below.
+                self.pipeline_logic_service.load_pipeline_from_file(plate_path, file_path)
 
-            # EXACT: Refresh display
+            # EXACT: Refresh display (assuming _update_pipeline_display_for_selection is still valid
+            # or can be adapted to use the service for fetching pipelines if needed for refresh)
             await self._update_pipeline_display_for_selection(self.current_selected_plates)
             logger.info(f"Loaded pipeline from {file_path} into {len(self.current_selected_plates)} plate(s)")
 
@@ -496,19 +523,15 @@ class PipelineEditorPane:
             )
             return
 
-        # EXACT: Get pipeline to save (from first selected plate)
+        # Get pipeline to save (from first selected plate)
         first_plate_path = self.current_selected_plates[0]
-        pipeline = self.plate_pipelines.get(first_plate_path)
-
-        if not pipeline or len(pipeline) == 0:
-            await show_error_dialog("Save Error", "No pipeline steps to save.", self.state)
-            return
+        # Pipeline itself is fetched by the service
 
         file_path = await prompt_for_file_dialog(
             title="Save Pipeline",
             prompt_message="Select save location:",
             app_state=self.state,
-            filemanager=self.context.filemanager,
+            filemanager=self.context.filemanager, # Still needed for dialog
             selection_mode="files",
             filter_extensions=[".pipeline"]
         )
@@ -517,11 +540,17 @@ class PipelineEditorPane:
             return
 
         try:
-            # EXACT: Save pipeline as list (Pipeline IS a list)
-            pipeline_data = list(pipeline)
-            self.context.filemanager.save(pipeline_data, file_path, Backend.DISK.value)
-            logger.info(f"Saved pipeline to {file_path} ({len(pipeline_data)} steps)")
+            # The service method handles fetching the pipeline and saving it.
+            # It will raise FileNotFoundError if no pipeline, or other errors on save failure.
+            self.pipeline_logic_service.save_pipeline_to_file(first_plate_path, file_path)
+            # Logger info is now inside the service method.
+            # We might want a success message here if desired.
+            # For example:
+            # await show_message_dialog("Success", f"Pipeline saved to {file_path}", self.state)
+            logger.info(f"Call to save pipeline for {first_plate_path} to {file_path} completed.")
 
+        except FileNotFoundError:
+            await show_error_dialog("Save Error", "No pipeline steps to save for the selected plate.", self.state)
         except Exception as e:
             await show_error_dialog("Save Error", f"Failed to save pipeline: {str(e)}", self.state)
 

@@ -15,7 +15,7 @@ from prompt_toolkit.widgets import Button, Frame, Box, Label
 from prompt_toolkit.mouse_events import MouseEventType
 
 from openhcs.tui.components.parameter_editor import ParameterEditor
-from openhcs.tui.services.function_registry_service import FunctionRegistryService
+from openhcs.business_logic.function_registry_service import FunctionRegistryService
 from openhcs.tui.utils.unified_task_manager import get_task_manager
 
 logger = logging.getLogger(__name__)
